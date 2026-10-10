@@ -75,6 +75,88 @@ export function buildInvoiceRows(invoices: Invoice[], referenceDate: string): In
 }
 
 /* ------------------------------------------------------------------ */
+/* Orders grid                                                         */
+/* ------------------------------------------------------------------ */
+
+export interface OrderRow {
+  id: string;
+  status: Order["status"];
+  description: string;
+  referenceId: string;
+  currency: string;
+  amount: string;
+  amountValue: number;
+  captureId: string;
+  captureStatus: string;
+  /** True once a capture exists (order reached COMPLETED via capture). */
+  captured: boolean;
+}
+
+export function toOrderRow(order: Order): OrderRow {
+  const unit = order.purchase_units[0];
+  const capture = unit?.payments?.captures?.[0];
+  return {
+    id: order.id,
+    status: order.status,
+    description: unit?.description ?? "",
+    referenceId: unit?.reference_id ?? "",
+    currency: unit?.amount.currency_code ?? "USD",
+    amount: unit?.amount.value ?? "0.00",
+    amountValue: Number(unit?.amount.value ?? "0"),
+    captureId: capture?.id ?? "",
+    captureStatus: capture?.status ?? "",
+    captured: !!capture,
+  };
+}
+
+/** Newest first (adapter lists are in creation order). */
+export function buildOrderRows(orders: Order[]): OrderRow[] {
+  return [...orders].reverse().map(toOrderRow);
+}
+
+/* ------------------------------------------------------------------ */
+/* Payouts grid — one row per payout item, batch context flattened in */
+/* ------------------------------------------------------------------ */
+
+export interface PayoutRow {
+  /** Payout item id — the stable row key. */
+  id: string;
+  batchId: string;
+  batchStatus: PayoutBatch["batch_header"]["batch_status"];
+  recipientName: string;
+  recipientEmail: string;
+  status: string;
+  currency: string;
+  amount: string;
+  amountValue: number;
+  note: string;
+  timeCreated: string;
+}
+
+export function buildPayoutRows(batches: PayoutBatch[]): PayoutRow[] {
+  const rows: PayoutRow[] = [];
+  for (const batch of batches) {
+    for (const item of batch.items) {
+      rows.push({
+        id: item.payout_item_id,
+        batchId: batch.batch_header.payout_batch_id,
+        batchStatus: batch.batch_header.batch_status,
+        recipientName: item.payout_item.recipient.name,
+        recipientEmail: item.payout_item.receiver,
+        status: item.transaction_status,
+        currency: item.payout_item.amount.currency_code,
+        amount: item.payout_item.amount.value,
+        amountValue: Number(item.payout_item.amount.value),
+        note: item.payout_item.note ?? "",
+        timeCreated: batch.batch_header.time_created,
+      });
+    }
+  }
+  // Newest first: batches are listed in creation order, items keep batch order.
+  return rows.reverse();
+}
+
+/* ------------------------------------------------------------------ */
 /* Activity / webhook audit grid                                       */
 /* ------------------------------------------------------------------ */
 
@@ -122,6 +204,10 @@ export interface ConsoleSummary {
    * adds one — the console labels this honestly as collected-to-date.
    */
   collected: MoneyTotal[];
+  /** Captured Orders v2 totals (COMPLETED orders only), per currency. */
+  capturedOrders: MoneyTotal[];
+  /** Sent payout totals (SUCCESS items only), per currency. */
+  payoutsSent: MoneyTotal[];
   pendingApprovals: number;
   awaitingTrigger: number;
   openDisputes: number;
@@ -149,6 +235,8 @@ export function computeSummary(input: {
   referenceDate: string;
 }): ConsoleSummary {
   const rows = buildInvoiceRows(input.invoices, input.referenceDate);
+  const orderRows = buildOrderRows(input.orders);
+  const payoutRows = buildPayoutRows(input.payouts);
   return {
     outstanding: totalsByCurrency(
       rows
@@ -156,6 +244,16 @@ export function computeSummary(input: {
         .map((r) => ({ currency: r.currency, value: r.dueValue })),
     ),
     collected: totalsByCurrency(rows.map((r) => ({ currency: r.currency, value: r.collectedValue }))),
+    capturedOrders: totalsByCurrency(
+      orderRows
+        .filter((r) => r.status === "COMPLETED")
+        .map((r) => ({ currency: r.currency, value: r.amountValue })),
+    ),
+    payoutsSent: totalsByCurrency(
+      payoutRows
+        .filter((r) => r.status === "SUCCESS")
+        .map((r) => ({ currency: r.currency, value: r.amountValue })),
+    ),
     pendingApprovals: input.plans.filter((p) => p.status === "pending_approval").length,
     awaitingTrigger: input.plans.filter((p) => p.status === "awaiting_trigger").length,
     openDisputes: input.disputes.filter((d) => d.status !== "RESOLVED").length,

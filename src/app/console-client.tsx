@@ -1,12 +1,13 @@
 "use client";
 
 /**
- * Operations console v1 — KPI strip + AG Grid Invoices grid + AG Grid
- * Agent Activity & Webhook audit grid, fed by /api/console/* read models.
+ * Operations console — KPI strip + AG Grid Invoices, Orders, Payouts,
+ * and Agent Activity & Webhook audit grids, fed by /api/console/*
+ * read models.
  *
  * AG Grid Community only (no Enterprise features, no trial watermark).
- * Orders / Payouts grids and the Agent Command bar land in the
- * full-loop milestone; this surface already renders their data as KPIs.
+ * The Agent Command bar, Ask-the-grid, and Judge Mode land in the
+ * remaining full-loop chunks.
  */
 
 import { useCallback, useEffect, useMemo, useState } from "react";
@@ -18,7 +19,13 @@ import {
   type ColDef,
   type ICellRendererParams,
 } from "ag-grid-community";
-import type { ActivityRow, ConsoleSummary, InvoiceRow } from "../lib/console";
+import type {
+  ActivityRow,
+  ConsoleSummary,
+  InvoiceRow,
+  OrderRow,
+  PayoutRow,
+} from "../lib/console";
 
 ModuleRegistry.registerModules([AllCommunityModule]);
 
@@ -37,18 +44,24 @@ function formatTotals(totals: ConsoleSummary["outstanding"]): string {
 export default function ConsoleClient() {
   const [summary, setSummary] = useState<ConsoleSummary | null>(null);
   const [invoices, setInvoices] = useState<InvoiceRow[]>([]);
+  const [orders, setOrders] = useState<OrderRow[]>([]);
+  const [payouts, setPayouts] = useState<PayoutRow[]>([]);
   const [activity, setActivity] = useState<ActivityRow[]>([]);
   const [error, setError] = useState<string | null>(null);
 
   const refresh = useCallback(async () => {
     try {
-      const [s, i, a] = await Promise.all([
+      const [s, i, o, p, a] = await Promise.all([
         fetch("/api/console/summary").then((r) => r.json()),
         fetch("/api/console/invoices").then((r) => r.json()),
+        fetch("/api/console/orders").then((r) => r.json()),
+        fetch("/api/console/payouts").then((r) => r.json()),
         fetch("/api/console/activity").then((r) => r.json()),
       ]);
       setSummary(s.summary as ConsoleSummary);
       setInvoices(i.invoices as InvoiceRow[]);
+      setOrders(o.orders as OrderRow[]);
+      setPayouts(p.payouts as PayoutRow[]);
       setActivity(a.activity as ActivityRow[]);
       setError(null);
     } catch (err) {
@@ -88,6 +101,49 @@ export default function ConsoleClient() {
         valueFormatter: (p) => (p.value ? "Yes" : "—"),
         cellStyle: (p) => (p.value ? { color: "#b91c1c", fontWeight: 600 } : null),
       },
+    ],
+    [],
+  );
+
+  const orderColumns = useMemo<ColDef<OrderRow>[]>(
+    () => [
+      { field: "id", headerName: "Order", width: 150 },
+      { field: "description", headerName: "Description", flex: 1, minWidth: 220 },
+      { field: "referenceId", headerName: "Reference", width: 150 },
+      { field: "status", headerName: "Status", width: 140, cellRenderer: StatusPill },
+      {
+        field: "amountValue",
+        headerName: "Amount",
+        width: 120,
+        type: "rightAligned",
+        valueFormatter: (p) => (p.data ? `${p.data.currency} ${p.data.amount}` : ""),
+      },
+      { field: "captureId", headerName: "Capture", width: 150 },
+      { field: "captureStatus", headerName: "Capture status", width: 140, cellRenderer: StatusPill },
+    ],
+    [],
+  );
+
+  const payoutColumns = useMemo<ColDef<PayoutRow>[]>(
+    () => [
+      {
+        field: "timeCreated",
+        headerName: "Time",
+        width: 190,
+        valueFormatter: (p) => (p.value ? new Date(String(p.value)).toLocaleString() : ""),
+      },
+      { field: "recipientName", headerName: "Recipient", width: 150 },
+      { field: "recipientEmail", headerName: "Email", width: 200 },
+      { field: "status", headerName: "Status", width: 130, cellRenderer: StatusPill },
+      {
+        field: "amountValue",
+        headerName: "Amount",
+        width: 120,
+        type: "rightAligned",
+        valueFormatter: (p) => (p.data ? `${p.data.currency} ${p.data.amount}` : ""),
+      },
+      { field: "note", headerName: "Note", flex: 1, minWidth: 180 },
+      { field: "batchId", headerName: "Batch", width: 170 },
     ],
     [],
   );
@@ -136,6 +192,14 @@ export default function ConsoleClient() {
           <span className="kpi-label">Open disputes</span>
           <span className="kpi-value">{summary ? summary.openDisputes : "…"}</span>
         </div>
+        <div className="kpi">
+          <span className="kpi-label">Captured orders</span>
+          <span className="kpi-value">{summary ? formatTotals(summary.capturedOrders) : "…"}</span>
+        </div>
+        <div className="kpi">
+          <span className="kpi-label">Payouts sent</span>
+          <span className="kpi-value">{summary ? formatTotals(summary.payoutsSent) : "…"}</span>
+        </div>
         <button type="button" className="refresh-btn" onClick={() => void refresh()}>
           Refresh
         </button>
@@ -149,6 +213,32 @@ export default function ConsoleClient() {
           theme={gridTheme}
           rowData={invoices}
           columnDefs={invoiceColumns}
+          defaultColDef={defaultColDef}
+          pagination
+          paginationPageSize={10}
+          domLayout="autoHeight"
+        />
+      </div>
+
+      <h2>Orders / Checkout</h2>
+      <div className="grid-wrap">
+        <AgGridReact<OrderRow>
+          theme={gridTheme}
+          rowData={orders}
+          columnDefs={orderColumns}
+          defaultColDef={defaultColDef}
+          pagination
+          paginationPageSize={10}
+          domLayout="autoHeight"
+        />
+      </div>
+
+      <h2>Payouts</h2>
+      <div className="grid-wrap">
+        <AgGridReact<PayoutRow>
+          theme={gridTheme}
+          rowData={payouts}
+          columnDefs={payoutColumns}
           defaultColDef={defaultColDef}
           pagination
           paginationPageSize={10}

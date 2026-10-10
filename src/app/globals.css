@@ -47,8 +47,10 @@ body { margin: 0; color: #111827; background: #ffffff; }
 .pill-paid, .pill-success, .pill-completed { background: #dcfce7; color: #166534; }
 .pill-sent, .pill-scheduled, .pill-processing, .pill-pending { background: #dbeafe; color: #1e40af; }
 .pill-partially-paid, .pill-awaiting-trigger, .pill-pending-approval, .pill-executing { background: #fef9c3; color: #854d0e; }
-.pill-draft { background: #f3f4f6; color: #4b5563; }
-.pill-cancelled, .pill-denied, .pill-failed, .pill-rejected { background: #fee2e2; color: #991b1b; }
+.pill-draft, .pill-created, .pill-saved { background: #f3f4f6; color: #4b5563; }
+.pill-approved { background: #dbeafe; color: #1e40af; }
+.pill-unclaimed { background: #fef9c3; color: #854d0e; }
+.pill-cancelled, .pill-denied, .pill-failed, .pill-rejected, .pill-voided, .pill-blocked, .pill-returned, .pill-canceled { background: #fee2e2; color: #991b1b; }
 .pill-webhook { background: #ede9fe; color: #5b21b6; }
 .pill-paypal-call { background: #ffedd5; color: #9a3412; }
 .pill-plan { background: #dbeafe; color: #1e40af; }
