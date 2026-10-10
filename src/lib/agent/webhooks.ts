@@ -77,6 +77,11 @@ export async function handleWebhookEvent(input: HandleWebhookInput): Promise<Web
     detail: { eventId: event.id, eventType: event.event_type, verified: true, resource: event.resource },
   });
 
-  const resumed = await resumeTriggeredSteps(store, client, event.event_type as WebhookEventType);
+  // Resource-correlated resumption: the event's resource id (the paid
+  // invoice's id on INVOICING.INVOICE.PAID) must match the resource a
+  // plan's gated step was bound to at execution time — an event about a
+  // different invoice never releases this plan's payout.
+  const resourceId = typeof event.resource?.id === "string" ? event.resource.id : undefined;
+  const resumed = await resumeTriggeredSteps(store, client, event.event_type as WebhookEventType, resourceId);
   return { outcome: "processed", eventId: event.id, eventType: event.event_type, resumed };
 }

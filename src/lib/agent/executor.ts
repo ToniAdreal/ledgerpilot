@@ -8,6 +8,14 @@
  *    is deferred, never executed early; `resumeTriggeredSteps` runs it
  *    when the matching event arrives (called by the webhook handler /
  *    sync reconciler in the next core-loop chunk).
+ *  - Trigger resumption is resource-correlated: executing a plan binds
+ *    its invoice-gated steps to the invoice that plan itself created
+ *    (`trigger.resourceId`), and a later event only resumes the step
+ *    when the event's resource id matches the binding. An event for a
+ *    *different* invoice — out-of-order delivery, another plan's
+ *    payment, seeded history — never fires this plan's payout. Events
+ *    that carry no resource id fall back to type-only matching so the
+ *    reconciler's synthetic events and direct callers keep working.
  */
 
 import type { PayPalClient } from "../paypal/client";
@@ -113,6 +121,7 @@ export async function executePlan(store: LedgerStore, client: PayPalClient, plan
   store.record({ planId, kind: "system", summary: `Executing plan ${planId} (${plan.steps.length} steps)` });
 
   const outcomes: StepOutcome[] = [];
+  let invoiceResultId: string | undefined;
   for (const step of plan.steps) {
     if (step.trigger) {
       store.record({
@@ -124,34 +133,76 @@ export async function executePlan(store: LedgerStore, client: PayPalClient, plan
       outcomes.push({ step, outcome: "deferred" });
       continue;
     }
-    outcomes.push(await runStep(client, store, plan, step));
+    const outcome = await runStep(client, store, plan, step);
+    if (step.type === "create_invoice" && outcome.outcome === "executed") {
+      invoiceResultId = outcome.resultId;
+    }
+    outcomes.push(outcome);
+  }
+
+  // Bind invoice-gated deferred steps to the invoice THIS plan created,
+  // so only that invoice's payment event can ever release them.
+  if (invoiceResultId) {
+    let changed = false;
+    const boundSteps = plan.steps.map((s) => {
+      if (s.trigger?.on === "INVOICING.INVOICE.PAID" && !s.trigger.resourceId) {
+        changed = true;
+        return { ...s, trigger: { ...s.trigger, resourceId: invoiceResultId } };
+      }
+      return s;
+    });
+    if (changed) store.replacePlanSteps(planId, boundSteps);
   }
   return { plan: finishPlan(store, plan, outcomes), outcomes };
+}
+
+/** Does this step's trigger match the event? Type must match; when both
+ * the step is bound to a resource and the event names one, they must be
+ * the same resource. Unbound steps / id-less events match on type. */
+function triggerMatches(step: ActionStep, eventType: WebhookEventType, resourceId?: string): boolean {
+  if (step.trigger?.on !== eventType) return false;
+  if (resourceId === undefined || step.trigger.resourceId === undefined) return true;
+  return step.trigger.resourceId === resourceId;
 }
 
 /**
  * Run the deferred steps of every `awaiting_trigger` plan whose trigger
  * matches the event that just arrived. Returns one result per resumed plan.
+ * A plan whose gated steps are bound to a different resource is left
+ * untouched (and the mismatch is written to the audit log) — never resumed.
  */
 export async function resumeTriggeredSteps(
   store: LedgerStore,
   client: PayPalClient,
   eventType: WebhookEventType,
+  resourceId?: string,
 ): Promise<ExecutionResult[]> {
   const results: ExecutionResult[] = [];
   for (const plan of store.listPlans()) {
     if (plan.status !== "awaiting_trigger") continue;
-    const due = plan.steps.filter((s) => s.trigger?.on === eventType);
-    if (due.length === 0) continue;
+    const typed = plan.steps.filter(
+      (s) => s.trigger?.on === eventType && !(s.payload as Record<string, unknown>)._executed,
+    );
+    if (typed.length === 0) continue;
+    const due = typed.filter((s) => triggerMatches(s, eventType, resourceId));
+    if (due.length === 0) {
+      store.record({
+        planId: plan.id,
+        kind: "webhook",
+        summary: `Trigger ${eventType} for resource ${resourceId} does not match plan ${plan.id}'s bound resource ${typed[0]!.trigger!.resourceId} — deferred step(s) stay gated`,
+        detail: { eventType, resourceId, boundResourceId: typed[0]!.trigger!.resourceId },
+      });
+      continue;
+    }
     store.updatePlanStatus(plan.id, "executing");
     store.record({ planId: plan.id, kind: "webhook", summary: `Trigger ${eventType} received — resuming ${due.length} deferred step(s) of plan ${plan.id}` });
     const outcomes: StepOutcome[] = [];
     const newSteps = [...plan.steps];
     for (const [i, step] of plan.steps.entries()) {
       if ((step.payload as Record<string, unknown>)._executed) continue; // ran in an earlier pass
-      if (step.trigger?.on !== eventType) {
-        // Steps with a different trigger stay deferred; already-run
-        // immediate steps are not re-executed.
+      if (!triggerMatches(step, eventType, resourceId)) {
+        // Steps gated on a different event (or a different resource)
+        // stay deferred; already-run immediate steps are not re-executed.
         if (step.trigger) outcomes.push({ step, outcome: "deferred" });
         continue;
       }

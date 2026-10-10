@@ -53,7 +53,13 @@ export async function syncFromPayPal(store: LedgerStore, client: PayPalClient): 
   const alreadyProcessedEventIds: string[] = [];
   const resumed: ExecutionResult[] = [];
 
-  const processEvent = async (eventId: string, eventType: string, summary: string, source: "emitted" | "state") => {
+  const processEvent = async (
+    eventId: string,
+    eventType: string,
+    summary: string,
+    source: "emitted" | "state",
+    resourceId?: string,
+  ) => {
     if (!store.markEventProcessed(eventId)) {
       alreadyProcessedEventIds.push(eventId);
       return;
@@ -64,13 +70,14 @@ export async function syncFromPayPal(store: LedgerStore, client: PayPalClient): 
       summary: `Sync reconciler processed ${eventType} (${eventId}): ${summary}`,
       detail: { eventId, eventType, source },
     });
-    resumed.push(...(await resumeTriggeredSteps(store, client, eventType as WebhookEventType)));
+    resumed.push(...(await resumeTriggeredSteps(store, client, eventType as WebhookEventType, resourceId)));
   };
 
   // 1) Drain undelivered emitted events, in emission order.
   const emitted = (client as EmittedEventsCarrier).emittedEvents ?? [];
   for (const event of emitted) {
-    await processEvent(event.id, event.event_type, event.summary, "emitted");
+    const resourceId = typeof event.resource?.id === "string" ? event.resource.id : undefined;
+    await processEvent(event.id, event.event_type, event.summary, "emitted", resourceId);
   }
 
   // 2) Resource-state sweep with stable synthetic ids (idempotent across
@@ -80,18 +87,18 @@ export async function syncFromPayPal(store: LedgerStore, client: PayPalClient): 
   const emittedTypes = new Set(emitted.map((e) => e.event_type));
   for (const inv of invoices) {
     if (inv.status === "PAID" && !emittedTypes.has("INVOICING.INVOICE.PAID")) {
-      await processEvent(`sync:INVOICING.INVOICE.PAID:${inv.id}`, "INVOICING.INVOICE.PAID", `Invoice ${inv.id} is PAID`, "state");
+      await processEvent(`sync:INVOICING.INVOICE.PAID:${inv.id}`, "INVOICING.INVOICE.PAID", `Invoice ${inv.id} is PAID`, "state", inv.id);
     }
   }
   for (const order of orders) {
     if (order.status === "COMPLETED" && !emittedTypes.has("PAYMENT.CAPTURE.COMPLETED")) {
-      await processEvent(`sync:PAYMENT.CAPTURE.COMPLETED:${order.id}`, "PAYMENT.CAPTURE.COMPLETED", `Order ${order.id} is COMPLETED`, "state");
+      await processEvent(`sync:PAYMENT.CAPTURE.COMPLETED:${order.id}`, "PAYMENT.CAPTURE.COMPLETED", `Order ${order.id} is COMPLETED`, "state", order.id);
     }
   }
   for (const batch of payouts) {
     if (batch.batch_header.batch_status === "SUCCESS" && !emittedTypes.has("PAYMENT.PAYOUTS-ITEM.SUCCEEDED")) {
       const id = batch.batch_header.payout_batch_id;
-      await processEvent(`sync:PAYMENT.PAYOUTS-ITEM.SUCCEEDED:${id}`, "PAYMENT.PAYOUTS-ITEM.SUCCEEDED", `Payout batch ${id} is SUCCESS`, "state");
+      await processEvent(`sync:PAYMENT.PAYOUTS-ITEM.SUCCEEDED:${id}`, "PAYMENT.PAYOUTS-ITEM.SUCCEEDED", `Payout batch ${id} is SUCCESS`, "state", id);
     }
   }
 

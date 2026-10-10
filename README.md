@@ -98,6 +98,10 @@ curl -X POST localhost:3000/api/agent/execute -H 'content-type: application/json
   (unverified events are rejected, audited, and never marked processed),
   deduplicates by event id (a redelivery is acknowledged as a duplicate and
   never causes a second PayPal call), and resumes gated plan steps.
+  Resumption is resource-correlated: a gated step is bound at execution
+  time to the invoice its own plan created, so one invoice's payment can
+  never release another plan's payout — a mismatched event is audit-logged
+  and the step stays gated.
 - **Sync reconciler.** `GET /api/paypal/sync` is the polling fallback for
   instances webhooks cannot reach: it drains undelivered events in order and
   sweeps resource state with stable synthetic event ids, so repeat syncs are
