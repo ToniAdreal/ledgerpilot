@@ -6,7 +6,7 @@ An AI money operator for solo sellers and freelancers. You say what happened in 
 
 ## Status
 
-Core loop, part 1: the deterministic agent pipeline is live — a plain-English brief becomes a typed action plan, nothing executes without approval, and a payout gated on invoice payment stays deferred until the payment lands. The webhook handler, sync reconciler, and AG Grid operations console land in the following milestones.
+Core loop, part 2: the deterministic agent pipeline is live — a plain-English brief becomes a typed action plan, nothing executes without approval, and a payout gated on invoice payment stays deferred until the payment lands. Verified, idempotent webhooks (`POST /api/paypal/webhooks`) now resume gated steps, and a polling sync reconciler (`GET /api/paypal/sync`) closes the same loop when webhooks cannot reach the instance. The AG Grid operations console lands in the next milestone.
 
 Try it against the running dev server:
 
@@ -39,7 +39,10 @@ Mock mode (`PAYPAL_MODE=mock`, the default) implements the full PayPal surface u
 - `src/lib/agent/parser.ts` — deterministic NL brief → typed action plan parser (no LLM, no keys; relative due dates resolved against an injectable reference date).
 - `src/lib/agent/store.ts` — in-memory ledger: plans, the append-only activity/audit log, and webhook event-id idempotency.
 - `src/lib/agent/executor.ts` — the only path from an approved plan to PayPal calls; trigger-gated steps are deferred and resumed by `resumeTriggeredSteps` when the matching event arrives.
+- `src/lib/agent/webhooks.ts` — webhook handling: signature verification through the adapter, event-id idempotency, audit logging, and trigger resume. Unverified events are rejected and never marked processed.
+- `src/lib/agent/reconciler.ts` — polling fallback (`syncFromPayPal`): drains undelivered emitted events and sweeps resource state with stable synthetic event ids, so repeat syncs are no-ops.
 - `src/app/api/agent/` — `POST /plan` (brief → plan), `POST /approve` (the approval gate), `POST /execute` (approved plans only).
+- `src/app/api/paypal/` — `POST /webhooks` (401 on bad signature, 200 on processed/duplicate), `GET /sync` (idempotent reconciler).
 - `src/app/` — Next.js App Router UI.
 
 ## Environment

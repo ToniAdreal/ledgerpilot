@@ -9,8 +9,9 @@ export default function HomePage() {
       </p>
       <p>
         <strong>Status:</strong> core-loop milestone — the agent plan/approve/execute pipeline is
-        live via <code>/api/agent/*</code> (mock-first PayPal adapter underneath). The operations
-        console lands next.
+        live via <code>/api/agent/*</code>, with verified idempotent webhooks and a sync
+        reconciler via <code>/api/paypal/*</code> (mock-first PayPal adapter underneath). The
+        operations console lands next.
       </p>
     </main>
   );
