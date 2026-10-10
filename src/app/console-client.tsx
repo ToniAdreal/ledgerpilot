@@ -35,7 +35,10 @@ import {
 } from "ag-grid-community";
 import {
   GRID_TITLES,
+  buildCsvExportParams,
   buildOverlayTemplate,
+  csvExportBlockReason,
+  findChangedRowIds,
   gridCaption,
   resolveConsoleBanner,
   resolveGridOverlay,
@@ -45,6 +48,7 @@ import {
   type ConsoleLoadStatus,
   type ConsoleSummary,
   type DisputeRow,
+  type FlashRow,
   type InvoiceRow,
   type OrderRow,
   type PayoutRow,
@@ -103,6 +107,17 @@ export default function ConsoleClient() {
     transactions: transactions.length,
   };
 
+  /* Change-flash bookkeeping (src/lib/console/grid-tools.ts): the
+   * previous row snapshot per grid, and the ids whose watched fields
+   * flipped on the latest refresh, waiting to be flashed once the
+   * new rowData has rendered. */
+  const prevRows = useRef<Record<ConsoleGridId, FlashRow[]>>({
+    invoices: [], orders: [], payouts: [], activity: [], disputes: [], transactions: [],
+  });
+  const pendingFlash = useRef<Record<ConsoleGridId, string[]>>({
+    invoices: [], orders: [], payouts: [], activity: [], disputes: [], transactions: [],
+  });
+
   const refresh = useCallback(async () => {
     setLoadStatus("loading");
     try {
@@ -115,6 +130,19 @@ export default function ConsoleClient() {
         fetch("/api/console/disputes").then((r) => r.json()),
         fetch("/api/console/transactions").then((r) => r.json()),
       ]);
+      const nextRows: Record<ConsoleGridId, FlashRow[]> = {
+        invoices: i.invoices as FlashRow[],
+        orders: o.orders as FlashRow[],
+        payouts: p.payouts as FlashRow[],
+        activity: a.activity as FlashRow[],
+        disputes: d.disputes as FlashRow[],
+        transactions: t.transactions as FlashRow[],
+      };
+      for (const grid of Object.keys(nextRows) as ConsoleGridId[]) {
+        const changed = findChangedRowIds(grid, prevRows.current[grid], nextRows[grid]);
+        if (changed.length > 0) pendingFlash.current[grid] = changed;
+        prevRows.current[grid] = nextRows[grid];
+      }
       setSummary(s.summary as ConsoleSummary);
       setInvoices(i.invoices as InvoiceRow[]);
       setOrders(o.orders as OrderRow[]);
@@ -194,13 +222,36 @@ export default function ConsoleClient() {
     [syncGrid],
   );
 
-  /* Data or load-status changes re-resolve every mounted grid. */
+  /* Data or load-status changes re-resolve every mounted grid, and
+   * flash any rows whose state flipped on the latest refresh (the
+   * row that just turned PAID is the demo's money shot). */
   useEffect(() => {
     for (const target of Object.keys(gridApis.current) as ConsoleGridId[]) {
       const api = gridApis.current[target];
-      if (api) syncGrid(target, api);
+      if (!api) continue;
+      syncGrid(target, api);
+      const ids = pendingFlash.current[target];
+      if (ids.length > 0) {
+        const nodes = ids
+          .map((id) => api.getRowNode(id))
+          .filter((n): n is NonNullable<typeof n> => !!n);
+        if (nodes.length > 0) api.flashCells({ rowNodes: nodes });
+        pendingFlash.current[target] = [];
+      }
     }
   }, [loadStatus, invoices, orders, payouts, activity, disputes, transactions, error, syncGrid]);
+
+  /* CSV export (Community feature): the pure view-model decides the
+   * file name and whether an export may run; this only calls the API. */
+  const exportCsv = useCallback(
+    (grid: ConsoleGridId) => {
+      const api = gridApis.current[grid];
+      if (!api) return;
+      if (csvExportBlockReason({ totalRows: loadFacts.current.totals[grid], status: loadFacts.current.status })) return;
+      api.exportDataAsCsv(buildCsvExportParams(grid));
+    },
+    [],
+  );
 
   const applyAsk = useCallback((result: AskResult) => {
     for (const target of ASK_TARGETS) {
@@ -390,6 +441,13 @@ export default function ConsoleClient() {
     [],
   );
 
+  /* Stable row ids (every read-model row carries `id`) — required so
+   * flashCells / getRowNode can find the row that just flipped. */
+  const getRowId = useCallback(
+    (params: { data: { id: string } }) => params.data.id,
+    [],
+  );
+
   const banner = resolveConsoleBanner({ status: loadStatus, summary, errorMessage: error });
   const kpiTotals = (totalsValue: ConsoleSummary["outstanding"] | null): string =>
     resolveKpiDisplay(loadStatus, totalsValue ? formatTotals(totalsValue) : null);
@@ -400,22 +458,34 @@ export default function ConsoleClient() {
       resolveGridOverlay({ grid, status: loadStatus, totalRows: totals[grid], errorMessage: error }),
     );
 
-  const sectionHead = (grid: ConsoleGridId) => (
-    <div className="grid-section-head">
-      <h2>{GRID_TITLES[grid]}</h2>
-      <span className="grid-count">{totals[grid]}</span>
-      <span className="grid-caption">
-        {gridCaption({
-          grid,
-          status: loadStatus,
-          totalRows: totals[grid],
-          displayedRows: gridDisplay[grid].displayed,
-          filterActive: gridDisplay[grid].filterActive,
-          errorMessage: error,
-        })}
-      </span>
-    </div>
-  );
+  const sectionHead = (grid: ConsoleGridId) => {
+    const exportBlock = csvExportBlockReason({ totalRows: totals[grid], status: loadStatus });
+    return (
+      <div className="grid-section-head">
+        <h2>{GRID_TITLES[grid]}</h2>
+        <span className="grid-count">{totals[grid]}</span>
+        <span className="grid-caption">
+          {gridCaption({
+            grid,
+            status: loadStatus,
+            totalRows: totals[grid],
+            displayedRows: gridDisplay[grid].displayed,
+            filterActive: gridDisplay[grid].filterActive,
+            errorMessage: error,
+          })}
+        </span>
+        <button
+          type="button"
+          className="command-btn grid-export-btn"
+          disabled={exportBlock !== null}
+          title={exportBlock ?? `Download ${GRID_TITLES[grid]} as CSV`}
+          onClick={() => exportCsv(grid)}
+        >
+          Export CSV
+        </button>
+      </div>
+    );
+  };
 
   return (
     <section>
@@ -487,6 +557,7 @@ export default function ConsoleClient() {
           <AgGridReact<InvoiceRow>
             theme={gridTheme}
             rowData={invoices}
+            getRowId={getRowId}
             columnDefs={invoiceColumns}
             defaultColDef={defaultColDef}
             onGridReady={gridReady("invoices")}
@@ -506,6 +577,7 @@ export default function ConsoleClient() {
           <AgGridReact<OrderRow>
             theme={gridTheme}
             rowData={orders}
+            getRowId={getRowId}
             columnDefs={orderColumns}
             defaultColDef={defaultColDef}
             onGridReady={gridReady("orders")}
@@ -525,6 +597,7 @@ export default function ConsoleClient() {
           <AgGridReact<PayoutRow>
             theme={gridTheme}
             rowData={payouts}
+            getRowId={getRowId}
             columnDefs={payoutColumns}
             defaultColDef={defaultColDef}
             onGridReady={gridReady("payouts")}
@@ -544,6 +617,7 @@ export default function ConsoleClient() {
           <AgGridReact<DisputeRow>
             theme={gridTheme}
             rowData={disputes}
+            getRowId={getRowId}
             columnDefs={disputeColumns}
             defaultColDef={defaultColDef}
             onGridReady={gridReady("disputes")}
@@ -563,6 +637,7 @@ export default function ConsoleClient() {
           <AgGridReact<TransactionRow>
             theme={gridTheme}
             rowData={transactions}
+            getRowId={getRowId}
             columnDefs={transactionColumns}
             defaultColDef={defaultColDef}
             onGridReady={gridReady("transactions")}
@@ -582,6 +657,7 @@ export default function ConsoleClient() {
           <AgGridReact<ActivityRow>
             theme={gridTheme}
             rowData={activity}
+            getRowId={getRowId}
             columnDefs={activityColumns}
             defaultColDef={defaultColDef}
             onGridReady={gridReady("activity")}

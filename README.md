@@ -122,9 +122,17 @@ curl -X POST localhost:3000/api/agent/execute -H 'content-type: application/json
   seeded demo rows are always flagged "Sample") and **Reconciliation —
   Transaction Search** (the signed money ledger: invoice payments in,
   payout batches out). All grids have sorting, column + floating filters,
-  pagination, and status pills. Money totals are grouped **per currency and
+  pagination, status pills, and a per-grid **Export CSV** button (dated
+  file name, disabled while loading or when the grid is empty). When a
+  refresh shows a row's state flipped — the invoice that just turned
+  `PAID`, a capture completing, a payout landing — that row **flashes**,
+  so a webhook-driven change is visible the moment it lands. Money
+  totals are grouped **per currency and
   never summed across currencies**. AG Grid Community edition only (no trial
-  watermark).
+  watermark) — which is also why there is no in-grid row grouping:
+  grouping is an AG Grid Enterprise feature, so the Activity grid's
+  Plan column + filter serves as the grouping substitute instead of
+  loading a licensed module.
 - **Honest console states.** Loading, load-error, empty, and filtered-empty
   are four different states with four different messages — resolved by a
   pure, unit-tested view-model, never a bare grid: a fresh console explains
@@ -149,7 +157,7 @@ curl -X POST localhost:3000/api/agent/execute -H 'content-type: application/json
 ```bash
 npm install
 npm run dev        # http://localhost:3000
-npm test           # full test suite (152 tests)
+npm test           # full test suite (162 tests)
 npm run typecheck  # tsc --noEmit
 npm run build      # production build
 ```
@@ -221,9 +229,11 @@ mock mode a config swap rather than a rewrite.
   with overdue flags, order rows with capture state, payout rows flattened
   one-per-item with batch context, activity/audit rows, dispute rows with
   response deadlines + sample flags, transaction rows for reconciliation,
-  per-currency KPI totals), plus the console-state view-model (`states.ts`):
-  loading / error / empty / filtered-empty resolution, overlay templates, the
-  console banner, and KPI/caption rules.
+  per-currency KPI totals), the console-state view-model (`states.ts`:
+  loading / error / empty / filtered-empty resolution, overlay templates,
+  the console banner, and KPI/caption rules), and the grid-tools
+  view-model (`grid-tools.ts`: CSV export naming/gating + change-flash
+  detection).
 - `src/lib/command/` — Agent Command bar view-model: brief validation,
   example briefs, the plan-review model (step labels, exact PayPal call,
   trigger badges), and action-availability rules that mirror the server-side
@@ -279,7 +289,7 @@ signatures mirror the REST resources one-to-one.
 ## Testing
 
 ```bash
-npm test           # vitest — 152 tests, all green
+npm test           # vitest — 162 tests, all green
 npm run typecheck  # TypeScript strict, clean
 npm run build      # Next.js production build
 ```
@@ -296,7 +306,10 @@ non-interference, resource-correlated trigger resumption), console read
 models (per-currency totals, overdue flags, dispute response deadlines +
 sample flags, signed reconciliation ledger), console states (loading /
 error / empty / filtered-empty precedence, overlay HTML escaping, banner
-and KPI rules), the command-bar gate matrix, Ask-the-grid parsing +
+and KPI rules), console grid tools (dated CSV export
+file names + export gating, change-flash detection — a SENT→PAID flip
+flashes, new rows never do, append-only grids watch nothing), the
+command-bar gate matrix, Ask-the-grid parsing +
 validator negative cases, the full Judge Mode loop (seed idempotency,
 the historical-event guard, double-payment no-op), and the sandbox REST
 adapter against a stub fetch (OAuth caching/expiry, the links-only
