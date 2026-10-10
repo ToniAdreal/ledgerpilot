@@ -108,8 +108,12 @@ curl -X POST localhost:3000/api/agent/execute -H 'content-type: application/json
   no-ops. It never calls a mutating PayPal endpoint.
 - **Operations console (AG Grid).** Four first-class grids — **Invoices**,
   **Orders / Checkout**, **Payouts**, and **Agent Activity & Webhook Audit** —
-  with sorting, column + floating filters, pagination, status pills, overdue
-  highlighting, and a KPI strip. Money totals are grouped **per currency and
+  plus two read-only surfaces: **Disputes** (buyer, reason, amount, lifecycle
+  stage, and the seller-response deadline, overdue responses highlighted;
+  seeded demo rows are always flagged "Sample") and **Reconciliation —
+  Transaction Search** (the signed money ledger: invoice payments in,
+  payout batches out). All grids have sorting, column + floating filters,
+  pagination, and status pills. Money totals are grouped **per currency and
   never summed across currencies**. AG Grid Community edition only (no trial
   watermark).
 - **Honest console states.** Loading, load-error, empty, and filtered-empty
@@ -136,7 +140,7 @@ curl -X POST localhost:3000/api/agent/execute -H 'content-type: application/json
 ```bash
 npm install
 npm run dev        # http://localhost:3000
-npm test           # full test suite (135 tests)
+npm test           # full test suite (141 tests)
 npm run typecheck  # tsc --noEmit
 npm run build      # production build
 ```
@@ -206,9 +210,10 @@ mock mode a config swap rather than a rewrite.
 - `src/lib/agent/reconciler.ts` — polling fallback (`syncFromPayPal`).
 - `src/lib/console/` — console read models: pure projections (invoice rows
   with overdue flags, order rows with capture state, payout rows flattened
-  one-per-item with batch context, activity/audit rows, per-currency KPI
-  totals), plus the console-state view-model (`states.ts`): loading /
-  error / empty / filtered-empty resolution, overlay templates, the
+  one-per-item with batch context, activity/audit rows, dispute rows with
+  response deadlines + sample flags, transaction rows for reconciliation,
+  per-currency KPI totals), plus the console-state view-model (`states.ts`):
+  loading / error / empty / filtered-empty resolution, overlay templates, the
   console banner, and KPI/caption rules.
 - `src/lib/command/` — Agent Command bar view-model: brief validation,
   example briefs, the plan-review model (step labels, exact PayPal call,
@@ -222,7 +227,7 @@ mock mode a config swap rather than a rewrite.
 - API routes — `src/app/api/agent/` (`POST /plan`, `POST /approve`,
   `POST /execute`), `src/app/api/paypal/` (`POST /webhooks` — 401 on bad
   signature, 200 on processed/duplicate; `GET /sync`),
-  `src/app/api/console/` (`GET /invoices|orders|payouts|activity|summary`),
+  `src/app/api/console/` (`GET /invoices|orders|payouts|activity|disputes|transactions|summary`),
   `src/app/api/judge/` (`GET /`, `POST /seed`, `POST /pay`).
 - UI — `src/app/` (operations console at `/`, Judge Mode at `/judge`).
 
@@ -234,8 +239,8 @@ mock mode a config swap rather than a rewrite.
 | **Orders v2 / Checkout** | Create + capture checkout orders for one-off sales ("sell" briefs) |
 | **Payouts** | Batch payouts drafted by the agent, released only after approval; per-item status tracked |
 | **Webhooks** | `INVOICING.INVOICE.PAID`, `INVOICING.INVOICE.CANCELLED`, `PAYMENT.CAPTURE.COMPLETED`, `PAYMENT.PAYOUTS-ITEM.SUCCEEDED`, `PAYMENT.PAYOUTS-ITEM.FAILED` — signature-verified, idempotent event log |
-| **Disputes (read-only)** | Open disputes surfaced in the console with deadlines; seeded Judge Mode includes one explicitly flagged sample row, because sandbox disputes cannot be reliably manufactured |
-| **Transaction Search (read-only)** | The adapter's transaction ledger feeds reconciliation views |
+| **Disputes (read-only)** | Own console grid: open disputes with buyer, reason, stage, and seller-response deadlines; seeded Judge Mode includes one explicitly flagged sample row, because sandbox disputes cannot be reliably manufactured |
+| **Transaction Search (read-only)** | The console's Reconciliation grid: the signed transaction ledger (payments in, payouts out) behind the KPI totals |
 
 In mock mode all of the above run against the mock adapter, whose method
 signatures mirror the REST resources one-to-one.
@@ -265,7 +270,7 @@ signatures mirror the REST resources one-to-one.
 ## Testing
 
 ```bash
-npm test           # vitest — 135 tests, all green
+npm test           # vitest — 141 tests, all green
 npm run typecheck  # TypeScript strict, clean
 npm run build      # Next.js production build
 ```
@@ -276,7 +281,8 @@ agent pipeline (brief parsing incl. due-date forms and currencies, the
 approval gate, trigger resume, audit ordering), webhooks + reconciler
 (bad-signature rejection, duplicate delivery, webhook/reconciler
 non-interference, resource-correlated trigger resumption), console read
-models (per-currency totals, overdue flags), console states (loading /
+models (per-currency totals, overdue flags, dispute response deadlines +
+sample flags, signed reconciliation ledger), console states (loading /
 error / empty / filtered-empty precedence, overlay HTML escaping, banner
 and KPI rules), the command-bar gate matrix, Ask-the-grid parsing +
 validator negative cases, the full Judge Mode loop (seed idempotency,

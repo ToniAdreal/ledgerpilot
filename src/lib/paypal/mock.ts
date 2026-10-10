@@ -82,6 +82,7 @@ export class MockPayPalClient implements PayPalClient {
               reason: "MERCHANDISE_OR_SERVICE_NOT_RECEIVED",
               status: "WAITING_FOR_SELLER_RESPONSE",
               dispute_life_cycle_stage: "INQUIRY",
+              response_due_date: "2026-10-29T23:59:59Z",
               sample: true,
             },
           ];

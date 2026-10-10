@@ -9,23 +9,34 @@
  * gets its own honest copy here — pure and unit-tested — so the React
  * layer only renders what this module resolves.
  *
- * Grid ids reuse the Ask-the-grid target vocabulary so a grid is the
- * same identifier in the parser, the filter models, and these states.
+ * Grid ids start from the Ask-the-grid target vocabulary; the two
+ * read-only surfaces (disputes, transactions) are console grids too
+ * but are not Ask targets — Ask-the-grid compiles money-movement
+ * questions, and these grids are inspected, not reconfigured.
  */
 
 import type { AskTarget } from "../ask";
 import type { ConsoleSummary } from "./read-models";
 
-export type ConsoleGridId = AskTarget;
+export type ConsoleGridId = AskTarget | "disputes" | "transactions";
 export type ConsoleLoadStatus = "loading" | "ready" | "error";
 
-export const CONSOLE_GRID_IDS: ConsoleGridId[] = ["invoices", "orders", "payouts", "activity"];
+export const CONSOLE_GRID_IDS: ConsoleGridId[] = [
+  "invoices",
+  "orders",
+  "payouts",
+  "activity",
+  "disputes",
+  "transactions",
+];
 
 export const GRID_TITLES: Record<ConsoleGridId, string> = {
   invoices: "Invoices",
   orders: "Orders / Checkout",
   payouts: "Payouts",
   activity: "Agent Activity & Webhook Audit",
+  disputes: "Disputes (read-only)",
+  transactions: "Reconciliation — Transaction Search (read-only)",
 };
 
 /* ------------------------------------------------------------------ */
@@ -56,6 +67,14 @@ const EMPTY_COPY: Record<ConsoleGridId, { title: string; hint: string }> = {
   activity: {
     title: "No activity yet",
     hint: "Every plan, approval, PayPal call, and verified webhook is written here. Draft a plan to start the audit trail.",
+  },
+  disputes: {
+    title: "No disputes on record",
+    hint: "Open disputes from the PayPal Disputes API (read-only) appear here with their response deadlines. Seeded demo data is always flagged “Sample”.",
+  },
+  transactions: {
+    title: "No transactions yet",
+    hint: "Money movement reported by PayPal Transaction Search (read-only) lands here — invoice payments in, payout batches out — once the first loop runs.",
   },
 };
 
@@ -159,7 +178,7 @@ export function resolveConsoleBanner(input: {
     return {
       kind: "loading",
       title: "Loading console data…",
-      message: "Fetching invoices, orders, payouts, and the audit trail.",
+      message: "Fetching invoices, orders, payouts, disputes, transactions, and the audit trail.",
       showJudgeLink: false,
     };
   }

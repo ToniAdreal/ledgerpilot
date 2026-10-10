@@ -15,6 +15,7 @@ import type {
   InvoiceStatus,
   Order,
   PayoutBatch,
+  Transaction,
 } from "../types";
 
 /* ------------------------------------------------------------------ */
@@ -186,6 +187,97 @@ export function buildActivityRows(activity: ActivityRecord[]): ActivityRow[] {
 }
 
 /* ------------------------------------------------------------------ */
+/* Disputes grid (read-only)                                           */
+/* ------------------------------------------------------------------ */
+
+export interface DisputeRow {
+  id: string;
+  buyerName: string;
+  buyerEmail: string;
+  sellerTransactionId: string;
+  status: Dispute["status"];
+  stage: string;
+  /** Raw PayPal reason code, e.g. MERCHANDISE_OR_SERVICE_NOT_RECEIVED. */
+  reason: string;
+  currency: string;
+  amount: string;
+  amountValue: number;
+  createdAt: string;
+  /** Seller-response deadline (ISO timestamp), when PayPal provides one. */
+  responseDueDate?: string;
+  /**
+   * Open dispute whose response deadline's date is before the
+   * reference date — the seller is late to respond.
+   */
+  responseOverdue: boolean;
+  /** Seeded demo row, never a live PayPal record — always surfaced. */
+  sample: boolean;
+}
+
+export function toDisputeRow(dispute: Dispute, referenceDate: string): DisputeRow {
+  const txn = dispute.disputed_transactions[0];
+  return {
+    id: dispute.dispute_id,
+    buyerName: txn?.buyer.name ?? "",
+    buyerEmail: txn?.buyer.email_address ?? "",
+    sellerTransactionId: txn?.seller_transaction_id ?? "",
+    status: dispute.status,
+    stage: dispute.dispute_life_cycle_stage,
+    reason: dispute.reason,
+    currency: dispute.amount.currency_code,
+    amount: dispute.amount.value,
+    amountValue: Number(dispute.amount.value),
+    createdAt: dispute.create_time,
+    responseDueDate: dispute.response_due_date,
+    responseOverdue:
+      dispute.status !== "RESOLVED" &&
+      !!dispute.response_due_date &&
+      dispute.response_due_date.slice(0, 10) < referenceDate,
+    sample: dispute.sample === true,
+  };
+}
+
+/** Newest first (adapter lists are in creation order). */
+export function buildDisputeRows(disputes: Dispute[], referenceDate: string): DisputeRow[] {
+  return [...disputes].reverse().map((d) => toDisputeRow(d, referenceDate));
+}
+
+/* ------------------------------------------------------------------ */
+/* Reconciliation grid — Transaction Search (read-only)                */
+/* ------------------------------------------------------------------ */
+
+export interface TransactionRow {
+  id: string;
+  eventCode: string;
+  date: string;
+  currency: string;
+  /** Signed, formatted decimal string as PayPal reports it. */
+  amount: string;
+  amountValue: number;
+  /** Raw Transaction Search status code: S / P / F / D. */
+  status: Transaction["transaction_status"];
+  subject: string;
+  payerName: string;
+  payerEmail: string;
+}
+
+/** Newest first (the adapter ledger is in initiation order). */
+export function buildTransactionRows(transactions: Transaction[]): TransactionRow[] {
+  return [...transactions].reverse().map((t) => ({
+    id: t.transaction_id,
+    eventCode: t.transaction_event_code,
+    date: t.transaction_initiation_date,
+    currency: t.transaction_amount.currency_code,
+    amount: t.transaction_amount.value,
+    amountValue: Number(t.transaction_amount.value),
+    status: t.transaction_status,
+    subject: t.transaction_subject ?? "",
+    payerName: t.payer_info?.name ?? "",
+    payerEmail: t.payer_info?.email_address ?? "",
+  }));
+}
+
+/* ------------------------------------------------------------------ */
 /* KPI strip                                                           */
 /* ------------------------------------------------------------------ */
 
@@ -211,7 +303,15 @@ export interface ConsoleSummary {
   pendingApprovals: number;
   awaitingTrigger: number;
   openDisputes: number;
-  counts: { invoices: number; orders: number; payouts: number; plans: number; activity: number };
+  counts: {
+    invoices: number;
+    orders: number;
+    payouts: number;
+    plans: number;
+    activity: number;
+    disputes: number;
+    transactions: number;
+  };
 }
 
 function totalsByCurrency(rows: Array<{ currency: string; value: number }>): MoneyTotal[] {
@@ -230,6 +330,7 @@ export function computeSummary(input: {
   orders: Order[];
   payouts: PayoutBatch[];
   disputes: Dispute[];
+  transactions?: Transaction[];
   plans: ActionPlan[];
   activity: ActivityRecord[];
   referenceDate: string;
@@ -263,6 +364,8 @@ export function computeSummary(input: {
       payouts: input.payouts.length,
       plans: input.plans.length,
       activity: input.activity.length,
+      disputes: input.disputes.length,
+      transactions: input.transactions?.length ?? 0,
     },
   };
 }

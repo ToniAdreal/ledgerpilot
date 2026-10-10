@@ -2,8 +2,9 @@
 
 /**
  * Operations console — KPI strip + AG Grid Invoices, Orders, Payouts,
- * and Agent Activity & Webhook audit grids, fed by /api/console/*
- * read models.
+ * Agent Activity & Webhook audit, Disputes (read-only), and
+ * Reconciliation / Transaction Search (read-only) grids, fed by
+ * /api/console/* read models.
  *
  * AG Grid Community only (no Enterprise features, no trial watermark).
  * The Agent Command bar (brief → plan review → approve → execute)
@@ -43,9 +44,11 @@ import {
   type ConsoleGridId,
   type ConsoleLoadStatus,
   type ConsoleSummary,
+  type DisputeRow,
   type InvoiceRow,
   type OrderRow,
   type PayoutRow,
+  type TransactionRow,
 } from "../lib/console";
 import { ASK_TARGETS, type AskResult, type AskTarget } from "../lib/ask";
 import CommandBar from "./command-bar";
@@ -75,6 +78,8 @@ const EMPTY_DISPLAY: Record<ConsoleGridId, GridDisplay> = {
   orders: { displayed: 0, filterActive: false },
   payouts: { displayed: 0, filterActive: false },
   activity: { displayed: 0, filterActive: false },
+  disputes: { displayed: 0, filterActive: false },
+  transactions: { displayed: 0, filterActive: false },
 };
 
 export default function ConsoleClient() {
@@ -83,6 +88,8 @@ export default function ConsoleClient() {
   const [orders, setOrders] = useState<OrderRow[]>([]);
   const [payouts, setPayouts] = useState<PayoutRow[]>([]);
   const [activity, setActivity] = useState<ActivityRow[]>([]);
+  const [disputes, setDisputes] = useState<DisputeRow[]>([]);
+  const [transactions, setTransactions] = useState<TransactionRow[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [loadStatus, setLoadStatus] = useState<ConsoleLoadStatus>("loading");
   const [gridDisplay, setGridDisplay] = useState<Record<ConsoleGridId, GridDisplay>>(EMPTY_DISPLAY);
@@ -92,23 +99,29 @@ export default function ConsoleClient() {
     orders: orders.length,
     payouts: payouts.length,
     activity: activity.length,
+    disputes: disputes.length,
+    transactions: transactions.length,
   };
 
   const refresh = useCallback(async () => {
     setLoadStatus("loading");
     try {
-      const [s, i, o, p, a] = await Promise.all([
+      const [s, i, o, p, a, d, t] = await Promise.all([
         fetch("/api/console/summary").then((r) => r.json()),
         fetch("/api/console/invoices").then((r) => r.json()),
         fetch("/api/console/orders").then((r) => r.json()),
         fetch("/api/console/payouts").then((r) => r.json()),
         fetch("/api/console/activity").then((r) => r.json()),
+        fetch("/api/console/disputes").then((r) => r.json()),
+        fetch("/api/console/transactions").then((r) => r.json()),
       ]);
       setSummary(s.summary as ConsoleSummary);
       setInvoices(i.invoices as InvoiceRow[]);
       setOrders(o.orders as OrderRow[]);
       setPayouts(p.payouts as PayoutRow[]);
       setActivity(a.activity as ActivityRow[]);
+      setDisputes(d.disputes as DisputeRow[]);
+      setTransactions(t.transactions as TransactionRow[]);
       setError(null);
       setLoadStatus("ready");
     } catch (err) {
@@ -187,7 +200,7 @@ export default function ConsoleClient() {
       const api = gridApis.current[target];
       if (api) syncGrid(target, api);
     }
-  }, [loadStatus, invoices, orders, payouts, activity, error, syncGrid]);
+  }, [loadStatus, invoices, orders, payouts, activity, disputes, transactions, error, syncGrid]);
 
   const applyAsk = useCallback((result: AskResult) => {
     for (const target of ASK_TARGETS) {
@@ -303,6 +316,71 @@ export default function ConsoleClient() {
       { field: "planId", headerName: "Plan", width: 120, filter: "agTextColumnFilter" },
       { field: "eventId", headerName: "Webhook event", width: 160, filter: "agTextColumnFilter" },
       { field: "summary", headerName: "Summary", flex: 1, minWidth: 320, filter: "agTextColumnFilter" },
+    ],
+    [],
+  );
+
+  const disputeColumns = useMemo<ColDef<DisputeRow>[]>(
+    () => [
+      { field: "id", headerName: "Dispute", width: 160, filter: "agTextColumnFilter" },
+      { field: "buyerName", headerName: "Buyer", width: 140, filter: "agTextColumnFilter" },
+      { field: "buyerEmail", headerName: "Buyer email", width: 190, filter: "agTextColumnFilter" },
+      { field: "status", headerName: "Status", width: 210, cellRenderer: StatusPill, filter: "agTextColumnFilter" },
+      { field: "stage", headerName: "Stage", width: 130, filter: "agTextColumnFilter" },
+      { field: "reason", headerName: "Reason", flex: 1, minWidth: 240, filter: "agTextColumnFilter" },
+      { field: "currency", headerName: "Currency", width: 100, filter: "agTextColumnFilter" },
+      {
+        field: "amountValue",
+        headerName: "Amount",
+        width: 120,
+        type: "rightAligned",
+        filter: "agNumberColumnFilter",
+        valueFormatter: (p) => (p.data ? `${p.data.currency} ${p.data.amount}` : ""),
+      },
+      {
+        field: "responseDueDate",
+        headerName: "Response due",
+        width: 170,
+        filter: "agDateColumnFilter",
+        valueFormatter: (p) => (p.value ? new Date(String(p.value)).toLocaleString() : "—"),
+        cellStyle: (p) => (p.data?.responseOverdue ? { color: "#b91c1c", fontWeight: 600 } : null),
+      },
+      {
+        field: "sample",
+        headerName: "Sample",
+        width: 100,
+        filter: false,
+        valueFormatter: (p) => (p.value ? "Sample" : "—"),
+        cellStyle: (p) => (p.value ? { color: "#854d0e", fontWeight: 600 } : null),
+      },
+    ],
+    [],
+  );
+
+  const transactionColumns = useMemo<ColDef<TransactionRow>[]>(
+    () => [
+      {
+        field: "date",
+        headerName: "Date",
+        width: 190,
+        filter: "agDateColumnFilter",
+        valueFormatter: (p) => (p.value ? new Date(String(p.value)).toLocaleString() : ""),
+      },
+      { field: "id", headerName: "Transaction", width: 170, filter: "agTextColumnFilter" },
+      { field: "eventCode", headerName: "Event", width: 100, filter: "agTextColumnFilter" },
+      { field: "payerName", headerName: "Payer", width: 140, filter: "agTextColumnFilter" },
+      { field: "subject", headerName: "Subject", flex: 1, minWidth: 240, filter: "agTextColumnFilter" },
+      { field: "status", headerName: "Status", width: 100, filter: "agTextColumnFilter" },
+      { field: "currency", headerName: "Currency", width: 100, filter: "agTextColumnFilter" },
+      {
+        field: "amountValue",
+        headerName: "Amount",
+        width: 130,
+        type: "rightAligned",
+        filter: "agNumberColumnFilter",
+        valueFormatter: (p) => (p.data ? `${p.data.currency} ${p.data.amount}` : ""),
+        cellStyle: (p) => (p.value != null && p.value < 0 ? { color: "#b91c1c" } : null),
+      },
     ],
     [],
   );
@@ -453,6 +531,44 @@ export default function ConsoleClient() {
             onModelUpdated={gridModelUpdated("payouts")}
             onFilterChanged={gridModelUpdated("payouts")}
             overlayNoRowsTemplate={initialOverlay("payouts")}
+            pagination
+            paginationPageSize={10}
+            domLayout="autoHeight"
+          />
+        </div>
+      </div>
+
+      <div className="grid-section">
+        {sectionHead("disputes")}
+        <div className="grid-wrap">
+          <AgGridReact<DisputeRow>
+            theme={gridTheme}
+            rowData={disputes}
+            columnDefs={disputeColumns}
+            defaultColDef={defaultColDef}
+            onGridReady={gridReady("disputes")}
+            onModelUpdated={gridModelUpdated("disputes")}
+            onFilterChanged={gridModelUpdated("disputes")}
+            overlayNoRowsTemplate={initialOverlay("disputes")}
+            pagination
+            paginationPageSize={10}
+            domLayout="autoHeight"
+          />
+        </div>
+      </div>
+
+      <div className="grid-section">
+        {sectionHead("transactions")}
+        <div className="grid-wrap">
+          <AgGridReact<TransactionRow>
+            theme={gridTheme}
+            rowData={transactions}
+            columnDefs={transactionColumns}
+            defaultColDef={defaultColDef}
+            onGridReady={gridReady("transactions")}
+            onModelUpdated={gridModelUpdated("transactions")}
+            onFilterChanged={gridModelUpdated("transactions")}
+            overlayNoRowsTemplate={initialOverlay("transactions")}
             pagination
             paginationPageSize={10}
             domLayout="autoHeight"

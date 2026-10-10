@@ -100,7 +100,15 @@ describe("console summary KPIs", () => {
     expect(summary.pendingApprovals).toBe(1);
     expect(summary.awaitingTrigger).toBe(0);
     expect(summary.openDisputes).toBe(1); // the flagged sample dispute
-    expect(summary.counts).toEqual({ invoices: 3, orders: 0, payouts: 0, plans: 2, activity: 3 });
+    expect(summary.counts).toEqual({
+      invoices: 3,
+      orders: 0,
+      payouts: 0,
+      plans: 2,
+      activity: 3,
+      disputes: 1,
+      transactions: 0,
+    });
   });
 
   it("empty state yields zeroed KPIs, not errors", () => {

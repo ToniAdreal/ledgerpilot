@@ -9,7 +9,7 @@ import {
   type ConsoleSummary,
 } from "../src/lib/console";
 
-const GRIDS = ["invoices", "orders", "payouts", "activity"] as const;
+const GRIDS = ["invoices", "orders", "payouts", "activity", "disputes", "transactions"] as const;
 
 function summaryWith(counts: ConsoleSummary["counts"]): ConsoleSummary {
   return {
@@ -44,7 +44,7 @@ describe("grid overlays", () => {
       expect(overlay.hint.length).toBeGreaterThan(20);
       titles.add(overlay.title);
     }
-    expect(titles.size).toBe(4); // no shared generic "no data" message
+    expect(titles.size).toBe(6); // no shared generic "no data" message
     expect(resolveGridOverlay({ grid: "invoices", status: "ready", totalRows: 0 }).hint).toContain("Judge Mode");
     expect(resolveGridOverlay({ grid: "activity", status: "ready", totalRows: 0 }).hint).toContain("audit trail");
   });
@@ -114,7 +114,7 @@ describe("console banner", () => {
 
     const fresh = resolveConsoleBanner({
       status: "ready",
-      summary: summaryWith({ invoices: 0, orders: 0, payouts: 0, plans: 0, activity: 0 }),
+      summary: summaryWith({ invoices: 0, orders: 0, payouts: 0, plans: 0, activity: 0, disputes: 0, transactions: 0 }),
     });
     expect(fresh.kind).toBe("fresh-start");
     expect(fresh.showJudgeLink).toBe(true);
@@ -122,8 +122,8 @@ describe("console banner", () => {
 
     // Any single surface with data ends the fresh-start state.
     for (const counts of [
-      { invoices: 1, orders: 0, payouts: 0, plans: 0, activity: 0 },
-      { invoices: 0, orders: 0, payouts: 0, plans: 0, activity: 2 },
+      { invoices: 1, orders: 0, payouts: 0, plans: 0, activity: 0, disputes: 0, transactions: 0 },
+      { invoices: 0, orders: 0, payouts: 0, plans: 0, activity: 2, disputes: 0, transactions: 0 },
     ]) {
       expect(resolveConsoleBanner({ status: "ready", summary: summaryWith(counts) }).kind).toBe("none");
     }

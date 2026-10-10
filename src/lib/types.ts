@@ -139,6 +139,8 @@ export interface Dispute {
   reason: string;
   status: "OPEN" | "WAITING_FOR_BUYER_RESPONSE" | "WAITING_FOR_SELLER_RESPONSE" | "RESOLVED";
   dispute_life_cycle_stage: string;
+  /** PayPal's seller-response deadline (ISO timestamp), when provided. */
+  response_due_date?: string;
   /** True when this row is seeded demo data, not a live PayPal record. */
   sample?: boolean;
 }

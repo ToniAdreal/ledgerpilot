@@ -511,6 +511,9 @@ export class SandboxPayPalClient implements PayPalClient {
           ? status
           : "OPEN") as Dispute["status"],
         dispute_life_cycle_stage: asString(r.dispute_life_cycle_stage),
+        ...(typeof r.response_due_date === "string" && r.response_due_date
+          ? { response_due_date: r.response_due_date }
+          : {}),
       };
     });
   }
