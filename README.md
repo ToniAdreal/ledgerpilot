@@ -93,6 +93,19 @@ curl -X POST localhost:3000/api/agent/execute -H 'content-type: application/json
   plans execute nothing, and re-executing a settled plan is refused (409).
   Trigger-gated steps resume only via a verified webhook or the sync
   reconciler — never via a second execute call.
+- **Resource-shaped plan drafts (the REST API respects the gate too).**
+  `POST /api/paypal/invoices`, `POST /api/paypal/orders`, and
+  `POST /api/paypal/payouts` are thin, validated wrappers over Invoicing
+  v2 / Orders v2 / Payouts — but they *draft* a typed action plan
+  (`source: "api"`, `pending_approval`) instead of calling PayPal, so
+  the approval gate has no REST back door: nothing is created, sent, or
+  paid until the plan is approved and executed through the ordinary
+  agent flow, and the drafted steps are payload-identical to the NL
+  parser's. A payout draft may name `payWhenInvoicePaid` to gate itself
+  on one specific invoice's payment event (resource-correlated, like
+  every gated step). Invalid input (bad currency, non-positive or
+  over-cap amount, impossible due date, malformed email) is a 400 with
+  the reason — never a half-valid plan.
 - **Verified, idempotent webhooks.** `POST /api/paypal/webhooks` verifies the
   event signature through the PayPal adapter before trusting the payload
   (unverified events are rejected, audited, and never marked processed),
@@ -170,7 +183,7 @@ curl -X POST localhost:3000/api/agent/execute -H 'content-type: application/json
 ```bash
 npm install
 npm run dev        # http://localhost:3000
-npm test           # full test suite (168 tests)
+npm test           # full test suite (188 tests)
 npm run typecheck  # tsc --noEmit
 npm run build      # production build
 ```
@@ -260,7 +273,8 @@ mock mode a config swap rather than a rewrite.
   them into the gated payout), live spine state, and the record-payment +
   sync payment leg.
 - API routes — `src/app/api/agent/` (`POST /plan`, `POST /approve`,
-  `POST /execute`), `src/app/api/paypal/` (`POST /webhooks` — 401 on bad
+  `POST /execute`), `src/app/api/paypal/` (`POST /invoices|orders|payouts` —
+  validated wrappers that draft plans, never execute; `POST /webhooks` — 401 on bad
   signature, 200 on processed/duplicate; `GET /sync`; `POST /orders/capture`),
   `src/app/api/console/` (`GET /invoices|orders|payouts|activity|disputes|transactions|summary`),
   `src/app/api/judge/` (`GET /`, `POST /seed`, `POST /pay`).
@@ -305,7 +319,7 @@ signatures mirror the REST resources one-to-one.
 ## Testing
 
 ```bash
-npm test           # vitest — 168 tests, all green
+npm test           # vitest — 188 tests, all green
 npm run typecheck  # TypeScript strict, clean
 npm run build      # Next.js production build
 ```
@@ -337,7 +351,11 @@ nested Transaction Search shape, webhook verification SUCCESS/FAILURE,
 and PayPal error translation), and the optional LLM adapter (config
 gating, deterministic-first non-consultation, validator negative cases,
 fallback error honesty, and a full approval-gated loop from an
-LLM-sourced plan) — fake credentials only, no network.
+LLM-sourced plan), and the resource plan drafts behind
+`POST /api/paypal/invoices|orders|payouts` (parser-identical payloads,
+the no-execution-without-approval invariant over HTTP-shaped inputs,
+a payout gated on a named invoice firing only for that invoice, and
+the validation rejection matrix) — fake credentials only, no network.
 
 ## Demo
 
