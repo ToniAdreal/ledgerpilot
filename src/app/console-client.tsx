@@ -11,6 +11,12 @@
  * validated filter models from src/lib/ask via `api.setFilterModel`.
  * Judge Mode (src/lib/judge) seeds the demo scenario from /judge; the
  * console is where its spine plan is approved and executed.
+ *
+ * Loading / error / empty / filtered-empty presentation is resolved
+ * by the pure view-model in src/lib/console/states.ts: this component
+ * tracks load status + per-grid displayed counts, renders the console
+ * banner and section captions from it, and pushes the resolved
+ * overlay into each grid (`overlayNoRowsTemplate` + show/hide).
  */
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
@@ -20,16 +26,26 @@ import {
   ModuleRegistry,
   themeQuartz,
   type ColDef,
+  type FilterChangedEvent,
   type GridApi,
   type GridReadyEvent,
   type ICellRendererParams,
+  type ModelUpdatedEvent,
 } from "ag-grid-community";
-import type {
-  ActivityRow,
-  ConsoleSummary,
-  InvoiceRow,
-  OrderRow,
-  PayoutRow,
+import {
+  GRID_TITLES,
+  buildOverlayTemplate,
+  gridCaption,
+  resolveConsoleBanner,
+  resolveGridOverlay,
+  resolveKpiDisplay,
+  type ActivityRow,
+  type ConsoleGridId,
+  type ConsoleLoadStatus,
+  type ConsoleSummary,
+  type InvoiceRow,
+  type OrderRow,
+  type PayoutRow,
 } from "../lib/console";
 import { ASK_TARGETS, type AskResult, type AskTarget } from "../lib/ask";
 import CommandBar from "./command-bar";
@@ -49,6 +65,18 @@ function formatTotals(totals: ConsoleSummary["outstanding"]): string {
   return totals.map((t) => `${t.currency_code} ${t.value}`).join(" · ");
 }
 
+interface GridDisplay {
+  displayed: number;
+  filterActive: boolean;
+}
+
+const EMPTY_DISPLAY: Record<ConsoleGridId, GridDisplay> = {
+  invoices: { displayed: 0, filterActive: false },
+  orders: { displayed: 0, filterActive: false },
+  payouts: { displayed: 0, filterActive: false },
+  activity: { displayed: 0, filterActive: false },
+};
+
 export default function ConsoleClient() {
   const [summary, setSummary] = useState<ConsoleSummary | null>(null);
   const [invoices, setInvoices] = useState<InvoiceRow[]>([]);
@@ -56,8 +84,18 @@ export default function ConsoleClient() {
   const [payouts, setPayouts] = useState<PayoutRow[]>([]);
   const [activity, setActivity] = useState<ActivityRow[]>([]);
   const [error, setError] = useState<string | null>(null);
+  const [loadStatus, setLoadStatus] = useState<ConsoleLoadStatus>("loading");
+  const [gridDisplay, setGridDisplay] = useState<Record<ConsoleGridId, GridDisplay>>(EMPTY_DISPLAY);
+
+  const totals: Record<ConsoleGridId, number> = {
+    invoices: invoices.length,
+    orders: orders.length,
+    payouts: payouts.length,
+    activity: activity.length,
+  };
 
   const refresh = useCallback(async () => {
+    setLoadStatus("loading");
     try {
       const [s, i, o, p, a] = await Promise.all([
         fetch("/api/console/summary").then((r) => r.json()),
@@ -72,8 +110,10 @@ export default function ConsoleClient() {
       setPayouts(p.payouts as PayoutRow[]);
       setActivity(a.activity as ActivityRow[]);
       setError(null);
+      setLoadStatus("ready");
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to load console data");
+      setLoadStatus("error");
     }
   }, []);
 
@@ -84,15 +124,70 @@ export default function ConsoleClient() {
   /* Ask-the-grid: one GridApi per surface; a parsed query sets the
    * targeted grids' filter models and clears the rest, so the visible
    * state always matches the AskBar readout exactly. */
-  const gridApis = useRef<Partial<Record<AskTarget, GridApi>>>({});
+  const gridApis = useRef<Partial<Record<ConsoleGridId, GridApi>>>({});
+
+  /* Latest load facts for the (stable) grid-event handlers below. */
+  const loadFacts = useRef({ status: loadStatus, totals, error });
+  loadFacts.current = { status: loadStatus, totals, error };
+
+  /**
+   * Push the view-model's verdict for one grid into that grid: the
+   * resolved overlay template is shown when the grid has nothing to
+   * display, and hidden when rows are on screen. A background refresh
+   * (loading with rows already present) never covers live data.
+   * Also mirrors displayed count / filter activity into React state
+   * for the section captions.
+   */
+  const syncGrid = useCallback((target: ConsoleGridId, api: GridApi) => {
+    const facts = loadFacts.current;
+    const totalRows = facts.totals[target];
+    const displayed = api.getDisplayedRowCount();
+    const filterActive = api.isAnyFilterPresent();
+    const overlay = resolveGridOverlay({
+      grid: target,
+      status: facts.status,
+      totalRows,
+      displayedRows: displayed,
+      filterActive,
+      errorMessage: facts.error,
+    });
+    if (overlay.kind === "none" || (overlay.kind === "loading" && totalRows > 0)) {
+      api.hideOverlay();
+    } else {
+      api.setGridOption("overlayNoRowsTemplate", buildOverlayTemplate(overlay));
+      api.showNoRowsOverlay();
+    }
+    setGridDisplay((prev) => {
+      const current = prev[target];
+      if (current.displayed === displayed && current.filterActive === filterActive) return prev;
+      return { ...prev, [target]: { displayed, filterActive } };
+    });
+  }, []);
 
   const gridReady = useCallback(
-    (target: AskTarget) =>
+    (target: ConsoleGridId) =>
       (event: GridReadyEvent): void => {
         gridApis.current[target] = event.api;
+        syncGrid(target, event.api);
       },
-    [],
+    [syncGrid],
   );
+
+  const gridModelUpdated = useCallback(
+    (target: ConsoleGridId) =>
+      (event: ModelUpdatedEvent | FilterChangedEvent): void => {
+        syncGrid(target, event.api);
+      },
+    [syncGrid],
+  );
+
+  /* Data or load-status changes re-resolve every mounted grid. */
+  useEffect(() => {
+    for (const target of Object.keys(gridApis.current) as ConsoleGridId[]) {
+      const api = gridApis.current[target];
+      if (api) syncGrid(target, api);
+    }
+  }, [loadStatus, invoices, orders, payouts, activity, error, syncGrid]);
 
   const applyAsk = useCallback((result: AskResult) => {
     for (const target of ASK_TARGETS) {
@@ -217,100 +312,171 @@ export default function ConsoleClient() {
     [],
   );
 
+  const banner = resolveConsoleBanner({ status: loadStatus, summary, errorMessage: error });
+  const kpiTotals = (totalsValue: ConsoleSummary["outstanding"] | null): string =>
+    resolveKpiDisplay(loadStatus, totalsValue ? formatTotals(totalsValue) : null);
+  const kpiCount = (value: number | null): string => resolveKpiDisplay(loadStatus, value);
+
+  const initialOverlay = (grid: ConsoleGridId): string =>
+    buildOverlayTemplate(
+      resolveGridOverlay({ grid, status: loadStatus, totalRows: totals[grid], errorMessage: error }),
+    );
+
+  const sectionHead = (grid: ConsoleGridId) => (
+    <div className="grid-section-head">
+      <h2>{GRID_TITLES[grid]}</h2>
+      <span className="grid-count">{totals[grid]}</span>
+      <span className="grid-caption">
+        {gridCaption({
+          grid,
+          status: loadStatus,
+          totalRows: totals[grid],
+          displayedRows: gridDisplay[grid].displayed,
+          filterActive: gridDisplay[grid].filterActive,
+          errorMessage: error,
+        })}
+      </span>
+    </div>
+  );
+
   return (
     <section>
       <CommandBar onSettled={() => void refresh()} />
       <AskBar onApply={applyAsk} onClear={clearAsk} />
-      <div className="kpi-strip">
+
+      {banner.kind !== "none" && (
+        <div
+          className={`console-banner console-banner-${banner.kind}`}
+          role={banner.kind === "error" ? "alert" : "status"}
+        >
+          <strong>{banner.title}</strong>
+          <span>{banner.message}</span>
+          {banner.showJudgeLink && (
+            <a className="command-btn judge-link-btn" href="/judge">
+              Open Judge Mode
+            </a>
+          )}
+          {banner.kind === "error" && (
+            <button type="button" className="command-btn" onClick={() => void refresh()}>
+              Retry
+            </button>
+          )}
+        </div>
+      )}
+
+      <div className="kpi-strip" aria-busy={loadStatus === "loading"}>
         <div className="kpi">
           <span className="kpi-label">Outstanding</span>
-          <span className="kpi-value">{summary ? formatTotals(summary.outstanding) : "…"}</span>
+          <span className="kpi-value">{kpiTotals(summary?.outstanding ?? null)}</span>
         </div>
         <div className="kpi">
           <span className="kpi-label">Collected to date</span>
-          <span className="kpi-value">{summary ? formatTotals(summary.collected) : "…"}</span>
+          <span className="kpi-value">{kpiTotals(summary?.collected ?? null)}</span>
         </div>
         <div className="kpi">
           <span className="kpi-label">Pending approvals</span>
-          <span className="kpi-value">{summary ? summary.pendingApprovals : "…"}</span>
+          <span className="kpi-value">{kpiCount(summary?.pendingApprovals ?? null)}</span>
         </div>
         <div className="kpi">
           <span className="kpi-label">Awaiting trigger</span>
-          <span className="kpi-value">{summary ? summary.awaitingTrigger : "…"}</span>
+          <span className="kpi-value">{kpiCount(summary?.awaitingTrigger ?? null)}</span>
         </div>
         <div className="kpi">
           <span className="kpi-label">Open disputes</span>
-          <span className="kpi-value">{summary ? summary.openDisputes : "…"}</span>
+          <span className="kpi-value">{kpiCount(summary?.openDisputes ?? null)}</span>
         </div>
         <div className="kpi">
           <span className="kpi-label">Captured orders</span>
-          <span className="kpi-value">{summary ? formatTotals(summary.capturedOrders) : "…"}</span>
+          <span className="kpi-value">{kpiTotals(summary?.capturedOrders ?? null)}</span>
         </div>
         <div className="kpi">
           <span className="kpi-label">Payouts sent</span>
-          <span className="kpi-value">{summary ? formatTotals(summary.payoutsSent) : "…"}</span>
+          <span className="kpi-value">{kpiTotals(summary?.payoutsSent ?? null)}</span>
         </div>
-        <button type="button" className="refresh-btn" onClick={() => void refresh()}>
-          Refresh
+        <button
+          type="button"
+          className="refresh-btn"
+          disabled={loadStatus === "loading"}
+          onClick={() => void refresh()}
+        >
+          {loadStatus === "loading" ? "Loading…" : "Refresh"}
         </button>
       </div>
 
-      {error && <p className="console-error">Console data failed to load: {error}</p>}
-
-      <h2>Invoices</h2>
-      <div className="grid-wrap">
-        <AgGridReact<InvoiceRow>
-          theme={gridTheme}
-          rowData={invoices}
-          columnDefs={invoiceColumns}
-          defaultColDef={defaultColDef}
-          onGridReady={gridReady("invoices")}
-          pagination
-          paginationPageSize={10}
-          domLayout="autoHeight"
-        />
+      <div className="grid-section">
+        {sectionHead("invoices")}
+        <div className="grid-wrap">
+          <AgGridReact<InvoiceRow>
+            theme={gridTheme}
+            rowData={invoices}
+            columnDefs={invoiceColumns}
+            defaultColDef={defaultColDef}
+            onGridReady={gridReady("invoices")}
+            onModelUpdated={gridModelUpdated("invoices")}
+            onFilterChanged={gridModelUpdated("invoices")}
+            overlayNoRowsTemplate={initialOverlay("invoices")}
+            pagination
+            paginationPageSize={10}
+            domLayout="autoHeight"
+          />
+        </div>
       </div>
 
-      <h2>Orders / Checkout</h2>
-      <div className="grid-wrap">
-        <AgGridReact<OrderRow>
-          theme={gridTheme}
-          rowData={orders}
-          columnDefs={orderColumns}
-          defaultColDef={defaultColDef}
-          onGridReady={gridReady("orders")}
-          pagination
-          paginationPageSize={10}
-          domLayout="autoHeight"
-        />
+      <div className="grid-section">
+        {sectionHead("orders")}
+        <div className="grid-wrap">
+          <AgGridReact<OrderRow>
+            theme={gridTheme}
+            rowData={orders}
+            columnDefs={orderColumns}
+            defaultColDef={defaultColDef}
+            onGridReady={gridReady("orders")}
+            onModelUpdated={gridModelUpdated("orders")}
+            onFilterChanged={gridModelUpdated("orders")}
+            overlayNoRowsTemplate={initialOverlay("orders")}
+            pagination
+            paginationPageSize={10}
+            domLayout="autoHeight"
+          />
+        </div>
       </div>
 
-      <h2>Payouts</h2>
-      <div className="grid-wrap">
-        <AgGridReact<PayoutRow>
-          theme={gridTheme}
-          rowData={payouts}
-          columnDefs={payoutColumns}
-          defaultColDef={defaultColDef}
-          onGridReady={gridReady("payouts")}
-          pagination
-          paginationPageSize={10}
-          domLayout="autoHeight"
-        />
+      <div className="grid-section">
+        {sectionHead("payouts")}
+        <div className="grid-wrap">
+          <AgGridReact<PayoutRow>
+            theme={gridTheme}
+            rowData={payouts}
+            columnDefs={payoutColumns}
+            defaultColDef={defaultColDef}
+            onGridReady={gridReady("payouts")}
+            onModelUpdated={gridModelUpdated("payouts")}
+            onFilterChanged={gridModelUpdated("payouts")}
+            overlayNoRowsTemplate={initialOverlay("payouts")}
+            pagination
+            paginationPageSize={10}
+            domLayout="autoHeight"
+          />
+        </div>
       </div>
 
-      <h2>Agent Activity &amp; Webhook Audit</h2>
-      <div className="grid-wrap">
-        <AgGridReact<ActivityRow>
-          theme={gridTheme}
-          rowData={activity}
-          columnDefs={activityColumns}
-          defaultColDef={defaultColDef}
-          onGridReady={gridReady("activity")}
-          pagination
-          paginationPageSize={10}
-          domLayout="autoHeight"
-        />
+      <div className="grid-section">
+        {sectionHead("activity")}
+        <div className="grid-wrap">
+          <AgGridReact<ActivityRow>
+            theme={gridTheme}
+            rowData={activity}
+            columnDefs={activityColumns}
+            defaultColDef={defaultColDef}
+            onGridReady={gridReady("activity")}
+            onModelUpdated={gridModelUpdated("activity")}
+            onFilterChanged={gridModelUpdated("activity")}
+            overlayNoRowsTemplate={initialOverlay("activity")}
+            pagination
+            paginationPageSize={10}
+            domLayout="autoHeight"
+          />
+        </div>
       </div>
     </section>
   );

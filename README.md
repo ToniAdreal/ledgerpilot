@@ -112,6 +112,12 @@ curl -X POST localhost:3000/api/agent/execute -H 'content-type: application/json
   highlighting, and a KPI strip. Money totals are grouped **per currency and
   never summed across currencies**. AG Grid Community edition only (no trial
   watermark).
+- **Honest console states.** Loading, load-error, empty, and filtered-empty
+  are four different states with four different messages — resolved by a
+  pure, unit-tested view-model, never a bare grid: a fresh console explains
+  itself and points at Judge Mode, a failed refresh keeps any rows already
+  on screen (the error lives in the banner, with a retry), and a filter
+  that hides every row says so instead of claiming there is no data.
 - **Ask-the-grid.** A plain-English question ("show unpaid invoices over
   $200 from this month") is compiled by the deterministic parser into a
   *validated* AG Grid filter model: per-grid status vocabulary (paid = PAID
@@ -130,7 +136,7 @@ curl -X POST localhost:3000/api/agent/execute -H 'content-type: application/json
 ```bash
 npm install
 npm run dev        # http://localhost:3000
-npm test           # full test suite (91 tests)
+npm test           # full test suite (107 tests)
 npm run typecheck  # tsc --noEmit
 npm run build      # production build
 ```
@@ -184,7 +190,9 @@ mock mode a config swap rather than a rewrite.
 - `src/lib/console/` — console read models: pure projections (invoice rows
   with overdue flags, order rows with capture state, payout rows flattened
   one-per-item with batch context, activity/audit rows, per-currency KPI
-  totals).
+  totals), plus the console-state view-model (`states.ts`): loading /
+  error / empty / filtered-empty resolution, overlay templates, the
+  console banner, and KPI/caption rules.
 - `src/lib/command/` — Agent Command bar view-model: brief validation,
   example briefs, the plan-review model (step labels, exact PayPal call,
   trigger badges), and action-availability rules that mirror the server-side
@@ -233,7 +241,7 @@ signatures mirror the REST resources one-to-one.
 ## Testing
 
 ```bash
-npm test           # vitest — 91 tests, all green
+npm test           # vitest — 107 tests, all green
 npm run typecheck  # TypeScript strict, clean
 npm run build      # Next.js production build
 ```
@@ -243,10 +251,12 @@ payments, capture/payout guards, the full invoice→paid→payout loop), the
 agent pipeline (brief parsing incl. due-date forms and currencies, the
 approval gate, trigger resume, audit ordering), webhooks + reconciler
 (bad-signature rejection, duplicate delivery, webhook/reconciler
-non-interference), console read models (per-currency totals, overdue flags),
-the command-bar gate matrix, Ask-the-grid parsing + validator negative
-cases, and the full Judge Mode loop (seed idempotency, the historical-event
-guard, double-payment no-op).
+non-interference, resource-correlated trigger resumption), console read
+models (per-currency totals, overdue flags), console states (loading /
+error / empty / filtered-empty precedence, overlay HTML escaping, banner
+and KPI rules), the command-bar gate matrix, Ask-the-grid parsing +
+validator negative cases, and the full Judge Mode loop (seed idempotency,
+the historical-event guard, double-payment no-op).
 
 ## Demo
 

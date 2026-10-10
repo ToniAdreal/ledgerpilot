@@ -31,8 +31,52 @@ body { margin: 0; color: #111827; background: #ffffff; }
   font-size: 13px;
 }
 .refresh-btn:hover { background: #f3f4f6; }
+.refresh-btn:disabled { opacity: 0.55; cursor: default; }
 .console-error { color: #b91c1c; }
 .grid-wrap { margin-bottom: 1.5rem; }
+
+/* Console states: banner, section heads, grid overlays */
+.console-banner {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem 0.9rem;
+  align-items: center;
+  border: 1px solid #e5e7eb;
+  border-left: 3px solid #111827;
+  border-radius: 10px;
+  padding: 0.75rem 1rem;
+  margin-top: 1.25rem;
+  background: #f9fafb;
+  font-size: 13px;
+  color: #374151;
+}
+.console-banner strong { color: #111827; }
+.console-banner-loading { border-left-color: #9ca3af; }
+.console-banner-error { border-color: #fecaca; border-left-color: #b91c1c; background: #fef2f2; }
+.console-banner-fresh-start { border-left-color: #166534; background: #f0fdf4; }
+.grid-section-head { display: flex; flex-wrap: wrap; gap: 0.5rem 0.75rem; align-items: baseline; margin-top: 0.5rem; }
+.grid-section-head h2 { margin: 0.5rem 0; }
+.grid-count {
+  background: #111827;
+  color: #ffffff;
+  border-radius: 999px;
+  padding: 0.05rem 0.55rem;
+  font-size: 11px;
+  font-weight: 650;
+}
+.grid-caption { color: #6b7280; font-size: 12px; }
+.grid-overlay {
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+  align-items: center;
+  text-align: center;
+  padding: 1.25rem 1.5rem;
+  max-width: 520px;
+}
+.grid-overlay-title { font-size: 14px; font-weight: 650; color: #111827; }
+.grid-overlay-hint { font-size: 12px; color: #6b7280; line-height: 1.5; }
+.grid-overlay-error .grid-overlay-title { color: #991b1b; }
 
 /* Agent Command bar */
 .command-bar { margin-top: 1.25rem; }
