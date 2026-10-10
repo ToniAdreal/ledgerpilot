@@ -6,7 +6,7 @@ An AI money operator for solo sellers and freelancers. You say what happened in 
 
 ## Status
 
-Core loop, part 2: the deterministic agent pipeline is live — a plain-English brief becomes a typed action plan, nothing executes without approval, and a payout gated on invoice payment stays deferred until the payment lands. Verified, idempotent webhooks (`POST /api/paypal/webhooks`) now resume gated steps, and a polling sync reconciler (`GET /api/paypal/sync`) closes the same loop when webhooks cannot reach the instance. The AG Grid operations console lands in the next milestone.
+Core loop complete: the deterministic agent pipeline is live — a plain-English brief becomes a typed action plan, nothing executes without approval, and a payout gated on invoice payment stays deferred until the payment lands. Verified, idempotent webhooks (`POST /api/paypal/webhooks`) resume gated steps, and a polling sync reconciler (`GET /api/paypal/sync`) closes the same loop when webhooks cannot reach the instance. The operations console v1 is live at `/`: KPI strip (outstanding, collected to date, pending approvals, awaiting trigger, open disputes) plus AG Grid Invoices and Agent Activity & Webhook Audit grids fed by `GET /api/console/*` read models. Orders / Payouts grids and the Agent Command bar land in the full-loop milestone.
 
 Try it against the running dev server:
 
@@ -43,7 +43,9 @@ Mock mode (`PAYPAL_MODE=mock`, the default) implements the full PayPal surface u
 - `src/lib/agent/reconciler.ts` — polling fallback (`syncFromPayPal`): drains undelivered emitted events and sweeps resource state with stable synthetic event ids, so repeat syncs are no-ops.
 - `src/app/api/agent/` — `POST /plan` (brief → plan), `POST /approve` (the approval gate), `POST /execute` (approved plans only).
 - `src/app/api/paypal/` — `POST /webhooks` (401 on bad signature, 200 on processed/duplicate), `GET /sync` (idempotent reconciler).
-- `src/app/` — Next.js App Router UI.
+- `src/lib/console/` — console read models: pure projections (invoice rows with overdue flags, activity/audit rows, per-currency KPI totals — money is never summed across currencies).
+- `src/app/api/console/` — `GET /invoices`, `GET /activity`, `GET /summary` read models feeding the grids.
+- `src/app/` — Next.js App Router UI: the operations console (KPI strip + AG Grid Community Invoices and Activity/Audit grids; status pills, floating filters, pagination).
 
 ## Environment
 
