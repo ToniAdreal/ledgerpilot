@@ -4,8 +4,11 @@
  * Converts a plain-English money brief into a typed ActionPlan
  * (CONCEPT.md §3.1). No LLM, no network, no keys: the same brief with
  * the same reference date always produces the same plan, which is what
- * makes the approval gate auditable. An optional LLM adapter may later
- * *suggest* briefs, but plans are only ever produced here.
+ * makes the approval gate auditable. The optional LLM adapter
+ * (./llm.ts) is only a fallback for briefs this parser cannot read, and
+ * its output is validated and converted by deterministic code before it
+ * can become a plan — plans from this parser are marked
+ * `source: "deterministic"`.
  *
  * Supported brief shapes (see tests/agent-core.test.ts):
  *   "Invoice Ana $450 for logo work, due Friday"
@@ -194,5 +197,6 @@ export function parseBrief(brief: string, options: ParseOptions = {}): ActionPla
     steps: found.map((f) => f.step),
     status: "pending_approval",
     createdAt: now.toISOString(),
+    source: "deterministic",
   };
 }

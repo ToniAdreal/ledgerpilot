@@ -1,9 +1,13 @@
 import { NextResponse } from "next/server";
-import { BriefParseError, getAgentRuntime, parseBrief } from "@/lib/agent";
+import { BriefParseError, getAgentRuntime, parseBriefWithFallback } from "@/lib/agent";
 
-/** POST /api/agent/plan — NL brief → typed action plan (nothing executes). */
+/**
+ * POST /api/agent/plan — NL brief → typed action plan (nothing executes).
+ * Deterministic parser first; the optional LLM adapter (only when
+ * LLM_API_KEY is configured) is a validated fallback — see lib/agent/llm.ts.
+ */
 export async function POST(req: Request) {
-  const { store } = getAgentRuntime();
+  const { store, llm } = getAgentRuntime();
   let body: { brief?: string };
   try {
     body = (await req.json()) as { brief?: string };
@@ -14,7 +18,7 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "Missing 'brief'" }, { status: 400 });
   }
   try {
-    const plan = store.addPlan(parseBrief(body.brief));
+    const plan = store.addPlan(await parseBriefWithFallback(body.brief, { llm }));
     return NextResponse.json({ plan }, { status: 201 });
   } catch (err) {
     if (err instanceof BriefParseError) return NextResponse.json({ error: err.message }, { status: 422 });

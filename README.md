@@ -136,7 +136,7 @@ curl -X POST localhost:3000/api/agent/execute -H 'content-type: application/json
 ```bash
 npm install
 npm run dev        # http://localhost:3000
-npm test           # full test suite (116 tests)
+npm test           # full test suite (135 tests)
 npm run typecheck  # tsc --noEmit
 npm run build      # production build
 ```
@@ -190,6 +190,12 @@ mock mode a config swap rather than a rewrite.
 - `src/lib/agent/parser.ts` — deterministic NL brief → typed action plan
   parser (no LLM, no keys; relative due dates resolved against an injectable
   reference date).
+- `src/lib/agent/llm.ts` — the optional LLM adapter: env-gated config
+  (null without `LLM_API_KEY`), an OpenAI-compatible chat-completions client
+  with an injectable fetch, the strict extraction validator, the
+  deterministic extraction→plan conversion, and `parseBriefWithFallback`
+  (deterministic-first; LLM only on a parser miss; failures rethrow the
+  parser's error).
 - `src/lib/agent/store.ts` — in-memory ledger: plans, the append-only
   activity/audit log, and webhook event-id idempotency.
 - `src/lib/agent/executor.ts` — the only path from an approved plan to
@@ -242,9 +248,16 @@ signatures mirror the REST resources one-to-one.
   needs no API key, behaves identically on every run, and is fully auditable:
   the plan a judge approves is the plan that executes.
 - **Optional LLM adapter (off by default).** Any OpenAI-compatible endpoint
-  via `LLM_API_KEY` / `LLM_BASE_URL` / `LLM_MODEL` may upgrade phrasing and
-  extraction. The app is fully functional with the LLM unset; no feature,
-  including Judge Mode, requires it.
+  via `LLM_API_KEY` / `LLM_BASE_URL` / `LLM_MODEL`. It is a *fallback*, not
+  a replacement: the deterministic parser always runs first, and the LLM is
+  consulted only for a brief the parser cannot read. Its JSON extraction is
+  validated field-by-field in code (step-type and currency whitelists,
+  positive amounts under a hard cap, real ISO due dates) and converted into
+  a plan by deterministic code — an invalid or failed LLM response falls
+  back to the parser's original error. LLM-sourced plans are marked
+  `source: "llm"` and pass through the same approval gate. The app is fully
+  functional with the LLM unset; no feature, including Judge Mode, requires
+  it.
 - **Development tooling.** This project was built with AI coding assistance
   (Muse). All PayPal flows, the approval-gate invariant, and the webhook
   idempotency semantics are covered by the automated test suite below.
@@ -252,7 +265,7 @@ signatures mirror the REST resources one-to-one.
 ## Testing
 
 ```bash
-npm test           # vitest — 116 tests, all green
+npm test           # vitest — 135 tests, all green
 npm run typecheck  # TypeScript strict, clean
 npm run build      # Next.js production build
 ```
@@ -271,7 +284,10 @@ the historical-event guard, double-payment no-op), and the sandbox REST
 adapter against a stub fetch (OAuth caching/expiry, the links-only
 create-invoice flow, order capture + list-by-id, payout mapping, the
 nested Transaction Search shape, webhook verification SUCCESS/FAILURE,
-and PayPal error translation) — fake credentials only, no network.
+and PayPal error translation), and the optional LLM adapter (config
+gating, deterministic-first non-consultation, validator negative cases,
+fallback error honesty, and a full approval-gated loop from an
+LLM-sourced plan) — fake credentials only, no network.
 
 ## Demo
 

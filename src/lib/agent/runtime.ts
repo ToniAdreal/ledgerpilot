@@ -5,18 +5,21 @@
  */
 
 import { getPayPalClient, type PayPalClient } from "../paypal";
+import { getDefaultLlmAdapter, type LlmBriefExtractor } from "./llm";
 import { LedgerStore } from "./store";
 
 interface AgentRuntime {
   client: PayPalClient;
   store: LedgerStore;
+  /** Optional LLM fallback for brief parsing; null unless LLM_API_KEY is set. */
+  llm: LlmBriefExtractor | null;
 }
 
 const g = globalThis as unknown as { __ledgerpilotRuntime?: AgentRuntime };
 
 export function getAgentRuntime(): AgentRuntime {
   if (!g.__ledgerpilotRuntime) {
-    g.__ledgerpilotRuntime = { client: getPayPalClient(), store: new LedgerStore() };
+    g.__ledgerpilotRuntime = { client: getPayPalClient(), store: new LedgerStore(), llm: getDefaultLlmAdapter() };
   }
   return g.__ledgerpilotRuntime;
 }
