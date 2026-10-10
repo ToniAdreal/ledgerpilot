@@ -111,6 +111,19 @@ curl -X POST localhost:3000/api/agent/execute -H 'content-type: application/json
   never silently downgraded to a draft), and with no reference the
   recipient's most-overdue open invoice wins. The adapter refuses
   non-open invoices (a reminder for a PAID invoice fails honestly).
+- **Checkout capture leg (the sell loop closes).** A `create_order` step
+  creates a `CREATED` order; the buyer-side completion lives in the
+  console's Orders grid (**Capture** button) and at
+  `POST /api/paypal/orders/capture`. Capture goes through the adapter,
+  is written to the audit log as the exact call, and the resulting
+  `PAYMENT.CAPTURE.COMPLETED` event is processed by the sync reconciler
+  — the same code path a webhook delivery takes. It is deliberately
+  *not* an agent action: capturing is what the buyer does by completing
+  checkout (in sandbox mode PayPal itself refuses capture before buyer
+  approval), so it needs no plan approval and does not weaken the gate.
+  Re-capturing a `COMPLETED` order is an `alreadyCaptured` no-op; a
+  `VOIDED` or unknown order is an honest error, and an adapter refusal
+  is audit-logged as a failed capture.
 - **Sync reconciler.** `GET /api/paypal/sync` is the polling fallback for
   instances webhooks cannot reach: it drains undelivered events in order and
   sweeps resource state with stable synthetic event ids, so repeat syncs are
@@ -157,7 +170,7 @@ curl -X POST localhost:3000/api/agent/execute -H 'content-type: application/json
 ```bash
 npm install
 npm run dev        # http://localhost:3000
-npm test           # full test suite (162 tests)
+npm test           # full test suite (168 tests)
 npm run typecheck  # tsc --noEmit
 npm run build      # production build
 ```
@@ -239,13 +252,16 @@ mock mode a config swap rather than a rewrite.
   trigger badges), and action-availability rules that mirror the server-side
   approval gate.
 - `src/lib/ask/` — Ask-the-grid parser + filter-model validator.
+- `src/lib/checkout/` — the Orders capture leg: buyer-side checkout
+  completion for a created order (status guards, audit record, capture
+  event processed via the reconciler, idempotent re-capture).
 - `src/lib/judge/` — Judge Mode scenario descriptor, idempotent seeder
   (historical events pre-marked processed, so a later sync can never replay
   them into the gated payout), live spine state, and the record-payment +
   sync payment leg.
 - API routes — `src/app/api/agent/` (`POST /plan`, `POST /approve`,
   `POST /execute`), `src/app/api/paypal/` (`POST /webhooks` — 401 on bad
-  signature, 200 on processed/duplicate; `GET /sync`),
+  signature, 200 on processed/duplicate; `GET /sync`; `POST /orders/capture`),
   `src/app/api/console/` (`GET /invoices|orders|payouts|activity|disputes|transactions|summary`),
   `src/app/api/judge/` (`GET /`, `POST /seed`, `POST /pay`).
 - UI — `src/app/` (operations console at `/`, Judge Mode at `/judge`).
@@ -255,7 +271,7 @@ mock mode a config swap rather than a rewrite.
 | API | How LedgerPilot uses it |
 |---|---|
 | **Invoicing v2** | Create/send invoices from briefs; get/list; record-payment for the local-run payment path; send payment reminders (`POST /v2/invoicing/invoices/:id/remind`) for open invoices |
-| **Orders v2 / Checkout** | Create + capture checkout orders for one-off sales ("sell" briefs) |
+| **Orders v2 / Checkout** | Create checkout orders for one-off sales ("sell" briefs); capture on buyer checkout completion (console Capture action / `POST /api/paypal/orders/capture`) |
 | **Payouts** | Batch payouts drafted by the agent, released only after approval; per-item status tracked |
 | **Webhooks** | `INVOICING.INVOICE.PAID`, `INVOICING.INVOICE.CANCELLED`, `PAYMENT.CAPTURE.COMPLETED`, `PAYMENT.PAYOUTS-ITEM.SUCCEEDED`, `PAYMENT.PAYOUTS-ITEM.FAILED` — signature-verified, idempotent event log |
 | **Disputes (read-only)** | Own console grid: open disputes with buyer, reason, stage, and seller-response deadlines; seeded Judge Mode includes one explicitly flagged sample row, because sandbox disputes cannot be reliably manufactured |
@@ -289,13 +305,16 @@ signatures mirror the REST resources one-to-one.
 ## Testing
 
 ```bash
-npm test           # vitest — 162 tests, all green
+npm test           # vitest — 168 tests, all green
 npm run typecheck  # TypeScript strict, clean
 npm run build      # Next.js production build
 ```
 
 The suite covers: the mock PayPal surface (invoice lifecycle, partial
 payments, capture/payout guards, the full invoice→paid→payout loop),
+the checkout capture leg (an agent-created order captured to COMPLETED
+with the capture event processed once, re-capture no-op, unknown /
+VOIDED / adapter-refusal paths audit-logged),
 invoice reminders (mock open-invoice rules, executor resolution by
 reference and by most-overdue open invoice, unmatched-reference and
 already-paid failures, the sandbox `/remind` request shape), the

@@ -67,6 +67,33 @@ function StatusPill(params: ICellRendererParams) {
   return <span className={`pill pill-${value.toLowerCase().replace(/[^a-z]+/g, "-")}`}>{value}</span>;
 }
 
+interface CaptureCellContext {
+  capturingOrderId: string | null;
+  onCaptureOrder: (orderId: string) => void;
+}
+
+/**
+ * Buyer-side checkout completion for an uncaptured order (the Orders
+ * leg's capture step, src/lib/checkout): rendered only while the order
+ * can still be captured; captured / VOIDED rows show a dash.
+ */
+function CaptureOrderCell(params: ICellRendererParams<OrderRow>) {
+  const row = params.data;
+  if (!row || row.captured || row.status === "VOIDED") return <span>—</span>;
+  const ctx = params.context as CaptureCellContext;
+  const busy = ctx.capturingOrderId === row.id;
+  return (
+    <button
+      type="button"
+      className="command-btn capture-btn"
+      disabled={busy || ctx.capturingOrderId !== null}
+      onClick={() => ctx.onCaptureOrder(row.id)}
+    >
+      {busy ? "Capturing…" : "Capture"}
+    </button>
+  );
+}
+
 function formatTotals(totals: ConsoleSummary["outstanding"]): string {
   if (totals.length === 0) return "0.00";
   return totals.map((t) => `${t.currency_code} ${t.value}`).join(" · ");
@@ -95,6 +122,8 @@ export default function ConsoleClient() {
   const [disputes, setDisputes] = useState<DisputeRow[]>([]);
   const [transactions, setTransactions] = useState<TransactionRow[]>([]);
   const [error, setError] = useState<string | null>(null);
+  const [capturingOrderId, setCapturingOrderId] = useState<string | null>(null);
+  const [captureError, setCaptureError] = useState<string | null>(null);
   const [loadStatus, setLoadStatus] = useState<ConsoleLoadStatus>("loading");
   const [gridDisplay, setGridDisplay] = useState<Record<ConsoleGridId, GridDisplay>>(EMPTY_DISPLAY);
 
@@ -161,6 +190,32 @@ export default function ConsoleClient() {
   useEffect(() => {
     void refresh();
   }, [refresh]);
+
+  /* Capture an uncaptured order (buyer-side checkout completion),
+   * then refresh — the flipped COMPLETED row flashes via the usual
+   * change-flash path. A refusal is shown under the Orders grid,
+   * never silently swallowed. */
+  const captureOrder = useCallback(
+    async (orderId: string) => {
+      setCapturingOrderId(orderId);
+      setCaptureError(null);
+      try {
+        const res = await fetch("/api/paypal/orders/capture", {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ orderId }),
+        });
+        const data = (await res.json()) as { error?: string };
+        if (!res.ok) throw new Error(data.error ?? `Capture failed (${res.status})`);
+      } catch (err) {
+        setCaptureError(err instanceof Error ? err.message : "Capture failed");
+      } finally {
+        setCapturingOrderId(null);
+        void refresh();
+      }
+    },
+    [refresh],
+  );
 
   /* Ask-the-grid: one GridApi per surface; a parsed query sets the
    * targeted grids' filter models and clears the rest, so the visible
@@ -323,6 +378,7 @@ export default function ConsoleClient() {
       },
       { field: "captureId", headerName: "Capture", width: 150, filter: "agTextColumnFilter" },
       { field: "captureStatus", headerName: "Capture status", width: 140, cellRenderer: StatusPill, filter: "agTextColumnFilter" },
+      { headerName: "Checkout", width: 130, filter: false, sortable: false, cellRenderer: CaptureOrderCell },
     ],
     [],
   );
@@ -573,10 +629,16 @@ export default function ConsoleClient() {
 
       <div className="grid-section">
         {sectionHead("orders")}
+        {captureError && (
+          <p className="capture-error" role="alert">
+            Capture failed: {captureError}
+          </p>
+        )}
         <div className="grid-wrap">
           <AgGridReact<OrderRow>
             theme={gridTheme}
             rowData={orders}
+            context={{ capturingOrderId, onCaptureOrder: captureOrder } satisfies CaptureCellContext}
             getRowId={getRowId}
             columnDefs={orderColumns}
             defaultColDef={defaultColDef}

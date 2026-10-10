@@ -66,6 +66,8 @@ body { margin: 0; color: #111827; background: #ffffff; }
 }
 .grid-caption { color: #6b7280; font-size: 12px; }
 .grid-export-btn { margin-left: auto; align-self: center; font-size: 12px; padding: 0.3rem 0.7rem; }
+.capture-btn { font-size: 12px; padding: 0.25rem 0.7rem; }
+.capture-error { margin: 0 0 0.5rem; color: #991b1b; font-size: 13px; font-weight: 600; }
 .grid-overlay {
   display: flex;
   flex-direction: column;
