@@ -4,34 +4,222 @@ import type {
   CreatePayoutInput,
   Dispute,
   Invoice,
+  Money,
   Order,
+  Party,
   PayoutBatch,
   Transaction,
   WebhookEvent,
 } from "../types";
-import { PayPalNotConfiguredError, type PayPalClient } from "./client";
+import { PayPalError, PayPalNotConfiguredError, type PayPalClient } from "./client";
 
 /**
- * Sandbox adapter — configuration boundary only (October, mock-first phase).
+ * Sandbox adapter — live PayPal REST wiring behind the PayPalClient
+ * contract (Invoicing v2, Orders v2, Payouts, Disputes, Transaction
+ * Search, webhook verification).
  *
- * This class intentionally does NOT contain credentials or network calls
- * yet: constructing it validates that the caller supplied their own sandbox
- * app credentials via env, and every operation fails loudly until the
- * sandbox integration milestone (blocked on the PayPal Developer account
- * decision, see CONCEPT.md §3.7 — hard deadline Oct 24) wires the REST
- * calls behind this exact interface. Mock mode is the supported path
- * until then, so nothing in the app depends on this class succeeding.
+ * Credential rules are unchanged: the constructor requires the caller's
+ * OWN sandbox app credentials (PAYPAL_CLIENT_ID / PAYPAL_CLIENT_SECRET,
+ * optionally PAYPAL_WEBHOOK_ID) and throws PayPalNotConfiguredError
+ * without them. No credential is stored in code, and mock mode remains
+ * the default everywhere — this adapter only runs when
+ * PAYPAL_MODE=sandbox is explicitly selected.
+ *
+ * Testability: the HTTP layer is injectable (`fetchFn`), as is the clock
+ * (`now`), so the full REST surface — OAuth token fetch + caching,
+ * request/response mapping, and PayPal error translation — is unit
+ * tested against a stub fetch with fake credentials. Nothing in those
+ * tests touches the network or a real PayPal account. The adapter has
+ * NOT yet been exercised against the live sandbox: that happens once
+ * the PayPal Developer account exists (see BUILD_LOG BLOCKERS,
+ * hard deadline Oct 24).
+ *
+ * Known PayPal API shapes this adapter is honest about:
+ * - Create-invoice returns 201 with HATEOAS links and no resource body,
+ *   so the invoice id is read from the `self` link and the invoice is
+ *   then fetched with GET. (A response that does carry an id is used
+ *   directly.)
+ * - Orders v2 has NO list endpoint. The adapter remembers the ids of
+ *   orders it created in this process and lists by GET-ing each one.
+ *   Orders created outside this process are therefore not listed —
+ *   the same process-scoping the mock adapter has.
+ * - Payout batch responses do not return recipient display names (only
+ *   the receiver email). Batches created by this process keep the
+ *   recipient names supplied at creation; batches only fetched are
+ *   reconstructed with the receiver email as the display name.
+ * - Transaction Search requires a date window (max 31 days); the
+ *   adapter queries the trailing 30 days from `now`.
  */
+
+export type FetchFn = (url: string, init?: RequestInit) => Promise<Response>;
+
 export interface SandboxConfig {
   clientId?: string;
   clientSecret?: string;
   webhookId?: string;
   baseUrl?: string;
+  /** Injectable HTTP layer (tests). Defaults to global fetch. */
+  fetchFn?: FetchFn;
+  /** Injectable clock in epoch ms (tests / token expiry). Defaults to Date.now. */
+  now?: () => number;
 }
+
+/* ------------------------------------------------------------------ */
+/* Raw-shape helpers (PayPal payloads arrive as loose JSON)            */
+/* ------------------------------------------------------------------ */
+
+type Raw = Record<string, unknown>;
+
+function asRaw(value: unknown): Raw {
+  return typeof value === "object" && value !== null ? (value as Raw) : {};
+}
+
+function asString(value: unknown, fallback = ""): string {
+  return typeof value === "string" ? value : fallback;
+}
+
+function asArray(value: unknown): unknown[] {
+  return Array.isArray(value) ? value : [];
+}
+
+function splitName(name: string): { given_name: string; surname?: string } {
+  const parts = name.trim().split(/\s+/).filter(Boolean);
+  const [first, ...rest] = parts;
+  return {
+    given_name: first ?? name,
+    ...(rest.length > 0 ? { surname: rest.join(" ") } : {}),
+  };
+}
+
+function joinName(name: unknown): string {
+  if (typeof name === "string") return name;
+  const raw = asRaw(name);
+  const full = asString(raw.full_name);
+  if (full) return full;
+  return [asString(raw.given_name), asString(raw.surname)].filter(Boolean).join(" ");
+}
+
+function toParty(value: unknown): Party {
+  const raw = asRaw(value);
+  return {
+    name: joinName(raw.name),
+    email_address: asString(raw.email_address),
+  };
+}
+
+function toMoney(value: unknown, fallback?: Money): Money {
+  const raw = asRaw(value);
+  const currency = asString(raw.currency_code);
+  const amount = asString(raw.value);
+  if (currency && amount) {
+    return { currency_code: currency as Money["currency_code"], value: amount };
+  }
+  return fallback ?? { currency_code: "USD", value: "0.00" };
+}
+
+function sumItems(items: Array<{ quantity: string; unit_amount: Money }>): Money {
+  const currency = items[0]?.unit_amount.currency_code ?? "USD";
+  const total = items.reduce(
+    (acc, i) => acc + Number(i.quantity) * Number(i.unit_amount.value),
+    0,
+  );
+  return { currency_code: currency, value: total.toFixed(2) };
+}
+
+function toInvoice(rawInput: unknown): Invoice {
+  const raw = asRaw(rawInput);
+  const detail = asRaw(raw.detail);
+  const paymentTerm = asRaw(detail.payment_term);
+  const items = asArray(raw.items).map((item) => {
+    const r = asRaw(item);
+    return {
+      name: asString(r.name),
+      quantity: asString(r.quantity, "1"),
+      unit_amount: toMoney(r.unit_amount),
+    };
+  });
+  const amount = toMoney(raw.amount, sumItems(items));
+  const invoicerRaw = asRaw(raw.invoicer);
+  return {
+    id: asString(raw.id),
+    status: asString(raw.status, "DRAFT") as Invoice["status"],
+    detail: {
+      invoice_number: asString(detail.invoice_number),
+      note: asString(detail.note) || undefined,
+      payment_term:
+        Object.keys(paymentTerm).length > 0
+          ? { due_date: asString(paymentTerm.due_date) || undefined }
+          : undefined,
+      reference: asString(detail.reference) || undefined,
+    },
+    invoicer:
+      Object.keys(invoicerRaw).length > 0
+        ? toParty(invoicerRaw)
+        : { name: "PayPal sandbox seller", email_address: "" },
+    primary_recipients: asArray(raw.primary_recipients).map((recipient) => ({
+      billing_info: toParty(asRaw(recipient).billing_info),
+    })),
+    items,
+    amount,
+    due_amount: toMoney(raw.due_amount, amount),
+    links: asArray(raw.links).map((link) => {
+      const r = asRaw(link);
+      return { href: asString(r.href), rel: asString(r.rel), method: asString(r.method) };
+    }),
+  };
+}
+
+function toOrder(rawInput: unknown): Order {
+  const raw = asRaw(rawInput);
+  return {
+    id: asString(raw.id),
+    status: asString(raw.status, "CREATED") as Order["status"],
+    intent: "CAPTURE",
+    purchase_units: asArray(raw.purchase_units).map((unit) => {
+      const r = asRaw(unit);
+      const payments = asRaw(r.payments);
+      const captures = asArray(payments.captures).map((capture) => {
+        const c = asRaw(capture);
+        return {
+          id: asString(c.id),
+          status: asString(c.status),
+          amount: toMoney(c.amount),
+        };
+      });
+      return {
+        reference_id: asString(r.reference_id) || undefined,
+        description: asString(r.description),
+        amount: toMoney(r.amount),
+        ...(captures.length > 0 ? { payments: { captures } } : {}),
+      };
+    }),
+    links: asArray(raw.links).map((link) => {
+      const r = asRaw(link);
+      return { href: asString(r.href), rel: asString(r.rel), method: asString(r.method) };
+    }),
+  };
+}
+
+/* ------------------------------------------------------------------ */
+/* Adapter                                                             */
+/* ------------------------------------------------------------------ */
 
 export class SandboxPayPalClient implements PayPalClient {
   readonly mode = "sandbox" as const;
   readonly baseUrl: string;
+
+  private readonly clientId: string;
+  private readonly clientSecret: string;
+  private readonly webhookId?: string;
+  private readonly fetchFn: FetchFn;
+  private readonly now: () => number;
+
+  private tokenCache: { token: string; expiresAt: number } | null = null;
+  /** Orders v2 has no list endpoint — see the header note. */
+  private readonly knownOrderIds: string[] = [];
+  /** Receiver email -> recipient supplied at payout creation (names). */
+  private readonly knownRecipients = new Map<string, Party>();
+  private payoutSeq = 0;
 
   constructor(config: SandboxConfig = {}) {
     const clientId = config.clientId ?? process.env.PAYPAL_CLIENT_ID;
@@ -40,26 +228,343 @@ export class SandboxPayPalClient implements PayPalClient {
     if (!clientId) missing.push("PAYPAL_CLIENT_ID");
     if (!clientSecret) missing.push("PAYPAL_CLIENT_SECRET");
     if (missing.length > 0) throw new PayPalNotConfiguredError(missing);
-    this.baseUrl = config.baseUrl ?? "https://api-m.sandbox.paypal.com";
+    if (!clientId || !clientSecret) throw new PayPalNotConfiguredError(missing);
+    this.clientId = clientId;
+    this.clientSecret = clientSecret;
+    this.webhookId = config.webhookId ?? process.env.PAYPAL_WEBHOOK_ID;
+    this.baseUrl = (config.baseUrl ?? "https://api-m.sandbox.paypal.com").replace(/\/$/, "");
+    this.fetchFn = config.fetchFn ?? ((url, init) => fetch(url, init));
+    this.now = config.now ?? Date.now;
   }
 
-  private notYetWired(): never {
-    throw new Error(
-      "Sandbox REST integration is not wired yet (mock-first phase). Use PAYPAL_MODE=mock.",
-    );
+  /* ---------------- transport ---------------- */
+
+  private async getAccessToken(): Promise<string> {
+    if (this.tokenCache && this.tokenCache.expiresAt > this.now() + 30_000) {
+      return this.tokenCache.token;
+    }
+    const basic = Buffer.from(`${this.clientId}:${this.clientSecret}`).toString("base64");
+    const res = await this.fetchFn(`${this.baseUrl}/v1/oauth2/token`, {
+      method: "POST",
+      headers: {
+        Authorization: `Basic ${basic}`,
+        "Content-Type": "application/x-www-form-urlencoded",
+      },
+      body: "grant_type=client_credentials",
+    });
+    const body = await this.readBody(res);
+    if (!res.ok) throw this.toError(res.status, body, "OAuth token request failed");
+    const token = asString(asRaw(body).access_token);
+    if (!token) throw new PayPalError("PayPal OAuth response carried no access_token", res.status, "INVALID_RESPONSE");
+    const expiresInSec = Number(asRaw(body).expires_in ?? 3600);
+    this.tokenCache = { token, expiresAt: this.now() + expiresInSec * 1000 };
+    return token;
   }
 
-  async createInvoice(_input: CreateInvoiceInput): Promise<Invoice> { return this.notYetWired(); }
-  async sendInvoice(_id: string): Promise<Invoice> { return this.notYetWired(); }
-  async getInvoice(_id: string): Promise<Invoice> { return this.notYetWired(); }
-  async listInvoices(): Promise<Invoice[]> { return this.notYetWired(); }
-  async recordInvoicePayment(_id: string, _a: { value: string; currency_code: string }): Promise<Invoice> { return this.notYetWired(); }
-  async createOrder(_input: CreateOrderInput): Promise<Order> { return this.notYetWired(); }
-  async captureOrder(_id: string): Promise<Order> { return this.notYetWired(); }
-  async listOrders(): Promise<Order[]> { return this.notYetWired(); }
-  async createPayout(_input: CreatePayoutInput): Promise<PayoutBatch> { return this.notYetWired(); }
-  async listPayouts(): Promise<PayoutBatch[]> { return this.notYetWired(); }
-  async listDisputes(): Promise<Dispute[]> { return this.notYetWired(); }
-  async listTransactions(): Promise<Transaction[]> { return this.notYetWired(); }
-  async verifyWebhookSignature(_h: Record<string, string>, _e: WebhookEvent): Promise<boolean> { return this.notYetWired(); }
+  private async readBody(res: Response): Promise<unknown> {
+    const text = await res.text();
+    if (!text) return {};
+    try {
+      return JSON.parse(text) as unknown;
+    } catch {
+      return { message: text };
+    }
+  }
+
+  private toError(status: number, body: unknown, fallbackMessage: string): PayPalError {
+    const raw = asRaw(body);
+    const message = asString(raw.message) || asString(raw.error_description) || fallbackMessage;
+    const name = asString(raw.name) || asString(raw.error) || "PAYPAL_ERROR";
+    return new PayPalError(message, status, name);
+  }
+
+  private async request<T>(path: string, init: { method: string; body?: unknown }): Promise<T> {
+    const token = await this.getAccessToken();
+    const res = await this.fetchFn(`${this.baseUrl}${path}`, {
+      method: init.method,
+      headers: {
+        Authorization: `Bearer ${token}`,
+        "Content-Type": "application/json",
+      },
+      ...(init.body !== undefined ? { body: JSON.stringify(init.body) } : {}),
+    });
+    const body = await this.readBody(res);
+    if (!res.ok) throw this.toError(res.status, body, `PayPal ${init.method} ${path} failed`);
+    return body as T;
+  }
+
+  /* ---------------- Invoicing v2 ---------------- */
+
+  async createInvoice(input: CreateInvoiceInput): Promise<Invoice> {
+    const body = {
+      detail: {
+        currency_code: input.items[0]?.unit_amount.currency_code ?? "USD",
+        note: input.note,
+        reference: input.reference,
+        payment_term: input.dueDate
+          ? { term_type: "DUE_ON_DATE_SPECIFIED", due_date: input.dueDate }
+          : undefined,
+      },
+      primary_recipients: [
+        {
+          billing_info: {
+            name: splitName(input.recipient.name),
+            email_address: input.recipient.email_address,
+          },
+        },
+      ],
+      items: input.items,
+      configuration: { partial_payment: { allow_partial_payment: true } },
+    };
+    const created = await this.request<unknown>("/v2/invoicing/invoices", { method: "POST", body });
+    const raw = asRaw(created);
+    let id = asString(raw.id);
+    if (!id) {
+      const self = asArray(raw.links)
+        .map((link) => asRaw(link))
+        .find((link) => asString(link.rel) === "self");
+      const href = asString(self?.href);
+      id = href.split("/").filter(Boolean).pop() ?? "";
+    }
+    if (!id) {
+      throw new PayPalError("PayPal create-invoice response carried no invoice id or self link", 502, "INVALID_RESPONSE");
+    }
+    return this.getInvoice(id);
+  }
+
+  async sendInvoice(invoiceId: string): Promise<Invoice> {
+    await this.request<unknown>(`/v2/invoicing/invoices/${encodeURIComponent(invoiceId)}/send`, {
+      method: "POST",
+      body: { send_to_invoicer: true, send_to_recipient: true },
+    });
+    return this.getInvoice(invoiceId);
+  }
+
+  async getInvoice(invoiceId: string): Promise<Invoice> {
+    const raw = await this.request<unknown>(`/v2/invoicing/invoices/${encodeURIComponent(invoiceId)}`, {
+      method: "GET",
+    });
+    return toInvoice(raw);
+  }
+
+  async listInvoices(): Promise<Invoice[]> {
+    const raw = await this.request<unknown>("/v2/invoicing/invoices?page_size=100", { method: "GET" });
+    const container = asRaw(raw);
+    const items = asArray(container.items ?? container.invoices);
+    return items.map((item) => toInvoice(item));
+  }
+
+  async recordInvoicePayment(
+    invoiceId: string,
+    amount: { value: string; currency_code: string },
+  ): Promise<Invoice> {
+    await this.request<unknown>(`/v2/invoicing/invoices/${encodeURIComponent(invoiceId)}/payments`, {
+      method: "POST",
+      body: { method: "OTHER", amount },
+    });
+    return this.getInvoice(invoiceId);
+  }
+
+  /* ---------------- Orders v2 ---------------- */
+
+  async createOrder(input: CreateOrderInput): Promise<Order> {
+    const raw = await this.request<unknown>("/v2/checkout/orders", {
+      method: "POST",
+      body: {
+        intent: "CAPTURE",
+        purchase_units: [
+          {
+            reference_id: input.reference_id,
+            description: input.description,
+            amount: input.amount,
+          },
+        ],
+      },
+    });
+    const order = toOrder(raw);
+    if (order.id && !this.knownOrderIds.includes(order.id)) this.knownOrderIds.push(order.id);
+    return order;
+  }
+
+  async captureOrder(orderId: string): Promise<Order> {
+    const raw = await this.request<unknown>(`/v2/checkout/orders/${encodeURIComponent(orderId)}/capture`, {
+      method: "POST",
+      body: {},
+    });
+    return toOrder(raw);
+  }
+
+  async listOrders(): Promise<Order[]> {
+    const orders: Order[] = [];
+    for (const id of this.knownOrderIds) {
+      const raw = await this.request<unknown>(`/v2/checkout/orders/${encodeURIComponent(id)}`, {
+        method: "GET",
+      });
+      orders.push(toOrder(raw));
+    }
+    return orders;
+  }
+
+  /* ---------------- Payouts ---------------- */
+
+  private toPayoutBatch(rawInput: unknown, fallbackItems?: PayoutBatch["items"]): PayoutBatch {
+    const raw = asRaw(rawInput);
+    const header = asRaw(raw.batch_header ?? raw);
+    const senderHeader = asRaw(header.sender_batch_header);
+    const rawItems = asArray(raw.items);
+    const items: PayoutBatch["items"] =
+      rawItems.length > 0
+        ? rawItems.map((item) => {
+            const r = asRaw(item);
+            const payoutItem = asRaw(r.payout_item ?? r);
+            const receiver = asString(payoutItem.receiver);
+            const known = this.knownRecipients.get(receiver);
+            return {
+              payout_item_id: asString(r.payout_item_id),
+              transaction_status: asString(r.transaction_status, "PENDING") as PayoutBatch["items"][number]["transaction_status"],
+              payout_item: {
+                recipient: known ?? { name: receiver, email_address: receiver },
+                amount: toMoney(payoutItem.amount),
+                note: asString(payoutItem.note) || undefined,
+                sender_item_id: asString(payoutItem.sender_item_id) || undefined,
+                receiver,
+              },
+            };
+          })
+        : (fallbackItems ?? []);
+    return {
+      batch_header: {
+        payout_batch_id: asString(header.payout_batch_id),
+        batch_status: asString(header.batch_status, "PENDING") as PayoutBatch["batch_header"]["batch_status"],
+        time_created: asString(header.time_created),
+        sender_batch_header: {
+          sender_batch_id: asString(senderHeader.sender_batch_id),
+          email_subject: asString(senderHeader.email_subject) || undefined,
+          email_message: asString(senderHeader.email_message) || undefined,
+        },
+      },
+      items,
+      links: asArray(raw.links).map((link) => {
+        const r = asRaw(link);
+        return { href: asString(r.href), rel: asString(r.rel), method: asString(r.method) };
+      }),
+    };
+  }
+
+  async createPayout(input: CreatePayoutInput): Promise<PayoutBatch> {
+    for (const item of input.items) {
+      this.knownRecipients.set(item.recipient.email_address, item.recipient);
+    }
+    this.payoutSeq += 1;
+    const senderBatchId = `LEDGERPILOT-${this.now()}-${this.payoutSeq}`;
+    const fallbackItems: PayoutBatch["items"] = input.items.map((item, idx) => ({
+      payout_item_id: "",
+      transaction_status: "PENDING",
+      payout_item: { ...item, receiver: item.recipient.email_address, sender_item_id: item.sender_item_id ?? `item-${idx + 1}` },
+    }));
+    const raw = await this.request<unknown>("/v1/payments/payouts", {
+      method: "POST",
+      body: {
+        sender_batch_header: {
+          sender_batch_id: senderBatchId,
+          email_subject: input.emailSubject ?? "You have a payout from LedgerPilot",
+          email_message: input.emailMessage,
+        },
+        items: input.items.map((item, idx) => ({
+          recipient_type: "EMAIL",
+          receiver: item.recipient.email_address,
+          amount: item.amount,
+          note: item.note,
+          sender_item_id: item.sender_item_id ?? `item-${idx + 1}`,
+        })),
+      },
+    });
+    return this.toPayoutBatch(raw, fallbackItems);
+  }
+
+  async listPayouts(): Promise<PayoutBatch[]> {
+    const raw = await this.request<unknown>("/v1/payments/payouts?page_size=100", { method: "GET" });
+    return asArray(asRaw(raw).items).map((item) => this.toPayoutBatch(item));
+  }
+
+  /* ---------------- Read-only surfaces ---------------- */
+
+  async listDisputes(): Promise<Dispute[]> {
+    const raw = await this.request<unknown>("/v1/customer/disputes?page_size=50", { method: "GET" });
+    return asArray(asRaw(raw).items).map((item) => {
+      const r = asRaw(item);
+      const status = asString(r.status, "OPEN");
+      return {
+        dispute_id: asString(r.dispute_id),
+        create_time: asString(r.create_time),
+        update_time: asString(r.update_time),
+        disputed_transactions: asArray(r.disputed_transactions).map((txn) => {
+          const t = asRaw(txn);
+          return {
+            seller_transaction_id: asString(t.seller_transaction_id),
+            buyer: toParty(t.buyer),
+          };
+        }),
+        amount: toMoney(r.amount),
+        reason: asString(r.reason),
+        status: (["OPEN", "WAITING_FOR_BUYER_RESPONSE", "WAITING_FOR_SELLER_RESPONSE", "RESOLVED"].includes(status)
+          ? status
+          : "OPEN") as Dispute["status"],
+        dispute_life_cycle_stage: asString(r.dispute_life_cycle_stage),
+      };
+    });
+  }
+
+  async listTransactions(): Promise<Transaction[]> {
+    const end = new Date(this.now());
+    const start = new Date(end.getTime() - 30 * 24 * 60 * 60 * 1000);
+    const query =
+      `start_date=${encodeURIComponent(start.toISOString())}` +
+      `&end_date=${encodeURIComponent(end.toISOString())}&fields=all&page_size=100`;
+    const raw = await this.request<unknown>(`/v1/reporting/transactions?${query}`, { method: "GET" });
+    return asArray(asRaw(raw).transaction_details).map((entry) => {
+      const e = asRaw(entry);
+      // Real shape nests the fields under transaction_info; tolerate a flat shape too.
+      const info = asRaw(e.transaction_info ?? e);
+      const payer = asRaw(e.payer_info);
+      const payerRaw = asRaw(payer.payer_name ?? payer);
+      return {
+        transaction_id: asString(info.transaction_id),
+        transaction_event_code: asString(info.transaction_event_code),
+        transaction_initiation_date: asString(info.transaction_initiation_date),
+        transaction_amount: toMoney(info.transaction_amount),
+        transaction_status: (asString(info.transaction_status, "S") || "S") as Transaction["transaction_status"],
+        transaction_subject: asString(info.transaction_subject) || undefined,
+        payer_info: {
+          email_address: asString(payer.email_address) || asString(payerRaw.email_address) || undefined,
+          name: joinName(payerRaw) || asString(payer.account_reference) || undefined,
+        },
+      };
+    });
+  }
+
+  /* ---------------- Webhooks ---------------- */
+
+  async verifyWebhookSignature(headers: Record<string, string>, event: WebhookEvent): Promise<boolean> {
+    if (!this.webhookId) return false;
+    const transmissionId = headers["paypal-transmission-id"];
+    const transmissionSig = headers["paypal-transmission-sig"];
+    const transmissionTime = headers["paypal-transmission-time"];
+    const certUrl = headers["paypal-cert-url"];
+    const authAlgo = headers["paypal-auth-algo"];
+    if (!transmissionId || !transmissionSig || !transmissionTime || !certUrl || !authAlgo) return false;
+    const raw = await this.request<unknown>("/v1/notifications/verify-webhook-signature", {
+      method: "POST",
+      body: {
+        auth_algo: authAlgo,
+        cert_url: certUrl,
+        transmission_id: transmissionId,
+        transmission_sig: transmissionSig,
+        transmission_time: transmissionTime,
+        webhook_id: this.webhookId,
+        webhook_event: event,
+      },
+    });
+    return asString(asRaw(raw).verification_status) === "SUCCESS";
+  }
 }

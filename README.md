@@ -136,7 +136,7 @@ curl -X POST localhost:3000/api/agent/execute -H 'content-type: application/json
 ```bash
 npm install
 npm run dev        # http://localhost:3000
-npm test           # full test suite (107 tests)
+npm test           # full test suite (116 tests)
 npm run typecheck  # tsc --noEmit
 npm run build      # production build
 ```
@@ -152,9 +152,17 @@ Set `PAYPAL_MODE=sandbox` and provide **your own** PayPal Developer sandbox
 credentials (see `.env.example`): `PAYPAL_CLIENT_ID`, `PAYPAL_CLIENT_SECRET`,
 `PAYPAL_WEBHOOK_ID`. Sandbox Business/Personal (buyer) test accounts are
 created inside your own developer dashboard; the hosted Judge Mode needs
-none of this. Honest status: the sandbox adapter currently validates the
-configuration and fails loudly when credentials are missing; live REST
-wiring is the sandbox milestone. Nothing in mock mode depends on it.
+none of this. Status: the sandbox adapter now implements the full REST
+surface behind the same contract — OAuth token fetch with caching,
+Invoicing v2, Orders v2, Payouts, Disputes + Transaction Search
+(read-only), and webhook signature verification — and that wiring is unit
+tested against a stub HTTP layer with fake credentials. It has **not yet
+been exercised against the live sandbox** (that needs a real sandbox app);
+mock mode remains the default and nothing in it depends on the sandbox
+adapter. Two PayPal shapes worth knowing: create-invoice returns only
+HATEOAS links, so the adapter reads the id from the `self` link and then
+GETs the invoice; and Orders v2 has no list endpoint, so listing re-GETs
+the orders this process created.
 
 ### Environment
 
@@ -175,7 +183,10 @@ mock mode a config swap rather than a rewrite.
   implementation with fictional seed data, invoice lifecycle incl. partial
   payments, emitted webhook events, and a deterministic mock
   webhook-signature scheme that mirrors the real verify flow's shape.
-- `src/lib/paypal/sandbox.ts` — sandbox adapter boundary (see above).
+- `src/lib/paypal/sandbox.ts` — sandbox adapter: live REST wiring behind
+  the same contract (OAuth + token cache, all resource mappings, PayPal
+  error translation), with an injectable fetch/clock so it is fully unit
+  tested offline with fake credentials.
 - `src/lib/agent/parser.ts` — deterministic NL brief → typed action plan
   parser (no LLM, no keys; relative due dates resolved against an injectable
   reference date).
@@ -241,7 +252,7 @@ signatures mirror the REST resources one-to-one.
 ## Testing
 
 ```bash
-npm test           # vitest — 107 tests, all green
+npm test           # vitest — 116 tests, all green
 npm run typecheck  # TypeScript strict, clean
 npm run build      # Next.js production build
 ```
@@ -255,8 +266,12 @@ non-interference, resource-correlated trigger resumption), console read
 models (per-currency totals, overdue flags), console states (loading /
 error / empty / filtered-empty precedence, overlay HTML escaping, banner
 and KPI rules), the command-bar gate matrix, Ask-the-grid parsing +
-validator negative cases, and the full Judge Mode loop (seed idempotency,
-the historical-event guard, double-payment no-op).
+validator negative cases, the full Judge Mode loop (seed idempotency,
+the historical-event guard, double-payment no-op), and the sandbox REST
+adapter against a stub fetch (OAuth caching/expiry, the links-only
+create-invoice flow, order capture + list-by-id, payout mapping, the
+nested Transaction Search shape, webhook verification SUCCESS/FAILURE,
+and PayPal error translation) — fake credentials only, no network.
 
 ## Demo
 
