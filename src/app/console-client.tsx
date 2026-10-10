@@ -9,7 +9,8 @@
  * The Agent Command bar (brief → plan review → approve → execute)
  * sits above the KPI strip, and the Ask-the-grid bar below it applies
  * validated filter models from src/lib/ask via `api.setFilterModel`.
- * Judge Mode seeding lands in the remaining full-loop chunk.
+ * Judge Mode (src/lib/judge) seeds the demo scenario from /judge; the
+ * console is where its spine plan is approved and executed.
  */
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";

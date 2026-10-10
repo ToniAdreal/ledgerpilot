@@ -12,7 +12,9 @@ export default function HomePage() {
       </p>
       <ConsoleClient />
       <p style={{ color: "#6b7280", fontSize: 13 }}>
-        Sandbox / mock mode only — no real money moves. Agent pipeline: briefs via{" "}
+        New here? <a href="/judge">Judge Mode</a> seeds the full demo scenario in one click —
+        no PayPal account or API key needed. Sandbox / mock mode only — no real money moves.
+        Agent pipeline: briefs via{" "}
         <code>POST /api/agent/plan</code>, approval via <code>/api/agent/approve</code>, execution
         via <code>/api/agent/execute</code>; webhooks via <code>POST /api/paypal/webhooks</code>{" "}
         with a polling reconciler at <code>GET /api/paypal/sync</code>.
