@@ -6,7 +6,18 @@ An AI money operator for solo sellers and freelancers. You say what happened in 
 
 ## Status
 
-Foundations milestone: Next.js + TypeScript scaffold and a complete mock-first PayPal adapter layer. The agent plan/execute pipeline, webhook handler, and AG Grid operations console land in the following milestones.
+Core loop, part 1: the deterministic agent pipeline is live — a plain-English brief becomes a typed action plan, nothing executes without approval, and a payout gated on invoice payment stays deferred until the payment lands. The webhook handler, sync reconciler, and AG Grid operations console land in the following milestones.
+
+Try it against the running dev server:
+
+```bash
+curl -X POST localhost:3000/api/agent/plan -H 'content-type: application/json' \
+  -d '{"brief":"Invoice Ana $450 for brand work, due Friday. When it lands, pay $200 to my contractor Marco."}'
+# → 201: a pending_approval plan with the exact PayPal calls listed
+curl -X POST localhost:3000/api/agent/approve -H 'content-type: application/json' -d '{"planId":"plan-0001","decision":"approve"}'
+curl -X POST localhost:3000/api/agent/execute -H 'content-type: application/json' -d '{"planId":"plan-0001"}'
+# → invoice SENT now; payout deferred (awaiting_trigger) until INVOICING.INVOICE.PAID
+```
 
 ## Run it (mock mode — no credentials, no keys)
 
@@ -25,6 +36,10 @@ Mock mode (`PAYPAL_MODE=mock`, the default) implements the full PayPal surface u
 - `src/lib/paypal/client.ts` — the `PayPalClient` adapter contract; app code never calls PayPal directly.
 - `src/lib/paypal/mock.ts` — mock adapter (October default).
 - `src/lib/paypal/sandbox.ts` — sandbox adapter boundary: validates the caller's own sandbox credentials from env; REST wiring lands with the sandbox milestone.
+- `src/lib/agent/parser.ts` — deterministic NL brief → typed action plan parser (no LLM, no keys; relative due dates resolved against an injectable reference date).
+- `src/lib/agent/store.ts` — in-memory ledger: plans, the append-only activity/audit log, and webhook event-id idempotency.
+- `src/lib/agent/executor.ts` — the only path from an approved plan to PayPal calls; trigger-gated steps are deferred and resumed by `resumeTriggeredSteps` when the matching event arrives.
+- `src/app/api/agent/` — `POST /plan` (brief → plan), `POST /approve` (the approval gate), `POST /execute` (approved plans only).
 - `src/app/` — Next.js App Router UI.
 
 ## Environment

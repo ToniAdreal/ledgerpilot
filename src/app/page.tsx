@@ -8,9 +8,9 @@ export default function HomePage() {
         executes without your approval.
       </p>
       <p>
-        <strong>Status:</strong> foundations milestone — PayPal adapter layer (mock-first) is in
-        place. The operations console and agent plan/execute pipeline land in the core-loop
-        milestone.
+        <strong>Status:</strong> core-loop milestone — the agent plan/approve/execute pipeline is
+        live via <code>/api/agent/*</code> (mock-first PayPal adapter underneath). The operations
+        console lands next.
       </p>
     </main>
   );

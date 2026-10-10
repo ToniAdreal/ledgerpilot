@@ -197,7 +197,14 @@ export interface ActionPlan {
   id: string;
   brief: string;
   steps: ActionStep[];
-  status: "pending_approval" | "approved" | "rejected" | "executing" | "completed" | "failed";
+  status:
+    | "pending_approval"
+    | "approved"
+    | "rejected"
+    | "executing"
+    | "awaiting_trigger"
+    | "completed"
+    | "failed";
   createdAt: string;
 }
 
