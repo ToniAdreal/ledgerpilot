@@ -11,7 +11,7 @@ export * from "./sandbox";
  * October phase is mock-first — sandbox requires the caller's own
  * PayPal Developer app credentials and is wired in a later milestone.
  */
-export function getPayPalClient(env: NodeJS.ProcessEnv = process.env): PayPalClient {
+export function getPayPalClient(env: Record<string, string | undefined> = process.env): PayPalClient {
   const mode = (env.PAYPAL_MODE ?? "mock").toLowerCase();
   if (mode === "sandbox") {
     return new SandboxPayPalClient({
