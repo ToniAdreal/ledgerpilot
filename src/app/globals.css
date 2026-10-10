@@ -101,6 +101,20 @@ body { margin: 0; color: #111827; background: #ffffff; }
 .plan-outcome { font-size: 13px; font-weight: 600; }
 .plan-actions { display: flex; gap: 0.6rem; margin-top: 0.5rem; }
 
+/* Ask-the-grid bar */
+.ask-bar { margin-top: 1.5rem; }
+.ask-bar input.command-input { align-self: center; }
+.ask-result {
+  border: 1px solid #e5e7eb;
+  border-left: 3px solid #111827;
+  border-radius: 8px;
+  padding: 0.6rem 0.9rem;
+  margin-top: 0.75rem;
+  background: #f9fafb;
+}
+.ask-summary { margin: 0; font-size: 13px; font-weight: 600; }
+.ask-note { margin: 0.25rem 0 0; font-size: 12px; color: #6b7280; }
+
 .pill {
   display: inline-block;
   padding: 0.05rem 0.55rem;

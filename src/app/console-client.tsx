@@ -7,17 +7,20 @@
  *
  * AG Grid Community only (no Enterprise features, no trial watermark).
  * The Agent Command bar (brief → plan review → approve → execute)
- * sits above the KPI strip. Ask-the-grid and Judge Mode land in the
- * remaining full-loop chunks.
+ * sits above the KPI strip, and the Ask-the-grid bar below it applies
+ * validated filter models from src/lib/ask via `api.setFilterModel`.
+ * Judge Mode seeding lands in the remaining full-loop chunk.
  */
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { AgGridReact } from "ag-grid-react";
 import {
   AllCommunityModule,
   ModuleRegistry,
   themeQuartz,
   type ColDef,
+  type GridApi,
+  type GridReadyEvent,
   type ICellRendererParams,
 } from "ag-grid-community";
 import type {
@@ -27,7 +30,9 @@ import type {
   OrderRow,
   PayoutRow,
 } from "../lib/console";
+import { ASK_TARGETS, type AskResult, type AskTarget } from "../lib/ask";
 import CommandBar from "./command-bar";
+import AskBar from "./ask-bar";
 
 ModuleRegistry.registerModules([AllCommunityModule]);
 
@@ -75,17 +80,49 @@ export default function ConsoleClient() {
     void refresh();
   }, [refresh]);
 
+  /* Ask-the-grid: one GridApi per surface; a parsed query sets the
+   * targeted grids' filter models and clears the rest, so the visible
+   * state always matches the AskBar readout exactly. */
+  const gridApis = useRef<Partial<Record<AskTarget, GridApi>>>({});
+
+  const gridReady = useCallback(
+    (target: AskTarget) =>
+      (event: GridReadyEvent): void => {
+        gridApis.current[target] = event.api;
+      },
+    [],
+  );
+
+  const applyAsk = useCallback((result: AskResult) => {
+    for (const target of ASK_TARGETS) {
+      const api = gridApis.current[target];
+      if (!api) continue;
+      const model = result.models[target];
+      api.setFilterModel(
+        model ? (model as Parameters<GridApi["setFilterModel"]>[0]) : null,
+      );
+    }
+  }, []);
+
+  const clearAsk = useCallback(() => {
+    for (const target of ASK_TARGETS) {
+      gridApis.current[target]?.setFilterModel(null);
+    }
+  }, []);
+
   const invoiceColumns = useMemo<ColDef<InvoiceRow>[]>(
     () => [
-      { field: "invoiceNumber", headerName: "Invoice", width: 130 },
-      { field: "recipientName", headerName: "Recipient", width: 150 },
-      { field: "recipientEmail", headerName: "Email", width: 200 },
-      { field: "status", headerName: "Status", width: 150, cellRenderer: StatusPill },
+      { field: "invoiceNumber", headerName: "Invoice", width: 130, filter: "agTextColumnFilter" },
+      { field: "recipientName", headerName: "Recipient", width: 150, filter: "agTextColumnFilter" },
+      { field: "recipientEmail", headerName: "Email", width: 200, filter: "agTextColumnFilter" },
+      { field: "status", headerName: "Status", width: 150, cellRenderer: StatusPill, filter: "agTextColumnFilter" },
+      { field: "currency", headerName: "Currency", width: 100, filter: "agTextColumnFilter" },
       {
         field: "amountValue",
         headerName: "Amount",
         width: 120,
         type: "rightAligned",
+        filter: "agNumberColumnFilter",
         valueFormatter: (p) => (p.data ? `${p.data.currency} ${p.data.amount}` : ""),
       },
       {
@@ -93,13 +130,15 @@ export default function ConsoleClient() {
         headerName: "Due",
         width: 120,
         type: "rightAligned",
+        filter: "agNumberColumnFilter",
         valueFormatter: (p) => (p.data ? `${p.data.currency} ${p.data.dueAmount}` : ""),
       },
-      { field: "dueDate", headerName: "Due date", width: 120 },
+      { field: "dueDate", headerName: "Due date", width: 120, filter: "agDateColumnFilter" },
       {
         field: "overdue",
         headerName: "Overdue",
         width: 100,
+        filter: false,
         valueFormatter: (p) => (p.value ? "Yes" : "—"),
         cellStyle: (p) => (p.value ? { color: "#b91c1c", fontWeight: 600 } : null),
       },
@@ -109,19 +148,21 @@ export default function ConsoleClient() {
 
   const orderColumns = useMemo<ColDef<OrderRow>[]>(
     () => [
-      { field: "id", headerName: "Order", width: 150 },
-      { field: "description", headerName: "Description", flex: 1, minWidth: 220 },
-      { field: "referenceId", headerName: "Reference", width: 150 },
-      { field: "status", headerName: "Status", width: 140, cellRenderer: StatusPill },
+      { field: "id", headerName: "Order", width: 150, filter: "agTextColumnFilter" },
+      { field: "description", headerName: "Description", flex: 1, minWidth: 220, filter: "agTextColumnFilter" },
+      { field: "referenceId", headerName: "Reference", width: 150, filter: "agTextColumnFilter" },
+      { field: "status", headerName: "Status", width: 140, cellRenderer: StatusPill, filter: "agTextColumnFilter" },
+      { field: "currency", headerName: "Currency", width: 100, filter: "agTextColumnFilter" },
       {
         field: "amountValue",
         headerName: "Amount",
         width: 120,
         type: "rightAligned",
+        filter: "agNumberColumnFilter",
         valueFormatter: (p) => (p.data ? `${p.data.currency} ${p.data.amount}` : ""),
       },
-      { field: "captureId", headerName: "Capture", width: 150 },
-      { field: "captureStatus", headerName: "Capture status", width: 140, cellRenderer: StatusPill },
+      { field: "captureId", headerName: "Capture", width: 150, filter: "agTextColumnFilter" },
+      { field: "captureStatus", headerName: "Capture status", width: 140, cellRenderer: StatusPill, filter: "agTextColumnFilter" },
     ],
     [],
   );
@@ -132,20 +173,23 @@ export default function ConsoleClient() {
         field: "timeCreated",
         headerName: "Time",
         width: 190,
+        filter: "agDateColumnFilter",
         valueFormatter: (p) => (p.value ? new Date(String(p.value)).toLocaleString() : ""),
       },
-      { field: "recipientName", headerName: "Recipient", width: 150 },
-      { field: "recipientEmail", headerName: "Email", width: 200 },
-      { field: "status", headerName: "Status", width: 130, cellRenderer: StatusPill },
+      { field: "recipientName", headerName: "Recipient", width: 150, filter: "agTextColumnFilter" },
+      { field: "recipientEmail", headerName: "Email", width: 200, filter: "agTextColumnFilter" },
+      { field: "status", headerName: "Status", width: 130, cellRenderer: StatusPill, filter: "agTextColumnFilter" },
+      { field: "currency", headerName: "Currency", width: 100, filter: "agTextColumnFilter" },
       {
         field: "amountValue",
         headerName: "Amount",
         width: 120,
         type: "rightAligned",
+        filter: "agNumberColumnFilter",
         valueFormatter: (p) => (p.data ? `${p.data.currency} ${p.data.amount}` : ""),
       },
-      { field: "note", headerName: "Note", flex: 1, minWidth: 180 },
-      { field: "batchId", headerName: "Batch", width: 170 },
+      { field: "note", headerName: "Note", flex: 1, minWidth: 180, filter: "agTextColumnFilter" },
+      { field: "batchId", headerName: "Batch", width: 170, filter: "agTextColumnFilter" },
     ],
     [],
   );
@@ -156,12 +200,13 @@ export default function ConsoleClient() {
         field: "createdAt",
         headerName: "Time",
         width: 190,
+        filter: "agDateColumnFilter",
         valueFormatter: (p) => (p.value ? new Date(String(p.value)).toLocaleString() : ""),
       },
-      { field: "kind", headerName: "Kind", width: 120, cellRenderer: StatusPill },
-      { field: "planId", headerName: "Plan", width: 120 },
-      { field: "eventId", headerName: "Webhook event", width: 160 },
-      { field: "summary", headerName: "Summary", flex: 1, minWidth: 320 },
+      { field: "kind", headerName: "Kind", width: 120, cellRenderer: StatusPill, filter: "agTextColumnFilter" },
+      { field: "planId", headerName: "Plan", width: 120, filter: "agTextColumnFilter" },
+      { field: "eventId", headerName: "Webhook event", width: 160, filter: "agTextColumnFilter" },
+      { field: "summary", headerName: "Summary", flex: 1, minWidth: 320, filter: "agTextColumnFilter" },
     ],
     [],
   );
@@ -174,6 +219,7 @@ export default function ConsoleClient() {
   return (
     <section>
       <CommandBar onSettled={() => void refresh()} />
+      <AskBar onApply={applyAsk} onClear={clearAsk} />
       <div className="kpi-strip">
         <div className="kpi">
           <span className="kpi-label">Outstanding</span>
@@ -217,6 +263,7 @@ export default function ConsoleClient() {
           rowData={invoices}
           columnDefs={invoiceColumns}
           defaultColDef={defaultColDef}
+          onGridReady={gridReady("invoices")}
           pagination
           paginationPageSize={10}
           domLayout="autoHeight"
@@ -230,6 +277,7 @@ export default function ConsoleClient() {
           rowData={orders}
           columnDefs={orderColumns}
           defaultColDef={defaultColDef}
+          onGridReady={gridReady("orders")}
           pagination
           paginationPageSize={10}
           domLayout="autoHeight"
@@ -243,6 +291,7 @@ export default function ConsoleClient() {
           rowData={payouts}
           columnDefs={payoutColumns}
           defaultColDef={defaultColDef}
+          onGridReady={gridReady("payouts")}
           pagination
           paginationPageSize={10}
           domLayout="autoHeight"
@@ -256,6 +305,7 @@ export default function ConsoleClient() {
           rowData={activity}
           columnDefs={activityColumns}
           defaultColDef={defaultColDef}
+          onGridReady={gridReady("activity")}
           pagination
           paginationPageSize={10}
           domLayout="autoHeight"
