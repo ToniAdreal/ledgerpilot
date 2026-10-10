@@ -24,6 +24,7 @@ import type {
   ActionStep,
   CreateInvoiceInput,
   CreateOrderInput,
+  Invoice,
   Party,
   Money,
   WebhookEventType,
@@ -85,18 +86,61 @@ async function runStep(
       });
       return { step, outcome: "executed", resultId: batch.batch_header.payout_batch_id };
     }
-    // send_reminder: the adapter contract has no remind call yet (the real
-    // endpoint is POST /v2/invoicing/invoices/:id/remind). Until the sandbox
-    // milestone adds it, execution produces the drafted reminder as an
-    // auditable activity record — labeled as a draft, never as "sent".
+    // send_reminder: resolve the target invoice, then call the real
+    // remind endpoint through the adapter. Resolution is deterministic:
+    //  - an explicit reference must match an invoice id, invoice number,
+    //    or detail reference — a reference that matches nothing fails the
+    //    step (a reminder is never sent to the wrong invoice, and never
+    //    silently downgraded to a "draft");
+    //  - with no reference, the recipient's open invoices (SENT /
+    //    PARTIALLY_PAID / SCHEDULED) are considered and the most overdue
+    //    wins: earliest due date first, undated invoices last, list order
+    //    breaks ties. No open invoice for the recipient fails the step.
+    // The adapter itself refuses non-open invoices (e.g. a PAID invoice
+    // named by reference), so those surface as failed steps too.
     const recipient = p.recipient as Party;
+    const ref = typeof p.invoiceRef === "string" && p.invoiceRef ? p.invoiceRef : null;
+    const invoices = await client.listInvoices();
+    let target: Invoice | undefined;
+    if (ref) {
+      target = invoices.find(
+        (i) => i.id === ref || i.detail.invoice_number === ref || i.detail.reference === ref,
+      );
+      if (!target) {
+        throw new Error(
+          `No invoice matches "${ref}" — the reminder was not sent. Check the invoice number, or drop the reference to remind ${recipient.name} about their most-overdue open invoice.`,
+        );
+      }
+    } else {
+      const open = invoices.filter(
+        (i) =>
+          (i.status === "SENT" || i.status === "PARTIALLY_PAID" || i.status === "SCHEDULED") &&
+          i.primary_recipients.some(
+            (r) => r.billing_info.email_address.toLowerCase() === recipient.email_address.toLowerCase(),
+          ),
+      );
+      if (open.length === 0) {
+        throw new Error(
+          `No open invoice for ${recipient.name} (${recipient.email_address}) — there is nothing to remind about, so no reminder was sent.`,
+        );
+      }
+      target = [...open].sort((a, b) => {
+        const da = a.detail.payment_term?.due_date ?? "9999-12-31";
+        const db = b.detail.payment_term?.due_date ?? "9999-12-31";
+        return da < db ? -1 : da > db ? 1 : 0;
+      })[0];
+    }
+    const reminded = await client.sendInvoiceReminder(target!.id, {
+      subject: `Reminder: invoice ${target!.detail.invoice_number} is due`,
+      note: `Payment reminder for invoice ${target!.detail.invoice_number} — ${target!.due_amount.currency_code} ${target!.due_amount.value} still due.`,
+    });
     store.record({
       planId: plan.id,
       kind: "paypal_call",
-      summary: `Reminder drafted for ${recipient.name}${p.invoiceRef ? ` (invoice ${String(p.invoiceRef)})` : ""} — draft only, reminder send lands with the sandbox adapter`,
-      detail: { drafted: true, recipient: recipient.email_address },
+      summary: `POST /v2/invoicing/invoices/${reminded.id}/remind → reminder sent to ${recipient.name} for invoice ${reminded.detail.invoice_number} (${reminded.due_amount.currency_code} ${reminded.due_amount.value} due, status ${reminded.status})`,
+      detail: { invoiceId: reminded.id, invoiceNumber: reminded.detail.invoice_number, reminded: true, recipient: recipient.email_address },
     });
-    return { step, outcome: "executed" };
+    return { step, outcome: "executed", resultId: reminded.id };
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
     store.record({ planId: plan.id, kind: "system", summary: `Step failed (${step.type}): ${message}` });

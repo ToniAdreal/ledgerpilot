@@ -37,7 +37,7 @@ export const EXAMPLE_BRIEFS: ExampleBrief[] = [
   },
   {
     label: "Payment reminder",
-    brief: "Remind Ana about invoice LP-000123",
+    brief: "Remind Marco about his overdue invoice",
   },
 ];
 

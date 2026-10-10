@@ -16,7 +16,8 @@
  *   "Pay $200 to Marco for hosting help"            (immediate payout)
  *   "Pay Marco $200"                                (immediate payout)
  *   "Sell a studio cable pack for $59"              (Orders v2 checkout)
- *   "Remind Ana about invoice LP-000123"           (reminder draft)
+ *   "Remind Ana about invoice LP-000123"           (invoice reminder)
+ *   "Remind Marco about his overdue invoice"       (reminder for the recipient's most-overdue open invoice)
  */
 
 import type { ActionPlan, ActionStep, CurrencyCode, Party } from "../types";
@@ -170,13 +171,20 @@ export function parseBrief(brief: string, options: ParseOptions = {}): ActionPla
   /* --- Reminder: "Remind Ana about invoice LP-000123" --- */
   const reminderMatch = text.match(/remind\s+([A-Z][a-zA-Z]+)(?:\s+about\s+(?:invoice\s+)?(\S+))?/i);
   if (reminderMatch && !invoiceMatch) {
-    const [, name, ref] = reminderMatch;
+    const [, name, refRaw] = reminderMatch;
     const recipient = resolveContact(name!, contacts);
+    // Only a token that actually looks like an invoice reference (a known
+    // prefix, or containing a digit) counts as a reference. Conversational
+    // phrasing — "Remind Marco about his overdue invoice" — captures "his"
+    // here; that is not a reference, so the step carries no ref and the
+    // executor resolves the recipient's most-overdue open invoice instead.
+    const candidate = refRaw?.replace(/[.,;]+$/, "");
+    const ref = candidate && (/^(LP|INV2|PP)-/i.test(candidate) || /\d/.test(candidate)) ? candidate : undefined;
     found.push({
       index: reminderMatch.index ?? 0,
       step: {
         type: "send_reminder",
-        description: `Draft a payment reminder to ${recipient.name}${ref ? ` about invoice ${ref}` : ""}`,
+        description: `Send a payment reminder to ${recipient.name}${ref ? ` about invoice ${ref}` : " about their most-overdue open invoice"}`,
         paypalCall: { method: "POST", path: "/v2/invoicing/invoices/:id/remind" },
         payload: { recipient, invoiceRef: ref ?? null },
       },

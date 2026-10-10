@@ -47,6 +47,20 @@ export interface CreateInvoiceInput {
   reference?: string;
 }
 
+export interface SendInvoiceReminderInput {
+  subject?: string;
+  note?: string;
+}
+
+/** One reminder actually sent for an invoice (mock adapter records these). */
+export interface SentInvoiceReminder {
+  invoiceId: string;
+  recipient: Party;
+  subject?: string;
+  note?: string;
+  sentAt: string;
+}
+
 export interface Invoice {
   id: string;
   status: InvoiceStatus;

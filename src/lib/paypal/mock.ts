@@ -8,6 +8,8 @@ import type {
   Money,
   Order,
   PayoutBatch,
+  SendInvoiceReminderInput,
+  SentInvoiceReminder,
   Transaction,
   WebhookEvent,
 } from "../types";
@@ -62,6 +64,8 @@ export class MockPayPalClient implements PayPalClient {
   private disputes: Dispute[];
   /** Webhook events the mock "PayPal" would have delivered, in order. */
   readonly emittedEvents: WebhookEvent[] = [];
+  /** Reminders actually sent through this adapter, in order. */
+  readonly sentReminders: SentInvoiceReminder[] = [];
 
   constructor(seed: MockSeedOptions = {}) {
     this.disputes =
@@ -177,6 +181,31 @@ export class MockPayPalClient implements PayPalClient {
         transaction_id: txnId,
       });
     }
+    return structuredClone(invoice);
+  }
+
+  async sendInvoiceReminder(invoiceId: string, input: SendInvoiceReminderInput = {}): Promise<Invoice> {
+    const invoice = this.mustGetInvoice(invoiceId);
+    // A reminder only makes sense for an invoice that is out and still
+    // owes money — the real API rejects the rest, and so does the mock.
+    const remindable = invoice.status === "SENT" || invoice.status === "PARTIALLY_PAID" || invoice.status === "SCHEDULED";
+    if (!remindable) {
+      throw new PayPalError(
+        `Invoice ${invoiceId} cannot be reminded from status ${invoice.status} — only an open invoice with an amount due can be reminded`,
+        422,
+        "UNPROCESSABLE_ENTITY",
+      );
+    }
+    const recipient = invoice.primary_recipients[0]?.billing_info;
+    this.sentReminders.push({
+      invoiceId: invoice.id,
+      recipient: recipient
+        ? { name: recipient.name, email_address: recipient.email_address }
+        : { name: "", email_address: "" },
+      subject: input.subject,
+      note: input.note,
+      sentAt: new Date().toISOString(),
+    });
     return structuredClone(invoice);
   }
 

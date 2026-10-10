@@ -102,6 +102,15 @@ curl -X POST localhost:3000/api/agent/execute -H 'content-type: application/json
   time to the invoice its own plan created, so one invoice's payment can
   never release another plan's payout — a mismatched event is audit-logged
   and the step stays gated.
+- **Invoice reminders that actually send.** A `send_reminder` step calls
+  the real remind endpoint (`POST /v2/invoicing/invoices/:id/remind`)
+  through the adapter — mock and sandbox alike. The target invoice is
+  resolved deterministically at execution: an explicit invoice reference
+  must match an invoice id, number, or reference (an unmatched reference
+  fails the step — a reminder is never sent to the wrong invoice and
+  never silently downgraded to a draft), and with no reference the
+  recipient's most-overdue open invoice wins. The adapter refuses
+  non-open invoices (a reminder for a PAID invoice fails honestly).
 - **Sync reconciler.** `GET /api/paypal/sync` is the polling fallback for
   instances webhooks cannot reach: it drains undelivered events in order and
   sweeps resource state with stable synthetic event ids, so repeat syncs are
@@ -140,7 +149,7 @@ curl -X POST localhost:3000/api/agent/execute -H 'content-type: application/json
 ```bash
 npm install
 npm run dev        # http://localhost:3000
-npm test           # full test suite (141 tests)
+npm test           # full test suite (152 tests)
 npm run typecheck  # tsc --noEmit
 npm run build      # production build
 ```
@@ -235,7 +244,7 @@ mock mode a config swap rather than a rewrite.
 
 | API | How LedgerPilot uses it |
 |---|---|
-| **Invoicing v2** | Create/send invoices from briefs; get/list; record-payment for the local-run payment path |
+| **Invoicing v2** | Create/send invoices from briefs; get/list; record-payment for the local-run payment path; send payment reminders (`POST /v2/invoicing/invoices/:id/remind`) for open invoices |
 | **Orders v2 / Checkout** | Create + capture checkout orders for one-off sales ("sell" briefs) |
 | **Payouts** | Batch payouts drafted by the agent, released only after approval; per-item status tracked |
 | **Webhooks** | `INVOICING.INVOICE.PAID`, `INVOICING.INVOICE.CANCELLED`, `PAYMENT.CAPTURE.COMPLETED`, `PAYMENT.PAYOUTS-ITEM.SUCCEEDED`, `PAYMENT.PAYOUTS-ITEM.FAILED` — signature-verified, idempotent event log |
@@ -270,13 +279,16 @@ signatures mirror the REST resources one-to-one.
 ## Testing
 
 ```bash
-npm test           # vitest — 141 tests, all green
+npm test           # vitest — 152 tests, all green
 npm run typecheck  # TypeScript strict, clean
 npm run build      # Next.js production build
 ```
 
 The suite covers: the mock PayPal surface (invoice lifecycle, partial
-payments, capture/payout guards, the full invoice→paid→payout loop), the
+payments, capture/payout guards, the full invoice→paid→payout loop),
+invoice reminders (mock open-invoice rules, executor resolution by
+reference and by most-overdue open invoice, unmatched-reference and
+already-paid failures, the sandbox `/remind` request shape), the
 agent pipeline (brief parsing incl. due-date forms and currencies, the
 approval gate, trigger resume, audit ordering), webhooks + reconciler
 (bad-signature rejection, duplicate delivery, webhook/reconciler

@@ -6,6 +6,7 @@ import type {
   Invoice,
   Order,
   PayoutBatch,
+  SendInvoiceReminderInput,
   Transaction,
   WebhookEvent,
 } from "../types";
@@ -31,6 +32,8 @@ export interface PayPalClient {
   listInvoices(): Promise<Invoice[]>;
   /* Invoicing v2 — POST /v2/invoicing/invoices/:id/payments (record a payment made outside PayPal) */
   recordInvoicePayment(invoiceId: string, amount: { value: string; currency_code: string }): Promise<Invoice>;
+  /* Invoicing v2 — POST /v2/invoicing/invoices/:id/remind (send a payment reminder for an open invoice) */
+  sendInvoiceReminder(invoiceId: string, input?: SendInvoiceReminderInput): Promise<Invoice>;
 
   /* Orders v2 — POST /v2/checkout/orders */
   createOrder(input: CreateOrderInput): Promise<Order>;

@@ -8,6 +8,7 @@ import type {
   Order,
   Party,
   PayoutBatch,
+  SendInvoiceReminderInput,
   Transaction,
   WebhookEvent,
 } from "../types";
@@ -361,6 +362,21 @@ export class SandboxPayPalClient implements PayPalClient {
     await this.request<unknown>(`/v2/invoicing/invoices/${encodeURIComponent(invoiceId)}/payments`, {
       method: "POST",
       body: { method: "OTHER", amount },
+    });
+    return this.getInvoice(invoiceId);
+  }
+
+  async sendInvoiceReminder(invoiceId: string, input: SendInvoiceReminderInput = {}): Promise<Invoice> {
+    // The real endpoint answers 204 No Content; the invoice is re-fetched
+    // afterwards, exactly like sendInvoice handles its empty 202.
+    await this.request<unknown>(`/v2/invoicing/invoices/${encodeURIComponent(invoiceId)}/remind`, {
+      method: "POST",
+      body: {
+        subject: input.subject ?? "Reminder: your invoice is due",
+        note: input.note,
+        send_to_invoicer: false,
+        send_to_recipient: true,
+      },
     });
     return this.getInvoice(invoiceId);
   }

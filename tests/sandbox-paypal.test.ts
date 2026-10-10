@@ -84,6 +84,12 @@ function makeStubFetch() {
       invoice.status = "SENT";
       return new Response(null, { status: 202 });
     }
+    if (path.match(/^\/v2\/invoicing\/invoices\/[^/]+\/remind$/) && method === "POST") {
+      const id = path.split("/")[4]!;
+      if (!invoices.has(id)) return json(404, { name: "RESOURCE_NOT_FOUND", message: "Invoice not found." });
+      // Real PayPal: 204 No Content.
+      return new Response(null, { status: 204 });
+    }
     if (path.match(/^\/v2\/invoicing\/invoices\/[^/]+\/payments$/) && method === "POST") {
       const id = path.split("/")[4]!;
       const invoice = invoices.get(id)!;
@@ -266,6 +272,27 @@ describe("sandbox invoicing", () => {
 
     const list = await client.listInvoices();
     expect(list.map((i) => i.id)).toEqual(["INV2-STUB-1"]);
+  });
+
+  it("sends a reminder via POST /remind (204) and re-fetches the invoice", async () => {
+    const { client, stub } = makeClient({ ...T0 });
+    const draft = await client.createInvoice({
+      recipient: ANA,
+      items: [{ name: "Logo work", quantity: "1", unit_amount: { currency_code: "USD", value: "450.00" } }],
+    });
+    const sent = await client.sendInvoice(draft.id);
+    const reminded = await client.sendInvoiceReminder(sent.id, { note: "Still due" });
+    expect(reminded.id).toBe(sent.id);
+    expect(reminded.status).toBe("SENT");
+    const remindReq = stub.requests.find((r) => r.method === "POST" && r.url.endsWith(`/v2/invoicing/invoices/${sent.id}/remind`))!;
+    expect(remindReq).toBeDefined();
+    expect(JSON.parse(remindReq.body)).toMatchObject({
+      subject: "Reminder: your invoice is due",
+      note: "Still due",
+      send_to_invoicer: false,
+      send_to_recipient: true,
+    });
+    await expect(client.sendInvoiceReminder("INV2-NOPE")).rejects.toMatchObject({ status: 404 });
   });
 
   it("translates a PayPal 404 into a PayPalError with status and name", async () => {

@@ -225,7 +225,7 @@ export function extractionToPlan(extraction: LlmExtraction, brief: string, optio
     const recipient = resolveContact(s.recipientName!, contacts);
     return {
       type: s.type,
-      description: `Draft a payment reminder to ${recipient.name}${s.invoiceRef ? ` about invoice ${s.invoiceRef}` : ""}`,
+      description: `Send a payment reminder to ${recipient.name}${s.invoiceRef ? ` about invoice ${s.invoiceRef}` : " about their most-overdue open invoice"}`,
       paypalCall,
       payload: { recipient, invoiceRef: s.invoiceRef ?? null },
     };
