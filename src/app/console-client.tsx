@@ -6,7 +6,8 @@
  * read models.
  *
  * AG Grid Community only (no Enterprise features, no trial watermark).
- * The Agent Command bar, Ask-the-grid, and Judge Mode land in the
+ * The Agent Command bar (brief → plan review → approve → execute)
+ * sits above the KPI strip. Ask-the-grid and Judge Mode land in the
  * remaining full-loop chunks.
  */
 
@@ -26,6 +27,7 @@ import type {
   OrderRow,
   PayoutRow,
 } from "../lib/console";
+import CommandBar from "./command-bar";
 
 ModuleRegistry.registerModules([AllCommunityModule]);
 
@@ -171,6 +173,7 @@ export default function ConsoleClient() {
 
   return (
     <section>
+      <CommandBar onSettled={() => void refresh()} />
       <div className="kpi-strip">
         <div className="kpi">
           <span className="kpi-label">Outstanding</span>

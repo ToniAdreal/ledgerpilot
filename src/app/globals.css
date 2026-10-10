@@ -34,6 +34,73 @@ body { margin: 0; color: #111827; background: #ffffff; }
 .console-error { color: #b91c1c; }
 .grid-wrap { margin-bottom: 1.5rem; }
 
+/* Agent Command bar */
+.command-bar { margin-top: 1.25rem; }
+.command-hint { color: #4b5563; font-size: 13px; margin: 0.25rem 0 0.75rem; }
+.command-input-row { display: flex; gap: 0.75rem; align-items: flex-start; }
+.command-input {
+  flex: 1;
+  border: 1px solid #d1d5db;
+  border-radius: 8px;
+  padding: 0.6rem 0.75rem;
+  font: inherit;
+  font-size: 14px;
+  resize: vertical;
+}
+.command-btn {
+  border: 1px solid #d1d5db;
+  background: #ffffff;
+  border-radius: 8px;
+  padding: 0.55rem 1rem;
+  cursor: pointer;
+  font-size: 13px;
+  font-weight: 600;
+}
+.command-btn:disabled { opacity: 0.55; cursor: default; }
+.command-btn-primary { background: #111827; color: #ffffff; border-color: #111827; }
+.command-btn-primary:hover:not(:disabled) { background: #1f2937; }
+.command-btn-danger { color: #991b1b; border-color: #fecaca; }
+.command-btn-danger:hover:not(:disabled) { background: #fef2f2; }
+.example-chips { display: flex; flex-wrap: wrap; gap: 0.5rem; margin-top: 0.6rem; }
+.example-chip, .pending-chip {
+  border: 1px solid #e5e7eb;
+  background: #f9fafb;
+  border-radius: 999px;
+  padding: 0.25rem 0.7rem;
+  cursor: pointer;
+  font-size: 12px;
+}
+.example-chip:hover, .pending-chip:hover { background: #f3f4f6; }
+.pending-queue { font-size: 13px; color: #4b5563; display: flex; flex-wrap: wrap; gap: 0.5rem; align-items: center; }
+.plan-review {
+  border: 1px solid #e5e7eb;
+  border-radius: 10px;
+  padding: 1rem;
+  margin-top: 1rem;
+  background: #ffffff;
+}
+.plan-review-head { display: flex; flex-wrap: wrap; gap: 0.75rem; align-items: center; font-size: 14px; }
+.plan-review-counts { color: #6b7280; font-size: 12px; }
+.plan-review-brief { color: #374151; font-style: italic; margin: 0.5rem 0; }
+.plan-steps { list-style: none; margin: 0.5rem 0; padding: 0; display: flex; flex-direction: column; gap: 0.5rem; }
+.plan-step {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.6rem;
+  align-items: baseline;
+  border: 1px solid #f3f4f6;
+  border-radius: 8px;
+  padding: 0.5rem 0.75rem;
+  background: #f9fafb;
+  font-size: 13px;
+}
+.plan-step-type { font-weight: 650; }
+.plan-step-call { background: #ffedd5; color: #9a3412; border-radius: 6px; padding: 0.05rem 0.45rem; font-size: 12px; }
+.plan-step-trigger { background: #ede9fe; color: #5b21b6; border-radius: 999px; padding: 0.05rem 0.55rem; font-size: 11px; font-weight: 600; }
+.plan-status-message { color: #4b5563; font-size: 13px; }
+.plan-outcome { font-size: 13px; font-weight: 600; }
+.plan-actions { display: flex; gap: 0.6rem; margin-top: 0.5rem; }
+
 .pill {
   display: inline-block;
   padding: 0.05rem 0.55rem;

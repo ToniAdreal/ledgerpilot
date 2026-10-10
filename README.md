@@ -6,9 +6,9 @@ An AI money operator for solo sellers and freelancers. You say what happened in 
 
 ## Status
 
-Core loop complete: the deterministic agent pipeline is live — a plain-English brief becomes a typed action plan, nothing executes without approval, and a payout gated on invoice payment stays deferred until the payment lands. Verified, idempotent webhooks (`POST /api/paypal/webhooks`) resume gated steps, and a polling sync reconciler (`GET /api/paypal/sync`) closes the same loop when webhooks cannot reach the instance. The operations console is live at `/`: KPI strip (outstanding, collected to date, pending approvals, awaiting trigger, open disputes, captured orders, payouts sent) plus four AG Grid surfaces — Invoices, Orders / Checkout, Payouts, and Agent Activity & Webhook Audit — fed by `GET /api/console/*` read models. The Agent Command bar, Ask-the-grid, and Judge Mode seeding land in the remaining full-loop chunks.
+Core loop complete: the deterministic agent pipeline is live — a plain-English brief becomes a typed action plan, nothing executes without approval, and a payout gated on invoice payment stays deferred until the payment lands. Verified, idempotent webhooks (`POST /api/paypal/webhooks`) resume gated steps, and a polling sync reconciler (`GET /api/paypal/sync`) closes the same loop when webhooks cannot reach the instance. The operations console is live at `/`: KPI strip (outstanding, collected to date, pending approvals, awaiting trigger, open disputes, captured orders, payouts sent) plus four AG Grid surfaces — Invoices, Orders / Checkout, Payouts, and Agent Activity & Webhook Audit — fed by `GET /api/console/*` read models. The **Agent Command bar** is live at the top of the console: write a brief, review the typed plan (every step shows its exact PayPal call; trigger-gated steps are marked), approve or reject it, and execute — the grids refresh when execution settles, and plans still waiting for a decision are listed so a page reload never loses pending work. Ask-the-grid and Judge Mode seeding land in the remaining full-loop chunks.
 
-Try it against the running dev server:
+Try it in the console at `/`, or against the running dev server:
 
 ```bash
 curl -X POST localhost:3000/api/agent/plan -H 'content-type: application/json' \
@@ -45,7 +45,8 @@ Mock mode (`PAYPAL_MODE=mock`, the default) implements the full PayPal surface u
 - `src/app/api/paypal/` — `POST /webhooks` (401 on bad signature, 200 on processed/duplicate), `GET /sync` (idempotent reconciler).
 - `src/lib/console/` — console read models: pure projections (invoice rows with overdue flags, order rows with capture state, payout rows flattened one-per-item with batch context, activity/audit rows, per-currency KPI totals — money is never summed across currencies).
 - `src/app/api/console/` — `GET /invoices`, `GET /orders`, `GET /payouts`, `GET /activity`, `GET /summary` read models feeding the grids.
-- `src/app/` — Next.js App Router UI: the operations console (KPI strip + AG Grid Community Invoices, Orders, Payouts, and Activity/Audit grids; status pills, floating filters, pagination).
+- `src/lib/command/` — Agent Command bar view-model: brief validation, example briefs, the plan-review model (step labels, exact PayPal call, trigger badges), and the action-availability rules that mirror the server-side approval gate (approve/reject only from `pending_approval`, execute only from `approved`).
+- `src/app/` — Next.js App Router UI: the operations console (Agent Command bar with plan review + approval gate, KPI strip + AG Grid Community Invoices, Orders, Payouts, and Activity/Audit grids; status pills, floating filters, pagination).
 
 ## Environment
 
