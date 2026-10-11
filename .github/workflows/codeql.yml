@@ -1,0 +1,57 @@
+name: CodeQL
+
+# Static code scanning for the public repository. The CI workflow
+# proves the suite passes; this workflow scans the shipped
+# JavaScript/TypeScript for security vulnerabilities and coding
+# errors and reports them to GitHub code scanning (Security tab).
+# It needs no secrets and no credentials: it reads the repository,
+# analyses it, and writes only code-scanning results. Findings are
+# triaged like any other security report (see SECURITY.md) — a
+# finding is never "fixed" by weakening the approval gate, the
+# webhook verification, or the secrets discipline to silence it.
+
+on:
+  push:
+    # The local build history lives on `master`; `main` is listed so
+    # the workflow also fires if the public repo's default branch is
+    # created as `main`.
+    branches: [main, master]
+  pull_request:
+  schedule:
+    # Weekly re-scan (Mondays, off the hour) so newly published
+    # CodeQL queries re-check code that has not changed.
+    - cron: "37 5 * * 1"
+
+permissions:
+  contents: read
+  security-events: write
+  actions: read
+
+jobs:
+  analyze:
+    name: Analyze (${{ matrix.language }})
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          # JavaScript/TypeScript extraction needs no compilation:
+          # `build-mode: none` analyses the sources directly and
+          # never runs install/build scripts during scanning.
+          - language: javascript-typescript
+            build-mode: none
+    steps:
+      - name: Check out the repository
+        uses: actions/checkout@v4
+
+      - name: Initialize CodeQL
+        uses: github/codeql-action/init@v3
+        with:
+          languages: ${{ matrix.language }}
+          build-mode: ${{ matrix.build-mode }}
+
+      - name: Perform CodeQL analysis
+        uses: github/codeql-action/analyze@v3
+        with:
+          category: "/language:${{ matrix.language }}"

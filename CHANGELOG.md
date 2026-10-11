@@ -120,6 +120,14 @@ build record behind these summaries.
   rule removes an outline without replacing it), and a
   `prefers-reduced-motion` query collapses animations, transitions,
   and smooth scrolling.
+- **CodeQL code scanning.** A `.github/workflows/codeql.yml`
+  workflow scans the shipped JavaScript/TypeScript on every push
+  and pull request and on a weekly schedule, reporting to GitHub
+  code scanning. Extraction uses `build-mode: none` (scanning never
+  runs project scripts), permissions are limited to reading the
+  repository and writing scanning results, and no secrets are
+  involved — the static-analysis complement to the CI gate and
+  Dependabot.
 - **Page metadata.** Every addressable page — the Operations
   Console, Judge Mode, invoice detail, and the 404 surface — now
   carries its own typed `Metadata` export with a distinct title and

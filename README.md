@@ -321,7 +321,7 @@ are not blocked, the suite also runs on them).
 ```bash
 npm install
 npm run dev        # http://localhost:3000
-npm test           # full test suite (395 tests)
+npm test           # full test suite (401 tests)
 npm run typecheck  # tsc --noEmit
 npm run build      # production build
 ```
@@ -513,7 +513,7 @@ signatures mirror the REST resources one-to-one.
 ## Testing
 
 ```bash
-npm test           # vitest — 395 tests, all green
+npm test           # vitest — 401 tests, all green
 npm run typecheck  # TypeScript strict, clean
 npm run build      # Next.js production build
 ```
@@ -677,7 +677,12 @@ re-runnability with its disposable-instance warning, the approval
 gate passed through rather than shortcut, the README's exact
 post-loop totals asserted per currency, no credential read and no
 import beyond Node's fetch, and the named-step failure with exit
-code 1)
+code 1), and the CodeQL workflow (`.github/workflows/codeql.yml` —
+push / pull-request / weekly-schedule triggers on main+master, the
+javascript-typescript matrix with `build-mode: none` so scanning
+never runs project scripts, init before analyze in the pinned
+official actions, permissions limited to contents read +
+security-events write, and no secrets anywhere)
 — fake credentials only, no network.
 
 ### Smoke check (a running instance, end to end)
@@ -720,7 +725,10 @@ configured in `next.config.mjs` (same-origin
 Content-Security-Policy, HSTS, anti-sniffing and anti-framing
 headers — see SECURITY.md for the full model). Dependency updates arrive as Dependabot pull requests
 (`.github/dependabot.yml`); every proposal is gated by CI and human
-review, nothing auto-merges.
+review, nothing auto-merges. The shipped code is also scanned by a
+CodeQL workflow (`.github/workflows/codeql.yml`) on every push and
+pull request and weekly, reporting to GitHub code scanning; it runs
+with no secrets and writes nothing but scanning results.
 
 ## Contributing
 
