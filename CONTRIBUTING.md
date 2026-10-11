@@ -7,6 +7,10 @@ review your change without guesswork.
 
 ## Before you start
 
+- **Be kind and harassment-free.** Participation is governed by
+  [CODE_OF_CONDUCT.md](./CODE_OF_CONDUCT.md) (Contributor Covenant
+  2.1). Report conduct concerns privately through GitHub — never in
+  a public issue.
 - **Security flaws are not issues.** If you found a vulnerability,
   follow [SECURITY.md](./SECURITY.md) and report it privately —
   never open a public issue for it.

@@ -260,7 +260,7 @@ are not blocked, the suite also runs on them).
 ```bash
 npm install
 npm run dev        # http://localhost:3000
-npm test           # full test suite (307 tests)
+npm test           # full test suite (315 tests)
 npm run typecheck  # tsc --noEmit
 npm run build      # production build
 ```
@@ -449,7 +449,7 @@ signatures mirror the REST resources one-to-one.
 ## Testing
 
 ```bash
-npm test           # vitest — 307 tests, all green
+npm test           # vitest — 315 tests, all green
 npm run typecheck  # TypeScript strict, clean
 npm run build      # Next.js production build
 ```
@@ -554,7 +554,11 @@ secrets, and money rules as a checklist), and the Node runtime pin
 (`.nvmrc` naming the pinned major, the `package.json` `engines` floor
 at that major, CI and the Render blueprint pinning the same major,
 `@types/node` tracking it, and CONTRIBUTING.md stating it — a version
-bump must move all five sites at once)
+bump must move all five sites at once), and the code of conduct
+(`CODE_OF_CONDUCT.md` — Contributor Covenant 2.1 pledge and standards,
+the four-step enforcement ladder in order, conduct reports routed
+privately through GitHub with no public issue and no invented contact
+address, referenced from CONTRIBUTING.md)
 — fake credentials only, no network.
 
 ## Demo
@@ -583,6 +587,9 @@ change must not break (approval gate, deterministic-first AI,
 verified webhooks, per-currency money, labeled sample data), and
 how to report bugs through the issue templates. Security flaws
 never go in a public issue — see the Security section above.
+Participation is governed by [CODE_OF_CONDUCT.md](./CODE_OF_CONDUCT.md)
+(Contributor Covenant 2.1); conduct concerns are likewise reported
+privately through GitHub, never in a public issue.
 
 ## License
 
