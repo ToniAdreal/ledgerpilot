@@ -101,6 +101,27 @@ function CaptureOrderCell(params: ICellRendererParams<OrderRow>) {
   );
 }
 
+/**
+ * Buyer view for an order (src/lib/checkout/checkout-link): the
+ * checkout link the buyer opens to approve the order. A payable row
+ * links out (mock links are labeled as mock, never disguised as a
+ * real PayPal page); captured / voided / link-less rows show their
+ * honest state instead of a dead link.
+ */
+function CheckoutLinkCell(params: ICellRendererParams<OrderRow>) {
+  const row = params.data;
+  if (!row) return <span>—</span>;
+  if (row.checkoutState === "payable" && row.checkoutUrl) {
+    return (
+      <a className="checkout-link" href={row.checkoutUrl} target="_blank" rel="noreferrer">
+        {row.checkoutLabel}
+      </a>
+    );
+  }
+  if (row.checkoutState === "voided") return <span>—</span>;
+  return <span>{row.checkoutLabel}</span>;
+}
+
 interface EvidenceCellContext {
   draftingDisputeId: string | null;
   onDraftEvidence: (disputeId: string) => void;
@@ -434,7 +455,8 @@ export default function ConsoleClient() {
       },
       { field: "captureId", headerName: "Capture", width: 150, filter: "agTextColumnFilter" },
       { field: "captureStatus", headerName: "Capture status", width: 140, cellRenderer: StatusPill, filter: "agTextColumnFilter" },
-      { headerName: "Checkout", width: 130, filter: false, sortable: false, cellRenderer: CaptureOrderCell },
+      { field: "checkoutLabel", headerName: "Buyer view", width: 170, filter: "agTextColumnFilter", cellRenderer: CheckoutLinkCell },
+      { headerName: "Capture", width: 130, filter: false, sortable: false, cellRenderer: CaptureOrderCell },
     ],
     [],
   );

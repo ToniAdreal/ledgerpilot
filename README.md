@@ -125,9 +125,16 @@ curl -X POST localhost:3000/api/agent/execute -H 'content-type: application/json
   recipient's most-overdue open invoice wins. The adapter refuses
   non-open invoices (a reminder for a PAID invoice fails honestly).
 - **Checkout capture leg (the sell loop closes).** A `create_order` step
-  creates a `CREATED` order; the buyer-side completion lives in the
-  console's Orders grid (**Capture** button) and at
-  `POST /api/paypal/orders/capture`. Capture goes through the adapter,
+  creates a `CREATED` order. The Orders grid's **Buyer view** column
+  surfaces the order's PayPal checkout link — the `approve` (or
+  `payer-action`) HATEOAS link the buyer opens to approve the order —
+  resolved by a pure, unit-tested view-model: a payable order links
+  out (mock-mode links are labeled "Open mock checkout", never
+  disguised as a real PayPal page), a captured order reads "Paid via
+  checkout" and offers no link again, and an order PayPal returned no
+  approval link for honestly reads "No checkout link" — a link is
+  never invented. The buyer-side completion lives in the same grid
+  (**Capture** button) and at `POST /api/paypal/orders/capture`. Capture goes through the adapter,
   is written to the audit log as the exact call, and the resulting
   `PAYMENT.CAPTURE.COMPLETED` event is processed by the sync reconciler
   — the same code path a webhook delivery takes. It is deliberately
@@ -196,7 +203,7 @@ curl -X POST localhost:3000/api/agent/execute -H 'content-type: application/json
 ```bash
 npm install
 npm run dev        # http://localhost:3000
-npm test           # full test suite (208 tests)
+npm test           # full test suite (217 tests)
 npm run typecheck  # tsc --noEmit
 npm run build      # production build
 ```
@@ -278,8 +285,12 @@ mock mode a config swap rather than a rewrite.
   trigger badges), and action-availability rules that mirror the server-side
   approval gate.
 - `src/lib/ask/` — Ask-the-grid parser + filter-model validator.
-- `src/lib/checkout/` — the Orders capture leg: buyer-side checkout
-  completion for a created order (status guards, audit record, capture
+- `src/lib/checkout/` — the Orders checkout leg: the buyer-view
+  resolution (`checkout-link.ts`: approval-link extraction —
+  `approve` before `payer-action`, mock links flagged — plus the
+  payable / captured / voided / unavailable view states projected
+  into the Orders grid rows) and the capture leg (buyer-side checkout
+  completion for a created order: status guards, audit record, capture
   event processed via the reconciler, idempotent re-capture).
 - `src/lib/disputes/` — draft-only dispute-evidence summaries:
   deterministic assembly from the dispute record, Transaction Search,
@@ -305,7 +316,7 @@ mock mode a config swap rather than a rewrite.
 | API | How LedgerPilot uses it |
 |---|---|
 | **Invoicing v2** | Create/send invoices from briefs; get/list; record-payment for the local-run payment path; send payment reminders (`POST /v2/invoicing/invoices/:id/remind`) for open invoices |
-| **Orders v2 / Checkout** | Create checkout orders for one-off sales ("sell" briefs); capture on buyer checkout completion (console Capture action / `POST /api/paypal/orders/capture`) |
+| **Orders v2 / Checkout** | Create checkout orders for one-off sales ("sell" briefs); the buyer approval link (`approve` / `payer-action`) is surfaced in the console's Buyer view column; capture on buyer checkout completion (console Capture action / `POST /api/paypal/orders/capture`) |
 | **Payouts** | Batch payouts drafted by the agent, released only after approval; per-item status tracked |
 | **Webhooks** | `INVOICING.INVOICE.PAID`, `INVOICING.INVOICE.CANCELLED`, `PAYMENT.CAPTURE.COMPLETED`, `PAYMENT.PAYOUTS-ITEM.SUCCEEDED`, `PAYMENT.PAYOUTS-ITEM.FAILED` — signature-verified, idempotent event log |
 | **Disputes (read-only)** | Own console grid: open disputes with buyer, reason, stage, and seller-response deadlines, plus a per-dispute Evidence draft (deterministic summary from the dispute record + Transaction Search + invoices; draft only, never submitted); seeded Judge Mode includes one explicitly flagged sample row, because sandbox disputes cannot be reliably manufactured |
@@ -339,13 +350,17 @@ signatures mirror the REST resources one-to-one.
 ## Testing
 
 ```bash
-npm test           # vitest — 208 tests, all green
+npm test           # vitest — 217 tests, all green
 npm run typecheck  # TypeScript strict, clean
 npm run build      # Next.js production build
 ```
 
 The suite covers: the mock PayPal surface (invoice lifecycle, partial
 payments, capture/payout guards, the full invoice→paid→payout loop),
+the checkout buyer view (approve-link extraction with payer-action
+fallback, mock links flagged, captured orders never re-offered a pay
+link, voided / link-less states honest, order-row projection through
+a real mock create → capture loop),
 the checkout capture leg (an agent-created order captured to COMPLETED
 with the capture event processed once, re-capture no-op, unknown /
 VOIDED / adapter-refusal paths audit-logged),

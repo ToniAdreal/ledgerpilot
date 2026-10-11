@@ -7,6 +7,7 @@
  * (never summed across currencies).
  */
 
+import { resolveCheckoutView, type CheckoutViewKind } from "../checkout/checkout-link";
 import type {
   ActionPlan,
   ActivityRecord,
@@ -91,11 +92,24 @@ export interface OrderRow {
   captureStatus: string;
   /** True once a capture exists (order reached COMPLETED via capture). */
   captured: boolean;
+  /**
+   * Buyer-view state for the order's checkout link (src/lib/checkout):
+   * `payable` only while an approval link exists and the order is
+   * neither captured nor voided.
+   */
+  checkoutState: CheckoutViewKind;
+  /** The buyer checkout URL — present only when checkoutState is `payable`. */
+  checkoutUrl: string;
+  /** True when checkoutUrl is the mock adapter's stand-in, not a PayPal URL. */
+  checkoutIsMock: boolean;
+  /** Short label for the Buyer view column ("Open checkout", "Paid via checkout", …). */
+  checkoutLabel: string;
 }
 
 export function toOrderRow(order: Order): OrderRow {
   const unit = order.purchase_units[0];
   const capture = unit?.payments?.captures?.[0];
+  const view = resolveCheckoutView(order);
   return {
     id: order.id,
     status: order.status,
@@ -107,6 +121,10 @@ export function toOrderRow(order: Order): OrderRow {
     captureId: capture?.id ?? "",
     captureStatus: capture?.status ?? "",
     captured: !!capture,
+    checkoutState: view.kind,
+    checkoutUrl: view.href ?? "",
+    checkoutIsMock: view.isMock,
+    checkoutLabel: view.label,
   };
 }
 
