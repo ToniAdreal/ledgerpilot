@@ -256,7 +256,7 @@ curl -X POST localhost:3000/api/agent/execute -H 'content-type: application/json
 ```bash
 npm install
 npm run dev        # http://localhost:3000
-npm test           # full test suite (281 tests)
+npm test           # full test suite (301 tests)
 npm run typecheck  # tsc --noEmit
 npm run build      # production build
 ```
