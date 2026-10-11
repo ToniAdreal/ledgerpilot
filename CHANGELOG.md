@@ -69,6 +69,13 @@ build record behind these summaries.
   and for the mock adapter (`LEDGERPILOT_STORE_FILE`,
   `PAYPAL_MOCK_STORE_FILE`) survive a restart; corrupt or unsupported
   snapshots are refused loudly and never overwritten.
+- **Publish-day smoke script.** `npm run smoke`
+  (`scripts/smoke.mjs`, zero dependencies) drives one full Judge
+  Mode loop over HTTP against a running instance — health, reset,
+  seed, approve, execute, pay, summary — and asserts the exact
+  post-loop totals the README promises, per currency. It resets the
+  target first so it is re-runnable, which is also its safety rule:
+  disposable mock-mode demo instances only; it reads no credentials.
 - **Deployment readiness.** `GET /api/health` reports
   ok / degraded / misconfigured from the environment alone, as
   booleans and missing-variable names only — never a credential

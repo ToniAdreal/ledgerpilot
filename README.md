@@ -321,7 +321,7 @@ are not blocked, the suite also runs on them).
 ```bash
 npm install
 npm run dev        # http://localhost:3000
-npm test           # full test suite (386 tests)
+npm test           # full test suite (395 tests)
 npm run typecheck  # tsc --noEmit
 npm run build      # production build
 ```
@@ -376,7 +376,10 @@ reset via `POST /api/judge/reset` — in seconds). The blueprint's shape
 is pinned by the test suite, and the variables it lists match
 `.env.example` exactly. On Vercel no descriptor is needed: import the
 repo, keep the default Next.js settings, and set the same environment
-variables.
+variables. Once a hosted instance is up, verify it end to end with
+`SMOKE_BASE_URL=<hosted demo URL> npm run smoke` (see Testing) — the
+script runs the full Judge Mode loop against the live instance and
+asserts the README totals.
 
 ## Architecture
 
@@ -510,7 +513,7 @@ signatures mirror the REST resources one-to-one.
 ## Testing
 
 ```bash
-npm test           # vitest — 386 tests, all green
+npm test           # vitest — 395 tests, all green
 npm run typecheck  # TypeScript strict, clean
 npm run build      # Next.js production build
 ```
@@ -668,8 +671,35 @@ the app icon's own colours asserted against `icon.svg`, the
 full-bleed root with no border radius of its own, no external URL
 or fetch in the source, the rendered PNG's signature and IHDR
 dimensions verified, and the layout leaving the touch icon to the
-convention)
+convention), and the publish-day smoke script (`scripts/smoke.mjs` —
+the documented endpoints driven in loop order, the reset-before-seed
+re-runnability with its disposable-instance warning, the approval
+gate passed through rather than shortcut, the README's exact
+post-loop totals asserted per currency, no credential read and no
+import beyond Node's fetch, and the named-step failure with exit
+code 1)
 — fake credentials only, no network.
+
+### Smoke check (a running instance, end to end)
+
+```bash
+npm start                            # in one terminal (mock mode)
+npm run smoke                        # in another — http://127.0.0.1:3000
+npm run smoke -- --base-url http://127.0.0.1:3100
+SMOKE_BASE_URL=<hosted demo URL> npm run smoke
+```
+
+`scripts/smoke.mjs` (zero dependencies, Node ≥ 22) drives one full
+Judge Mode loop over HTTP — health, reset, seed, approve, execute,
+pay, summary — and asserts the exact end state promised above
+(collected USD 570.00 / EUR 100.00, outstanding EUR 200.00 /
+USD 280.00, captured orders USD 59.00, payouts sent USD 280.00).
+It resets the target first so it can be re-run, which is also its
+safety rule: **only ever point it at a disposable mock-mode demo
+instance** — never at sandbox mode (the reset refuses there and
+the script stops) and never at an instance holding data you care
+about. It reads no credentials; the only environment variable it
+consults is `SMOKE_BASE_URL`.
 
 ## Demo
 
