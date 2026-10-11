@@ -99,6 +99,12 @@ build record behind these summaries.
   SVG icon — a format share crawlers do not render, so link previews
   would have been blank. The Twitter card is now
   `summary_large_image`.
+- **Apple touch icon.** The `apple-icon` file convention generates a
+  180×180 PNG touch icon (the app icon's ledger-rows motif in its own
+  colours, full-bleed because Apple masks the corners itself) —
+  iOS / Safari do not use the SVG favicon or the manifest's SVG icon
+  for the touch surface, so the hosted demo previously had no touch
+  icon on Apple devices. No external asset or font is fetched.
 - **Accessibility shell.** A "Skip to main content" link is the root
   layout's first focusable element — off-viewport until focused, then
   pinned visible — targeting each page's single

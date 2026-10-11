@@ -279,6 +279,15 @@ curl -X POST localhost:3000/api/agent/execute -H 'content-type: application/json
   pointed at the square SVG icon, which share crawlers do not render.
   No external asset, font, or URL is fetched: the image renders
   identically offline, locally, and on the hosted demo.
+- **Apple touch icon.** `src/app/apple-icon.tsx` generates the
+  180×180 PNG touch icon with `next/og` — the app icon's ledger-rows
+  motif in its own colours (`#111827` / `#ffffff` / `#22c55e`) — and
+  the file convention references it automatically as the
+  apple-touch-icon. iOS / Safari do not use the SVG favicon or the
+  manifest's SVG icon for the touch surface, so without it the
+  hosted demo would have had no touch icon on Apple devices. The
+  background is full-bleed (Apple masks and rounds the corners
+  itself), and no external asset, font, or URL is fetched.
 - **Accessibility shell.** The root layout's first focusable element is
   a "Skip to main content" link that stays off-viewport until focused,
   then pins to the top-left and jumps to the page's single
@@ -312,7 +321,7 @@ are not blocked, the suite also runs on them).
 ```bash
 npm install
 npm run dev        # http://localhost:3000
-npm test           # full test suite (378 tests)
+npm test           # full test suite (386 tests)
 npm run typecheck  # tsc --noEmit
 npm run build      # production build
 ```
@@ -501,7 +510,7 @@ signatures mirror the REST resources one-to-one.
 ## Testing
 
 ```bash
-npm test           # vitest — 378 tests, all green
+npm test           # vitest — 386 tests, all green
 npm run typecheck  # TypeScript strict, clean
 npm run build      # Next.js production build
 ```
@@ -653,7 +662,13 @@ typed `Metadata` export with a distinct `LedgerPilot — …` title and
 a substantive, distinct description, the console description naming
 its surfaces and the sandbox / mock-only rule and differing from the
 layout's generic description, and no URL / canonical / `metadataBase`
-/ credential / email declared in any page's metadata)
+/ credential / email declared in any page's metadata), and the
+Apple touch icon (the apple-icon constants — 180×180 PNG — pinned,
+the app icon's own colours asserted against `icon.svg`, the
+full-bleed root with no border radius of its own, no external URL
+or fetch in the source, the rendered PNG's signature and IHDR
+dimensions verified, and the layout leaving the touch icon to the
+convention)
 — fake credentials only, no network.
 
 ## Demo
