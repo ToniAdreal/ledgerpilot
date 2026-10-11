@@ -163,7 +163,12 @@ curl -X POST localhost:3000/api/agent/execute -H 'content-type: application/json
 - **Sync reconciler.** `GET /api/paypal/sync` is the polling fallback for
   instances webhooks cannot reach: it drains undelivered events in order and
   sweeps resource state with stable synthetic event ids, so repeat syncs are
-  no-ops. It never calls a mutating PayPal endpoint.
+  no-ops. It never calls a mutating PayPal endpoint. The console's
+  **Sync from PayPal** button runs it in place (the pure view-model in
+  `src/lib/console/sync.ts` validates the route's wire shape before anything
+  renders and summarises the outcome — a resumed plan is the headline, an
+  idempotent re-run is reported honestly as "nothing new to reconcile") and
+  then refreshes every grid, so reconciled state flips flash as usual.
 - **Optional ledger persistence.** The ledger store (plans, the append-only
   audit log, webhook event-id idempotency) is in-memory by default. Set
   `LEDGERPILOT_STORE_FILE` to a JSON file path and every mutation is written
@@ -321,7 +326,7 @@ are not blocked, the suite also runs on them).
 ```bash
 npm install
 npm run dev        # http://localhost:3000
-npm test           # full test suite (408 tests)
+npm test           # full test suite (415 tests)
 npm run typecheck  # tsc --noEmit
 npm run build      # production build
 ```
@@ -427,9 +432,10 @@ mock mode a config swap rather than a rewrite.
   response deadlines + sample flags, transaction rows for reconciliation,
   per-currency KPI totals), the console-state view-model (`states.ts`:
   loading / error / empty / filtered-empty resolution, overlay templates,
-  the console banner, and KPI/caption rules), and the grid-tools
+  the console banner, and KPI/caption rules), the grid-tools
   view-model (`grid-tools.ts`: CSV export naming/gating + change-flash
-  detection).
+  detection), and the sync view-model (`sync.ts`: wire-shape validation
+  + outcome summary for the console's Sync from PayPal action).
 - `src/lib/command/` — Agent Command bar view-model: brief validation,
   example briefs, the plan-review model (step labels, exact PayPal call,
   trigger badges), and action-availability rules that mirror the server-side
@@ -513,7 +519,7 @@ signatures mirror the REST resources one-to-one.
 ## Testing
 
 ```bash
-npm test           # vitest — 408 tests, all green
+npm test           # vitest — 415 tests, all green
 npm run typecheck  # TypeScript strict, clean
 npm run build      # Next.js production build
 ```
@@ -544,6 +550,10 @@ error / empty / filtered-empty precedence, overlay HTML escaping, banner
 and KPI rules), console grid tools (dated CSV export
 file names + export gating, change-flash detection — a SENT→PAID flip
 flashes, new rows never do, append-only grids watch nothing), the
+console sync view-model (wire-shape validation with field-named
+rejections, resumed-plan / new-event / nothing-new outcome summaries,
+and a real reconciler run over the demo spine whose route-shaped
+result parses and names the resumed plan), the
 command-bar gate matrix, Ask-the-grid parsing +
 validator negative cases, the full Judge Mode loop (seed idempotency,
 the historical-event guard, double-payment no-op), and the sandbox REST

@@ -33,7 +33,10 @@ build record behind these summaries.
   deliveries are signature-verified before they are trusted and each
   event id is processed exactly once; trigger-gated steps resume only
   for the resource they were bound to. The polling reconciler closes
-  the same loops on instances webhooks cannot reach.
+  the same loops on instances webhooks cannot reach, and the console's
+  Sync from PayPal button runs it in place with a validated,
+  honestly-summarised outcome (resumed plans named; an idempotent
+  re-run reported as nothing new).
 - **AG Grid operations console.** Invoices, Orders / Checkout, Payouts,
   Disputes (read-only), Reconciliation — Transaction Search
   (read-only), and the combined Agent Activity & Webhook audit grid,

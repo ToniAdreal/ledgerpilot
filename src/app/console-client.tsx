@@ -35,6 +35,10 @@ import {
 } from "ag-grid-community";
 import {
   GRID_TITLES,
+  parseSyncWireResult,
+  summarizeSyncResult,
+  syncBlockReason,
+  type SyncSummary,
   buildCsvExportParams,
   buildOverlayTemplate,
   csvExportBlockReason,
@@ -183,6 +187,9 @@ export default function ConsoleClient() {
   const [draftingDisputeId, setDraftingDisputeId] = useState<string | null>(null);
   const [evidenceSummary, setEvidenceSummary] = useState<DisputeEvidenceSummary | null>(null);
   const [evidenceError, setEvidenceError] = useState<string | null>(null);
+  const [syncing, setSyncing] = useState(false);
+  const [syncSummary, setSyncSummary] = useState<SyncSummary | null>(null);
+  const [syncError, setSyncError] = useState<string | null>(null);
   const [loadStatus, setLoadStatus] = useState<ConsoleLoadStatus>("loading");
   const [gridDisplay, setGridDisplay] = useState<Record<ConsoleGridId, GridDisplay>>(EMPTY_DISPLAY);
 
@@ -249,6 +256,38 @@ export default function ConsoleClient() {
   useEffect(() => {
     void refresh();
   }, [refresh]);
+
+  /* Sync from PayPal (src/lib/console/sync.ts): run the polling
+   * reconciler — the webhook fallback — then refresh, so any state it
+   * reconciled (and any gated plan it resumed) renders, with flipped
+   * rows flashing via the usual change-flash path. The reconciler is
+   * idempotent and never calls a mutating PayPal endpoint, so this is
+   * always safe to run; the outcome summary says honestly whether it
+   * found anything new. Errors surface in the sync notice, never
+   * silently swallowed. */
+  const runSync = useCallback(async () => {
+    if (syncBlockReason({ syncing })) return;
+    setSyncing(true);
+    setSyncError(null);
+    try {
+      const res = await fetch("/api/paypal/sync");
+      const data: unknown = await res.json();
+      if (!res.ok) {
+        const message =
+          typeof data === "object" && data !== null && "error" in data
+            ? String((data as { error: unknown }).error)
+            : `Sync failed (${res.status})`;
+        throw new Error(message);
+      }
+      setSyncSummary(summarizeSyncResult(parseSyncWireResult(data)));
+    } catch (err) {
+      setSyncError(err instanceof Error ? err.message : "Sync failed");
+      setSyncSummary(null);
+    } finally {
+      setSyncing(false);
+      void refresh();
+    }
+  }, [refresh, syncing]);
 
   /* Capture an uncaptured order (buyer-side checkout completion),
    * then refresh — the flipped COMPLETED row flashes via the usual
@@ -685,7 +724,35 @@ export default function ConsoleClient() {
         >
           {loadStatus === "loading" ? "Loading…" : "Refresh"}
         </button>
+        <button
+          type="button"
+          className="refresh-btn sync-btn"
+          disabled={syncBlockReason({ syncing }) !== null}
+          title="Run the polling reconciler (webhook fallback): process any PayPal event or state the webhook listener has not seen, and resume gated plans"
+          onClick={() => void runSync()}
+        >
+          {syncing ? "Syncing…" : "Sync from PayPal"}
+        </button>
       </div>
+
+      {(syncSummary || syncError) && (
+        <div
+          className={`console-banner sync-notice${syncError ? " console-banner-error" : ""}`}
+          role={syncError ? "alert" : "status"}
+        >
+          {syncError ? (
+            <>
+              <strong>Sync failed</strong>
+              <span>{syncError}</span>
+            </>
+          ) : syncSummary ? (
+            <>
+              <strong>{syncSummary.headline}</strong>
+              <span>{syncSummary.detail}</span>
+            </>
+          ) : null}
+        </div>
+      )}
 
       <div className="grid-section">
         {sectionHead("invoices")}
