@@ -279,6 +279,18 @@ curl -X POST localhost:3000/api/agent/execute -H 'content-type: application/json
   pointed at the square SVG icon, which share crawlers do not render.
   No external asset, font, or URL is fetched: the image renders
   identically offline, locally, and on the hosted demo.
+- **Accessibility shell.** The root layout's first focusable element is
+  a "Skip to main content" link that stays off-viewport until focused,
+  then pins to the top-left and jumps to the page's single
+  `<main id="main-content" tabIndex={-1}>` landmark (present on the
+  console, Judge Mode, invoice detail, and the 404 / error / loading
+  surfaces). Keyboard focus is always visible — a global
+  `:focus-visible` outline, and no rule in `globals.css` removes an
+  outline without replacing it — and a `prefers-reduced-motion` media
+  query collapses animations, transitions, and smooth scrolling for
+  visitors who ask for less motion. (The global-error fallback replaces
+  the root layout itself, so it carries neither the skip link nor
+  `globals.css` — the same documented limit as its styling.)
 
 ## Run it locally
 
@@ -291,7 +303,7 @@ are not blocked, the suite also runs on them).
 ```bash
 npm install
 npm run dev        # http://localhost:3000
-npm test           # full test suite (354 tests)
+npm test           # full test suite (364 tests)
 npm run typecheck  # tsc --noEmit
 npm run build      # production build
 ```
@@ -480,7 +492,7 @@ signatures mirror the REST resources one-to-one.
 ## Testing
 
 ```bash
-npm test           # vitest — 354 tests, all green
+npm test           # vitest — 364 tests, all green
 npm run typecheck  # TypeScript strict, clean
 npm run build      # Next.js production build
 ```
@@ -620,7 +632,13 @@ pinned, the app's own colours asserted against the icon, no external
 URL or fetch in the source, the rendered PNG's signature and IHDR
 dimensions verified, the twitter-image re-export, and the layout
 leaving share images to the conventions with a `summary_large_image`
-card)
+card), and the accessibility shell (the skip link rendered before the
+page content in the root layout, every layout-rendered page carrying
+exactly one `<main id="main-content" tabIndex={-1}>` skip target, the
+skip link hidden until focused, the global `:focus-visible` outline
+with no outline-removal rule anywhere in `globals.css`, and the
+`prefers-reduced-motion` collapse of animations / transitions /
+smooth scrolling)
 — fake credentials only, no network.
 
 ## Demo

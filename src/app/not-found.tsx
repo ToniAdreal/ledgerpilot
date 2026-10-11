@@ -6,6 +6,8 @@ export const metadata = {
 export default function NotFound() {
   return (
     <main
+      id="main-content"
+      tabIndex={-1}
       style={{
         fontFamily: "system-ui, sans-serif",
         margin: "2rem auto",

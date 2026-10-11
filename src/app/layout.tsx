@@ -34,7 +34,16 @@ export const viewport: Viewport = {
 export default function RootLayout({ children }: { children: ReactNode }) {
   return (
     <html lang="en">
-      <body>{children}</body>
+      <body>
+        {/* Accessibility: the skip link is the first focusable element on
+            every page and jumps past the repeated chrome to the page's
+            <main id="main-content" tabIndex={-1}> landmark. It is visually
+            hidden until focused (see .skip-link in globals.css). */}
+        <a className="skip-link" href="#main-content">
+          Skip to main content
+        </a>
+        {children}
+      </body>
     </html>
   );
 }

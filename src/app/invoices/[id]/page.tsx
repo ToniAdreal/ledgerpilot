@@ -8,7 +8,7 @@ export const metadata = {
 export default async function InvoiceDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   return (
-    <main style={{ fontFamily: "system-ui, sans-serif", margin: "2rem auto", maxWidth: 900, padding: "0 1rem" }}>
+    <main id="main-content" tabIndex={-1} style={{ fontFamily: "system-ui, sans-serif", margin: "2rem auto", maxWidth: 900, padding: "0 1rem" }}>
       <p>
         <a href="/">← Operations Console</a>
       </p>

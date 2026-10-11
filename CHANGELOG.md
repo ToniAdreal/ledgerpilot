@@ -99,6 +99,14 @@ build record behind these summaries.
   SVG icon — a format share crawlers do not render, so link previews
   would have been blank. The Twitter card is now
   `summary_large_image`.
+- **Accessibility shell.** A "Skip to main content" link is the root
+  layout's first focusable element — off-viewport until focused, then
+  pinned visible — targeting each page's single
+  `<main id="main-content" tabIndex={-1}>` landmark; a global
+  `:focus-visible` outline keeps keyboard focus visible (no stylesheet
+  rule removes an outline without replacing it), and a
+  `prefers-reduced-motion` query collapses animations, transitions,
+  and smooth scrolling.
 
 ### Security
 

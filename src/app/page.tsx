@@ -2,7 +2,7 @@ import ConsoleClient from "./console-client";
 
 export default function HomePage() {
   return (
-    <main style={{ fontFamily: "system-ui, sans-serif", margin: "2rem auto", maxWidth: 1180, padding: "0 1rem" }}>
+    <main id="main-content" tabIndex={-1} style={{ fontFamily: "system-ui, sans-serif", margin: "2rem auto", maxWidth: 1180, padding: "0 1rem" }}>
       <h1>LedgerPilot — Operations Console</h1>
       <p>
         An AI money operator for solo sellers and freelancers. Tell it what happened in plain

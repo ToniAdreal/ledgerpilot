@@ -7,7 +7,7 @@ export const metadata = {
 
 export default function JudgePage() {
   return (
-    <main style={{ fontFamily: "system-ui, sans-serif", margin: "2rem auto", maxWidth: 900, padding: "0 1rem" }}>
+    <main id="main-content" tabIndex={-1} style={{ fontFamily: "system-ui, sans-serif", margin: "2rem auto", maxWidth: 900, padding: "0 1rem" }}>
       <h1>LedgerPilot — Judge Mode</h1>
       <p>
         The fastest way to see LedgerPilot work: one click seeds a fictional seller history and

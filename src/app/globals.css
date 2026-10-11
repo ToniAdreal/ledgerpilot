@@ -1,6 +1,32 @@
 * { box-sizing: border-box; }
 body { margin: 0; color: #111827; background: #ffffff; }
 
+/* Accessibility shell: skip link, visible keyboard focus, reduced motion.
+   The skip link (rendered first by the root layout) sits above the
+   viewport until it receives focus, then pins to the top-left corner.
+   No rule in this file may remove a focus outline without replacing it. */
+.skip-link {
+  position: absolute;
+  top: -100px;
+  left: 0.5rem;
+  z-index: 1000;
+  background: #111827;
+  color: #ffffff;
+  padding: 0.6rem 1rem;
+  border-radius: 0 0 8px 8px;
+  font-size: 14px;
+}
+.skip-link:focus { top: 0; }
+:focus-visible { outline: 3px solid #2563eb; outline-offset: 2px; }
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    scroll-behavior: auto !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
 .kpi-strip {
   display: flex;
   flex-wrap: wrap;
