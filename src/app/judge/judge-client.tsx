@@ -2,10 +2,12 @@
 
 /**
  * Judge Mode client — loads the scenario state from GET /api/judge,
- * seeds via POST /api/judge/seed, and closes the payment leg via
- * POST /api/judge/pay. Approving/executing the spine plan deliberately
- * happens in the Operations Console's Agent Command bar — the judge
- * experiences the real approval gate, not a Judge-Mode shortcut.
+ * seeds via POST /api/judge/seed, closes the payment leg via
+ * POST /api/judge/pay, and resets the demo instance via
+ * POST /api/judge/reset (mock mode only). Approving/executing the
+ * spine plan deliberately happens in the Operations Console's Agent
+ * Command bar — the judge experiences the real approval gate, not a
+ * Judge-Mode shortcut.
  */
 
 import { useCallback, useEffect, useState } from "react";
@@ -18,7 +20,7 @@ interface JudgePayload {
 
 export default function JudgeClient() {
   const [payload, setPayload] = useState<JudgePayload | null>(null);
-  const [busy, setBusy] = useState<"seed" | "pay" | null>(null);
+  const [busy, setBusy] = useState<"seed" | "pay" | "reset" | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
 
@@ -87,6 +89,41 @@ export default function JudgeClient() {
     }
   }, [load]);
 
+  const reset = useCallback(async () => {
+    if (
+      !window.confirm(
+        "Reset the demo? This clears every plan, audit record, and mock PayPal resource in this instance, so the scenario can be loaded and run again from a clean slate.",
+      )
+    ) {
+      return;
+    }
+    setBusy("reset");
+    setError(null);
+    setNotice(null);
+    try {
+      const res = await fetch("/api/judge/reset", { method: "POST" });
+      const json = (await res.json()) as {
+        cleared?: { plans: number; invoices: number; orders: number; payouts: number };
+        error?: string;
+      };
+      if (!res.ok) {
+        setError(json.error ?? `Reset failed (HTTP ${res.status})`);
+        return;
+      }
+      const cleared = json.cleared;
+      setNotice(
+        cleared && (cleared.plans > 0 || cleared.invoices > 0 || cleared.orders > 0 || cleared.payouts > 0)
+          ? `Demo reset — cleared ${cleared.plans} plan(s), ${cleared.invoices} invoice(s), ${cleared.orders} order(s), and ${cleared.payouts} payout batch(es). Load the scenario to run it again.`
+          : "Demo reset — the instance was already on a clean slate.",
+      );
+      await load();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to reset the demo");
+    } finally {
+      setBusy(null);
+    }
+  }, [load]);
+
   if (!payload) {
     return <p>{error ? `Judge Mode failed to load: ${error}` : "Loading Judge Mode…"}</p>;
   }
@@ -138,6 +175,15 @@ export default function JudgeClient() {
             title={canPay ? "Record-payment for the spine invoice, then sync" : "Available once the spine plan has been executed and its invoice is still unpaid"}
           >
             {busy === "pay" ? "Recording payment…" : "Simulate invoice payment"}
+          </button>
+          <button
+            type="button"
+            className="command-btn"
+            disabled={busy !== null}
+            onClick={() => void reset()}
+            title="Mock mode only: clear every plan, audit record, and mock PayPal resource so the scenario can be loaded and run again"
+          >
+            {busy === "reset" ? "Resetting…" : "Reset demo"}
           </button>
         </div>
         {notice && <p className="plan-outcome">{notice}</p>}

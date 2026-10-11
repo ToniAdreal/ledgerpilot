@@ -223,6 +223,28 @@ export class LedgerStore {
     return this.processedEventIds.has(eventId);
   }
 
+  /**
+   * Clear every plan, activity record, and processed event id, and
+   * persist the emptied snapshot when persistence is on. This is the
+   * ledger half of the Judge Mode demo reset (see judge-mode.ts): a
+   * hosted demo instance returns to a fresh slate so the next judge
+   * can seed and run the scenario from the top. The activity sequence
+   * (`actSeq`) deliberately does NOT rewind — audit ids are never
+   * reused, even across a reset. Returns what was cleared.
+   */
+  reset(): { plans: number; activity: number; processedEvents: number } {
+    const cleared = {
+      plans: this.plans.size,
+      activity: this.activity.length,
+      processedEvents: this.processedEventIds.size,
+    };
+    this.plans.clear();
+    this.activity = [];
+    this.processedEventIds.clear();
+    this.persist();
+    return cleared;
+  }
+
   private mustGet(planId: string): ActionPlan {
     const plan = this.plans.get(planId);
     if (!plan) throw new Error(`Unknown plan: ${planId}`);

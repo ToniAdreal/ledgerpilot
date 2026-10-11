@@ -31,6 +31,17 @@
  *
  * Seeding is idempotent: a second call returns `alreadySeeded: true`
  * and changes nothing.
+ *
+ * Reset (`resetJudgeDemo`): seeding is one-way by design, but a hosted
+ * demo serves many judges in sequence — after one judge closes the
+ * loop, the next arrives to a completed plan and an already-seeded
+ * runtime with nothing left to do. Reset returns a MOCK-mode instance
+ * to its fresh slate (all plans, audit records, and mock resources
+ * cleared; the flagged sample dispute restored) so the scenario can
+ * be seeded and run again from the top. It refuses in sandbox mode:
+ * sandbox resources live at PayPal and no demo button may pretend to
+ * delete them. Resource/activity id sequences never rewind across a
+ * reset, so ids are never reused.
  */
 
 import { parseBrief } from "../agent/parser";
@@ -363,5 +374,70 @@ export async function simulateJudgeInvoicePayment(
     invoice: { id: paid.id, status: paid.status },
     sync,
     spinePlanStatus: store.getPlan(state.spinePlan.id)?.status ?? null,
+  };
+}
+
+/* ------------------------------------------------------------------ */
+/* Demo reset — back to a fresh slate (mock mode only)                 */
+/* ------------------------------------------------------------------ */
+
+export interface JudgeResetResult {
+  /** What the reset cleared, counted before it was cleared. */
+  cleared: {
+    plans: number;
+    activity: number;
+    processedEvents: number;
+    invoices: number;
+    orders: number;
+    payouts: number;
+    transactions: number;
+    emittedEvents: number;
+    sentReminders: number;
+  };
+  /** Live state after the reset (unseeded, all counts zero). */
+  state: JudgeState;
+}
+
+/**
+ * Reset a mock-mode demo instance to its fresh slate: every plan,
+ * activity record, processed event id, and mock PayPal resource is
+ * cleared (the mock's flagged sample dispute is restored, as on a
+ * fresh client), so Judge Mode can be seeded and run again — the
+ * multi-judge / video-retake path for the hosted demo.
+ *
+ * Mock mode only, by honesty: in sandbox mode the resources live at
+ * PayPal, and a "reset" that silently did nothing — or pretended to
+ * delete PayPal-side data — would be a lie. Refuses with
+ * `JudgeModeError` before touching anything in that case.
+ */
+export async function resetJudgeDemo(
+  client: PayPalClient,
+  store: LedgerStore,
+): Promise<JudgeResetResult> {
+  if (client.mode !== "mock") {
+    throw new JudgeModeError(
+      "Demo reset is available in mock mode only — in sandbox mode the resources live at PayPal and cannot be cleared from LedgerPilot. Restart with PAYPAL_MODE=mock for a resettable demo instance.",
+    );
+  }
+  const resettable = client as PayPalClient & {
+    reset?: () => {
+      invoices: number;
+      orders: number;
+      payouts: number;
+      transactions: number;
+      emittedEvents: number;
+      sentReminders: number;
+    };
+  };
+  if (typeof resettable.reset !== "function") {
+    throw new JudgeModeError(
+      "This PayPal adapter does not support demo reset — the mock adapter is required.",
+    );
+  }
+  const mockCleared = resettable.reset();
+  const ledgerCleared = store.reset();
+  return {
+    cleared: { ...ledgerCleared, ...mockCleared },
+    state: await getJudgeState(store, client),
   };
 }

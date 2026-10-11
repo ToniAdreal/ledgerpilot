@@ -112,9 +112,12 @@ export class MockPayPalClient implements PayPalClient {
   /** Reminders actually sent through this adapter, in order. */
   readonly sentReminders: SentInvoiceReminder[] = [];
   private readonly filePath?: string;
+  /** Whether this client's fresh state carries the flagged sample dispute. */
+  private readonly sampleDispute: boolean;
 
   constructor(seed: MockSeedOptions = {}) {
     this.filePath = seed.filePath;
+    this.sampleDispute = seed.sampleDispute !== false;
     const snap = this.filePath ? this.load() : null;
     if (snap) {
       // Restored from a snapshot: seed data (incl. the sample dispute,
@@ -131,28 +134,69 @@ export class MockPayPalClient implements PayPalClient {
       seq = Math.max(seq, snap.seq);
       return;
     }
-    this.disputes =
-      seed.sampleDispute === false
-        ? []
-        : [
-            {
-              dispute_id: "PP-D-SAMPLE-001",
-              create_time: "2026-10-08T14:22:00Z",
-              update_time: "2026-10-08T14:22:00Z",
-              disputed_transactions: [
-                {
-                  seller_transaction_id: "TXN-SAMPLE-001",
-                  buyer: { name: "Sam Rivera", email_address: "sam@example.com" },
-                },
-              ],
-              amount: { currency_code: "USD", value: "120.00" },
-              reason: "MERCHANDISE_OR_SERVICE_NOT_RECEIVED",
-              status: "WAITING_FOR_SELLER_RESPONSE",
-              dispute_life_cycle_stage: "INQUIRY",
-              response_due_date: "2026-10-29T23:59:59Z",
-              sample: true,
-            },
-          ];
+    this.disputes = this.initialDisputes();
+  }
+
+  /** The dispute set of a fresh client: the flagged sample row, or none. */
+  private initialDisputes(): Dispute[] {
+    if (!this.sampleDispute) return [];
+    return [
+      {
+        dispute_id: "PP-D-SAMPLE-001",
+        create_time: "2026-10-08T14:22:00Z",
+        update_time: "2026-10-08T14:22:00Z",
+        disputed_transactions: [
+          {
+            seller_transaction_id: "TXN-SAMPLE-001",
+            buyer: { name: "Sam Rivera", email_address: "sam@example.com" },
+          },
+        ],
+        amount: { currency_code: "USD", value: "120.00" },
+        reason: "MERCHANDISE_OR_SERVICE_NOT_RECEIVED",
+        status: "WAITING_FOR_SELLER_RESPONSE",
+        dispute_life_cycle_stage: "INQUIRY",
+        response_due_date: "2026-10-29T23:59:59Z",
+        sample: true,
+      },
+    ];
+  }
+
+  /**
+   * Clear every mock resource (invoices, orders, payout batches,
+   * transactions, emitted events, sent reminders) and restore the
+   * dispute set to this client's fresh state — the flagged sample row
+   * comes back, exactly as on a fresh client, so the Disputes surface
+   * is demonstrable again. The id sequence deliberately does NOT
+   * rewind: resource ids are never reused, even across a reset.
+   * Persists the emptied snapshot when persistence is on. This is the
+   * adapter half of the Judge Mode demo reset (see judge-mode.ts).
+   * Returns what was cleared.
+   */
+  reset(): {
+    invoices: number;
+    orders: number;
+    payouts: number;
+    transactions: number;
+    emittedEvents: number;
+    sentReminders: number;
+  } {
+    const cleared = {
+      invoices: this.invoices.size,
+      orders: this.orders.size,
+      payouts: this.payouts.size,
+      transactions: this.transactions.length,
+      emittedEvents: this.emittedEvents.length,
+      sentReminders: this.sentReminders.length,
+    };
+    this.invoices.clear();
+    this.orders.clear();
+    this.payouts.clear();
+    this.transactions = [];
+    this.emittedEvents.length = 0;
+    this.sentReminders.length = 0;
+    this.disputes = this.initialDisputes();
+    this.persist();
+    return cleared;
   }
 
   /** The snapshot file this client persists to, when persistence is on. */

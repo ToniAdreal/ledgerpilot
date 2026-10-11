@@ -229,7 +229,14 @@ curl -X POST localhost:3000/api/agent/execute -H 'content-type: application/json
   grid; every emitted model is validated before it is applied.
 - **Judge Mode.** `/judge` seeds the fictional scenario above (all customers
   are invented; the one sample dispute is explicitly flagged `sample: true`)
-  and explains exactly what will happen before it happens.
+  and explains exactly what will happen before it happens. When a run is
+  finished, **Reset demo** returns the instance to a clean slate — every
+  plan, audit record, and mock resource cleared, the sample dispute
+  restored — so the next judge (or the next video take) can seed and run
+  the scenario from the top. Reset is mock-mode only and refuses in
+  sandbox mode: sandbox resources live at PayPal and cannot be cleared
+  from here. Id sequences never rewind across a reset, so no invoice,
+  plan, or event id is ever reused.
 - **Deployment readiness.** `GET /api/health` reports whether this instance
   can actually do PayPal work — effective mode, sandbox credentials /
   webhook id configured (booleans + missing-variable names only, never a
@@ -249,7 +256,7 @@ curl -X POST localhost:3000/api/agent/execute -H 'content-type: application/json
 ```bash
 npm install
 npm run dev        # http://localhost:3000
-npm test           # full test suite (259 tests)
+npm test           # full test suite (269 tests)
 npm run typecheck  # tsc --noEmit
 npm run build      # production build
 ```
@@ -359,8 +366,9 @@ mock mode a config swap rather than a rewrite.
   urgency from the response deadline; nothing is ever submitted).
 - `src/lib/judge/` — Judge Mode scenario descriptor, idempotent seeder
   (historical events pre-marked processed, so a later sync can never replay
-  them into the gated payout), live spine state, and the record-payment +
-  sync payment leg.
+  them into the gated payout), live spine state, the record-payment +
+  sync payment leg, and the mock-mode demo reset (`LedgerStore.reset` +
+  `MockPayPalClient.reset`, refusing in sandbox mode).
 - `src/lib/health/` — the deployment-readiness report behind
   `GET /api/health`: a pure function of the environment + an injected
   clock (effective mode with the factory's mock fallback, sandbox
@@ -376,7 +384,7 @@ mock mode a config swap rather than a rewrite.
   `src/app/api/console/` (`GET /invoices|orders|payouts|activity|disputes|transactions|summary`,
   plus `GET /invoices/[id]` for the detail projection and
   `GET /disputes/[id]/evidence` for the draft-only evidence summary),
-  `src/app/api/judge/` (`GET /`, `POST /seed`, `POST /pay`).
+  `src/app/api/judge/` (`GET /`, `POST /seed`, `POST /pay`, `POST /reset`).
 - UI — `src/app/` (operations console at `/`, Judge Mode at `/judge`,
   invoice detail at `/invoices/[id]`).
 
@@ -419,7 +427,7 @@ signatures mirror the REST resources one-to-one.
 ## Testing
 
 ```bash
-npm test           # vitest — 259 tests, all green
+npm test           # vitest — 269 tests, all green
 npm run typecheck  # TypeScript strict, clean
 npm run build      # Next.js production build
 ```
@@ -492,7 +500,13 @@ credentials misconfigured → 503 naming exactly the missing variables,
 sandbox without a webhook id degraded with the sync fallback noted,
 blank values treated as unset, stable check ordering, and a
 secret-safety guarantee: no env credential value ever appears in the
-serialized report)
+serialized report), and the Judge Mode demo reset (store + mock
+clearance counts, activity/resource ids never reused after a reset,
+the sample dispute restored exactly once — and not restored for a
+`sampleDispute: false` client — a completed loop resetting to a clean
+slate and closing a second time under a new plan id, sandbox-mode and
+no-reset-adapter refusals that touch nothing, and emptied file-backed
+snapshots reopening fresh)
 — fake credentials only, no network.
 
 ## Demo
