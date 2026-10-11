@@ -260,7 +260,7 @@ are not blocked, the suite also runs on them).
 ```bash
 npm install
 npm run dev        # http://localhost:3000
-npm test           # full test suite (315 tests)
+npm test           # full test suite (323 tests)
 npm run typecheck  # tsc --noEmit
 npm run build      # production build
 ```
@@ -449,7 +449,7 @@ signatures mirror the REST resources one-to-one.
 ## Testing
 
 ```bash
-npm test           # vitest — 315 tests, all green
+npm test           # vitest — 323 tests, all green
 npm run typecheck  # TypeScript strict, clean
 npm run build      # Next.js production build
 ```
@@ -558,7 +558,13 @@ bump must move all five sites at once), and the code of conduct
 (`CODE_OF_CONDUCT.md` — Contributor Covenant 2.1 pledge and standards,
 the four-step enforcement ladder in order, conduct reports routed
 privately through GitHub with no public issue and no invented contact
-address, referenced from CONTRIBUTING.md)
+address, referenced from CONTRIBUTING.md), and the changelog
+(`CHANGELOG.md` — Keep a Changelog format, everything under
+Unreleased with no version claimed as released before the public
+launch, the pending version agreeing with `package.json`, the
+shipped capabilities and the honesty notes — sandbox not yet
+live-verified, AG Grid Community only, money never summed across
+currencies — all pinned)
 — fake credentials only, no network.
 
 ## Demo
@@ -590,6 +596,13 @@ never go in a public issue — see the Security section above.
 Participation is governed by [CODE_OF_CONDUCT.md](./CODE_OF_CONDUCT.md)
 (Contributor Covenant 2.1); conduct concerns are likewise reported
 privately through GitHub, never in a public issue.
+
+## Changelog
+
+See [CHANGELOG.md](./CHANGELOG.md) (Keep a Changelog format).
+LedgerPilot has not been publicly released yet — the first public
+release, 0.1.0, launches with the public repository on 2026-11-01,
+so all changes are listed under Unreleased until then.
 
 ## License
 
