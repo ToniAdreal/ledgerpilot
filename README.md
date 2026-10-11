@@ -230,6 +230,17 @@ curl -X POST localhost:3000/api/agent/execute -H 'content-type: application/json
 - **Judge Mode.** `/judge` seeds the fictional scenario above (all customers
   are invented; the one sample dispute is explicitly flagged `sample: true`)
   and explains exactly what will happen before it happens.
+- **Deployment readiness.** `GET /api/health` reports whether this instance
+  can actually do PayPal work — effective mode, sandbox credentials /
+  webhook id configured (booleans + missing-variable names only, never a
+  secret value), persistence, and LLM state — as `ok` / `degraded` /
+  `misconfigured` with per-check explanations. It is built from the
+  environment alone and never constructs the runtime, so it diagnoses the
+  exact case where every other route fails: sandbox mode deployed without
+  credentials answers 503 here (naming `PAYPAL_CLIENT_ID` /
+  `PAYPAL_CLIENT_SECRET`) instead of an opaque 500. Warnings only (e.g.
+  sandbox without a webhook id — the sync reconciler remains the fallback)
+  stay 200 `degraded`; mock mode is always `ok`.
 
 ## Run it locally
 
@@ -238,7 +249,7 @@ curl -X POST localhost:3000/api/agent/execute -H 'content-type: application/json
 ```bash
 npm install
 npm run dev        # http://localhost:3000
-npm test           # full test suite (249 tests)
+npm test           # full test suite (259 tests)
 npm run typecheck  # tsc --noEmit
 npm run build      # production build
 ```
@@ -350,7 +361,15 @@ mock mode a config swap rather than a rewrite.
   (historical events pre-marked processed, so a later sync can never replay
   them into the gated payout), live spine state, and the record-payment +
   sync payment leg.
-- API routes — `src/app/api/agent/` (`POST /plan`, `POST /approve`,
+- `src/lib/health/` — the deployment-readiness report behind
+  `GET /api/health`: a pure function of the environment + an injected
+  clock (effective mode with the factory's mock fallback, sandbox
+  credential/webhook presence as booleans, persistence and LLM state),
+  resolving to `ok` / `degraded` / `misconfigured` checks. It never
+  constructs the runtime or a PayPal client and never reports a secret
+  value — only the names of missing variables.
+- API routes — `GET /api/health` (readiness; 200 ok/degraded, 503
+  misconfigured), `src/app/api/agent/` (`POST /plan`, `POST /approve`,
   `POST /execute`), `src/app/api/paypal/` (`POST /invoices|orders|payouts` —
   validated wrappers that draft plans, never execute; `POST /webhooks` — 401 on bad
   signature, 200 on processed/duplicate; `GET /sync`; `POST /orders/capture`),
@@ -400,7 +419,7 @@ signatures mirror the REST resources one-to-one.
 ## Testing
 
 ```bash
-npm test           # vitest — 249 tests, all green
+npm test           # vitest — 259 tests, all green
 npm run typecheck  # TypeScript strict, clean
 npm run build      # Next.js production build
 ```
@@ -466,7 +485,14 @@ transactions/events/reminders/disputes — restored after a simulated
 restart with no sample-dispute duplication, id-sequence continuation,
 the versioned snapshot shape, loud refusal of corrupt or unsupported
 snapshots, and the whole invoice→paid→payout loop closing across a
-restart when both stores are file-backed)
+restart when both stores are file-backed), and the deployment
+readiness report (mock default ok, unknown mode degraded with the
+mock fallback named, sandbox fully configured ok, sandbox missing
+credentials misconfigured → 503 naming exactly the missing variables,
+sandbox without a webhook id degraded with the sync fallback noted,
+blank values treated as unset, stable check ordering, and a
+secret-safety guarantee: no env credential value ever appears in the
+serialized report)
 — fake credentials only, no network.
 
 ## Demo
