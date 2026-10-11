@@ -68,6 +68,14 @@ body { margin: 0; color: #111827; background: #ffffff; }
 .grid-export-btn { margin-left: auto; align-self: center; font-size: 12px; padding: 0.3rem 0.7rem; }
 .capture-btn { font-size: 12px; padding: 0.25rem 0.7rem; }
 .capture-error { margin: 0 0 0.5rem; color: #991b1b; font-size: 13px; font-weight: 600; }
+.evidence-panel { border: 1px solid #e5e7eb; border-radius: 10px; padding: 1rem 1.25rem; margin: 0 0 0.75rem; background: #f9fafb; font-size: 13px; }
+.evidence-panel h3 { margin: 0.9rem 0 0.4rem; font-size: 13px; }
+.evidence-panel ul { margin: 0.25rem 0; padding-left: 1.2rem; line-height: 1.55; }
+.evidence-panel-head { display: flex; flex-wrap: wrap; gap: 0.5rem 0.75rem; align-items: center; }
+.evidence-panel-head .command-btn { margin-left: auto; font-size: 12px; padding: 0.3rem 0.7rem; }
+.evidence-disclaimer { color: #6b7280; margin: 0.5rem 0 0; line-height: 1.55; }
+.evidence-checklist { list-style: none; padding-left: 0 !important; }
+.evidence-draft { white-space: pre-wrap; word-break: break-word; background: #ffffff; border: 1px solid #e5e7eb; border-radius: 8px; padding: 0.75rem 1rem; font-size: 12px; line-height: 1.55; margin: 0.25rem 0 0; }
 .grid-overlay {
   display: flex;
   flex-direction: column;
@@ -180,6 +188,8 @@ body { margin: 0; color: #111827; background: #ffffff; }
 .pill-unclaimed { background: #fef9c3; color: #854d0e; }
 .pill-cancelled, .pill-denied, .pill-failed, .pill-rejected, .pill-voided, .pill-blocked, .pill-returned, .pill-canceled { background: #fee2e2; color: #991b1b; }
 .pill-open, .pill-waiting-for-seller-response { background: #fee2e2; color: #991b1b; }
+.pill-overdue { background: #fee2e2; color: #991b1b; }
+.pill-due-soon { background: #fef9c3; color: #854d0e; }
 .pill-waiting-for-buyer-response { background: #fef9c3; color: #854d0e; }
 .pill-resolved { background: #dcfce7; color: #166534; }
 /* Judge Mode */

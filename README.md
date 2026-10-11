@@ -147,7 +147,14 @@ curl -X POST localhost:3000/api/agent/execute -H 'content-type: application/json
   stage, and the seller-response deadline, overdue responses highlighted;
   seeded demo rows are always flagged "Sample") and **Reconciliation —
   Transaction Search** (the signed money ledger: invoice payments in,
-  payout batches out). Clicking an invoice number opens its **detail
+  payout batches out). Each dispute row has an **Evidence draft** action:
+  a deterministic, draft-only **dispute-evidence summary** assembled from
+  the dispute record, Transaction Search, and the seller's invoices —
+  verified facts, an evidence checklist, the gaps the seller must still
+  fill (delivery proof is always a gap: LedgerPilot holds no shipping
+  data and never asserts it), and a response draft for seller review.
+  It is never submitted — the Disputes integration is read-only.
+  Clicking an invoice number opens its **detail
   page** (`/invoices/[id]`): billed/collected/still-due amounts, line
   items, the plans related to it, and a chronological **status timeline**
   projected from the audit log — every agent call, verified webhook
@@ -189,7 +196,7 @@ curl -X POST localhost:3000/api/agent/execute -H 'content-type: application/json
 ```bash
 npm install
 npm run dev        # http://localhost:3000
-npm test           # full test suite (197 tests)
+npm test           # full test suite (208 tests)
 npm run typecheck  # tsc --noEmit
 npm run build      # production build
 ```
@@ -274,6 +281,10 @@ mock mode a config swap rather than a rewrite.
 - `src/lib/checkout/` — the Orders capture leg: buyer-side checkout
   completion for a created order (status guards, audit record, capture
   event processed via the reconciler, idempotent re-capture).
+- `src/lib/disputes/` — draft-only dispute-evidence summaries:
+  deterministic assembly from the dispute record, Transaction Search,
+  and invoices (conservative matching, evidence checklist + gaps,
+  urgency from the response deadline; nothing is ever submitted).
 - `src/lib/judge/` — Judge Mode scenario descriptor, idempotent seeder
   (historical events pre-marked processed, so a later sync can never replay
   them into the gated payout), live spine state, and the record-payment +
@@ -283,7 +294,8 @@ mock mode a config swap rather than a rewrite.
   validated wrappers that draft plans, never execute; `POST /webhooks` — 401 on bad
   signature, 200 on processed/duplicate; `GET /sync`; `POST /orders/capture`),
   `src/app/api/console/` (`GET /invoices|orders|payouts|activity|disputes|transactions|summary`,
-  plus `GET /invoices/[id]` for the detail projection),
+  plus `GET /invoices/[id]` for the detail projection and
+  `GET /disputes/[id]/evidence` for the draft-only evidence summary),
   `src/app/api/judge/` (`GET /`, `POST /seed`, `POST /pay`).
 - UI — `src/app/` (operations console at `/`, Judge Mode at `/judge`,
   invoice detail at `/invoices/[id]`).
@@ -296,7 +308,7 @@ mock mode a config swap rather than a rewrite.
 | **Orders v2 / Checkout** | Create checkout orders for one-off sales ("sell" briefs); capture on buyer checkout completion (console Capture action / `POST /api/paypal/orders/capture`) |
 | **Payouts** | Batch payouts drafted by the agent, released only after approval; per-item status tracked |
 | **Webhooks** | `INVOICING.INVOICE.PAID`, `INVOICING.INVOICE.CANCELLED`, `PAYMENT.CAPTURE.COMPLETED`, `PAYMENT.PAYOUTS-ITEM.SUCCEEDED`, `PAYMENT.PAYOUTS-ITEM.FAILED` — signature-verified, idempotent event log |
-| **Disputes (read-only)** | Own console grid: open disputes with buyer, reason, stage, and seller-response deadlines; seeded Judge Mode includes one explicitly flagged sample row, because sandbox disputes cannot be reliably manufactured |
+| **Disputes (read-only)** | Own console grid: open disputes with buyer, reason, stage, and seller-response deadlines, plus a per-dispute Evidence draft (deterministic summary from the dispute record + Transaction Search + invoices; draft only, never submitted); seeded Judge Mode includes one explicitly flagged sample row, because sandbox disputes cannot be reliably manufactured |
 | **Transaction Search (read-only)** | The console's Reconciliation grid: the signed transaction ledger (payments in, payouts out) behind the KPI totals |
 
 In mock mode all of the above run against the mock adapter, whose method
@@ -327,7 +339,7 @@ signatures mirror the REST resources one-to-one.
 ## Testing
 
 ```bash
-npm test           # vitest — 197 tests, all green
+npm test           # vitest — 208 tests, all green
 npm run typecheck  # TypeScript strict, clean
 npm run build      # Next.js production build
 ```
@@ -345,7 +357,7 @@ approval gate, trigger resume, audit ordering), webhooks + reconciler
 (bad-signature rejection, duplicate delivery, webhook/reconciler
 non-interference, resource-correlated trigger resumption), console read
 models (per-currency totals, overdue flags, dispute response deadlines +
-sample flags, signed reconciliation ledger), console states (loading /
+sample flags, signed reconciliation ledger), dispute-evidence summaries (reason labels, exact-id transaction matching, buyer+amount invoice matching, overdue/due-soon urgency, delivery proof always a gap, unknown-id 404), console states (loading /
 error / empty / filtered-empty precedence, overlay HTML escaping, banner
 and KPI rules), console grid tools (dated CSV export
 file names + export gating, change-flash detection — a SENT→PAID flip

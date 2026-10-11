@@ -55,6 +55,7 @@ import {
   type TransactionRow,
 } from "../lib/console";
 import { ASK_TARGETS, type AskResult, type AskTarget } from "../lib/ask";
+import type { DisputeEvidenceSummary } from "../lib/disputes";
 import CommandBar from "./command-bar";
 import AskBar from "./ask-bar";
 
@@ -100,6 +101,33 @@ function CaptureOrderCell(params: ICellRendererParams<OrderRow>) {
   );
 }
 
+interface EvidenceCellContext {
+  draftingDisputeId: string | null;
+  onDraftEvidence: (disputeId: string) => void;
+}
+
+/**
+ * Draft-only dispute-evidence summary (src/lib/disputes): the button
+ * loads the deterministic draft for seller review. It never submits
+ * anything to PayPal — the Disputes integration is read-only.
+ */
+function EvidenceDraftCell(params: ICellRendererParams<DisputeRow>) {
+  const row = params.data;
+  if (!row) return <span>—</span>;
+  const ctx = params.context as EvidenceCellContext;
+  const busy = ctx.draftingDisputeId === row.id;
+  return (
+    <button
+      type="button"
+      className="command-btn capture-btn"
+      disabled={busy || ctx.draftingDisputeId !== null}
+      onClick={() => ctx.onDraftEvidence(row.id)}
+    >
+      {busy ? "Drafting…" : "Evidence draft"}
+    </button>
+  );
+}
+
 function formatTotals(totals: ConsoleSummary["outstanding"]): string {
   if (totals.length === 0) return "0.00";
   return totals.map((t) => `${t.currency_code} ${t.value}`).join(" · ");
@@ -130,6 +158,9 @@ export default function ConsoleClient() {
   const [error, setError] = useState<string | null>(null);
   const [capturingOrderId, setCapturingOrderId] = useState<string | null>(null);
   const [captureError, setCaptureError] = useState<string | null>(null);
+  const [draftingDisputeId, setDraftingDisputeId] = useState<string | null>(null);
+  const [evidenceSummary, setEvidenceSummary] = useState<DisputeEvidenceSummary | null>(null);
+  const [evidenceError, setEvidenceError] = useState<string | null>(null);
   const [loadStatus, setLoadStatus] = useState<ConsoleLoadStatus>("loading");
   const [gridDisplay, setGridDisplay] = useState<Record<ConsoleGridId, GridDisplay>>(EMPTY_DISPLAY);
 
@@ -222,6 +253,25 @@ export default function ConsoleClient() {
     },
     [refresh],
   );
+
+  /* Load a dispute's draft-only evidence summary for seller review.
+   * Read-only GET — nothing is submitted to PayPal. Errors surface
+   * under the Disputes grid, never silently swallowed. */
+  const draftEvidence = useCallback(async (disputeId: string) => {
+    setDraftingDisputeId(disputeId);
+    setEvidenceError(null);
+    try {
+      const res = await fetch(`/api/console/disputes/${encodeURIComponent(disputeId)}/evidence`);
+      const data = (await res.json()) as { summary?: DisputeEvidenceSummary; error?: string };
+      if (!res.ok || !data.summary) throw new Error(data.error ?? `Evidence draft failed (${res.status})`);
+      setEvidenceSummary(data.summary);
+    } catch (err) {
+      setEvidenceError(err instanceof Error ? err.message : "Evidence draft failed");
+      setEvidenceSummary(null);
+    } finally {
+      setDraftingDisputeId(null);
+    }
+  }, []);
 
   /* Ask-the-grid: one GridApi per surface; a parsed query sets the
    * targeted grids' filter models and clears the rest, so the visible
@@ -466,6 +516,7 @@ export default function ConsoleClient() {
         valueFormatter: (p) => (p.value ? "Sample" : "—"),
         cellStyle: (p) => (p.value ? { color: "#854d0e", fontWeight: 600 } : null),
       },
+      { headerName: "Evidence", width: 150, filter: false, sortable: false, cellRenderer: EvidenceDraftCell },
     ],
     [],
   );
@@ -681,10 +732,52 @@ export default function ConsoleClient() {
 
       <div className="grid-section">
         {sectionHead("disputes")}
+        {evidenceError && (
+          <p className="capture-error" role="alert">
+            Evidence draft failed: {evidenceError}
+          </p>
+        )}
+        {evidenceSummary && (
+          <div className="evidence-panel">
+            <div className="evidence-panel-head">
+              <strong>{evidenceSummary.headline}</strong>
+              <span className={`pill pill-${evidenceSummary.urgency.replace(/_/g, "-")}`}>{evidenceSummary.urgency}</span>
+              <button
+                type="button"
+                className="command-btn"
+                onClick={() => setEvidenceSummary(null)}
+              >
+                Close
+              </button>
+            </div>
+            <p className="evidence-disclaimer">{evidenceSummary.disclaimer}</p>
+            <h3>Evidence checklist</h3>
+            <ul className="evidence-checklist">
+              {evidenceSummary.checklist.map((item) => (
+                <li key={item.label}>
+                  <span aria-hidden="true">{item.present ? "✓" : "✗"}</span> <strong>{item.label}</strong> — {item.detail}
+                </li>
+              ))}
+            </ul>
+            {evidenceSummary.gaps.length > 0 && (
+              <>
+                <h3>Still to attach</h3>
+                <ul>
+                  {evidenceSummary.gaps.map((gap) => (
+                    <li key={gap}>{gap}</li>
+                  ))}
+                </ul>
+              </>
+            )}
+            <h3>Draft response (not submitted)</h3>
+            <pre className="evidence-draft">{evidenceSummary.draftResponse}</pre>
+          </div>
+        )}
         <div className="grid-wrap">
           <AgGridReact<DisputeRow>
             theme={gridTheme}
             rowData={disputes}
+            context={{ draftingDisputeId, onDraftEvidence: draftEvidence } satisfies EvidenceCellContext}
             getRowId={getRowId}
             columnDefs={disputeColumns}
             defaultColDef={defaultColDef}
