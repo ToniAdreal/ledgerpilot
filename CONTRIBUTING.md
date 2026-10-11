@@ -26,8 +26,10 @@ npm install
 npm run dev        # mock mode by default — no keys, no PayPal account
 ```
 
-Node 22 is the pinned runtime (CI and the deployment descriptor
-agree). Judge Mode at `/judge` seeds the full demo scenario with
+Node 22 is the pinned runtime (`.nvmrc` and the `package.json`
+`engines` floor carry it locally; CI and the deployment descriptor
+pin the same major, and the test suite keeps all five sites in
+agreement). Judge Mode at `/judge` seeds the full demo scenario with
 one click.
 
 ## The verification gate

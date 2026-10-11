@@ -251,12 +251,16 @@ curl -X POST localhost:3000/api/agent/execute -H 'content-type: application/json
 
 ## Run it locally
 
+Node 22 is the pinned runtime (`.nvmrc` + the `package.json` `engines`
+floor; CI and the Render blueprint pin the same major — newer majors
+are not blocked, the suite also runs on them).
+
 ### Mock mode (default — no credentials, no keys)
 
 ```bash
 npm install
 npm run dev        # http://localhost:3000
-npm test           # full test suite (301 tests)
+npm test           # full test suite (307 tests)
 npm run typecheck  # tsc --noEmit
 npm run build      # production build
 ```
@@ -445,7 +449,7 @@ signatures mirror the REST resources one-to-one.
 ## Testing
 
 ```bash
-npm test           # vitest — 301 tests, all green
+npm test           # vitest — 307 tests, all green
 npm run typecheck  # TypeScript strict, clean
 npm run build      # Next.js production build
 ```
@@ -546,7 +550,11 @@ fictional demo data — plus the issue forms in
 `.github/ISSUE_TEMPLATE/` — bug form with mode + reproduction steps,
 feature form carrying the scope and the approval gate, blank issues
 disabled — and `.github/pull_request_template.md` — the gate,
-secrets, and money rules as a checklist)
+secrets, and money rules as a checklist), and the Node runtime pin
+(`.nvmrc` naming the pinned major, the `package.json` `engines` floor
+at that major, CI and the Render blueprint pinning the same major,
+`@types/node` tracking it, and CONTRIBUTING.md stating it — a version
+bump must move all five sites at once)
 — fake credentials only, no network.
 
 ## Demo
