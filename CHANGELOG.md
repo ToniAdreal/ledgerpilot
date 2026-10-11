@@ -86,6 +86,12 @@ build record behind these summaries.
   render the raw error or stack, an accessible loading state, a
   file-convention app icon, and a `robots.txt` that allows the
   public pages while keeping `/api/` out of search indexes.
+- **Web app manifest.** `/manifest.webmanifest` carries the app's
+  identity (name, description, start URL, the app icon, theme and
+  background colours taken from the app itself), and the root layout
+  carries matching Open Graph / Twitter share metadata and a theme
+  colour. Identity metadata only — no service worker, no offline
+  mode, and no public URL is declared before one exists.
 
 ### Security
 

@@ -260,6 +260,16 @@ curl -X POST localhost:3000/api/agent/execute -H 'content-type: application/json
   while keeping the `/api/` machine surface out of search indexes — no
   sitemap or host is declared, because no public URL exists to declare
   before the hosted deployment.
+- **Web app manifest + share metadata.** `src/app/manifest.ts` serves
+  `/manifest.webmanifest` with the app's identity — name, description,
+  `start_url: "/"`, the existing app icon, and theme/background colours
+  taken from the app itself (`#111827` icon/ink, `#ffffff` page) — and
+  the root layout carries matching Open Graph / Twitter share fields
+  plus a `themeColor` viewport. It is identity metadata only:
+  LedgerPilot ships no service worker and no offline mode, and the
+  manifest claims neither. No `metadataBase`, canonical, or openGraph
+  URL is declared, for the same reason robots declares no sitemap —
+  no public URL exists to declare before hosting, and none is invented.
 
 ## Run it locally
 
@@ -272,7 +282,7 @@ are not blocked, the suite also runs on them).
 ```bash
 npm install
 npm run dev        # http://localhost:3000
-npm test           # full test suite (338 tests)
+npm test           # full test suite (346 tests)
 npm run typecheck  # tsc --noEmit
 npm run build      # production build
 ```
@@ -461,7 +471,7 @@ signatures mirror the REST resources one-to-one.
 ## Testing
 
 ```bash
-npm test           # vitest — 338 tests, all green
+npm test           # vitest — 346 tests, all green
 npm run typecheck  # TypeScript strict, clean
 npm run build      # Next.js production build
 ```
@@ -589,7 +599,13 @@ never rendering the error message or stack, the global-error
 fallback carrying its own html/body shell, the accessible loading
 region, the self-contained `icon.svg` with no external references,
 and `robots` allowing the pages while disallowing `/api/` — the
-robots function's return value is asserted directly)
+robots function's return value is asserted directly), and the web
+app manifest + share metadata (the manifest function's return value
+asserted directly — identity fields, colours matching the icon and
+globals.css, the icon pointing at the real file-convention icon,
+no external URL — the layout's Open Graph / Twitter fields and
+viewport theme colour agreeing with the manifest, and no invented
+metadataBase / canonical / public URL anywhere)
 — fake credentials only, no network.
 
 ## Demo
