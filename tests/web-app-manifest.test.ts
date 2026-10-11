@@ -54,8 +54,10 @@ describe("Web App Manifest + share/theme metadata", () => {
     expect(src).toContain('siteName: "LedgerPilot"');
     expect(src).toContain('type: "website"');
     expect(src).toContain("twitter:");
-    expect(src).toContain('card: "summary"');
-    expect(src).toContain('url: "/icon.svg"');
+    expect(src).toContain('card: "summary_large_image"');
+    // Share images come from the opengraph-image / twitter-image file
+    // conventions (generated 1200x630 PNG), not a hand-declared icon.
+    expect(src).not.toContain("images:");
   });
 
   it("layout description agrees with the manifest description", () => {

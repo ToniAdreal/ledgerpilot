@@ -92,6 +92,13 @@ build record behind these summaries.
   carries matching Open Graph / Twitter share metadata and a theme
   colour. Identity metadata only — no service worker, no offline
   mode, and no public URL is declared before one exists.
+- **Generated share image.** The `opengraph-image` / `twitter-image`
+  file conventions generate a 1200×630 PNG share card (the app's name
+  and one-liner in its own colours, no external asset or font fetched),
+  replacing a hand-declared share image that pointed at the square
+  SVG icon — a format share crawlers do not render, so link previews
+  would have been blank. The Twitter card is now
+  `summary_large_image`.
 
 ### Security
 

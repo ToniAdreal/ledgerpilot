@@ -270,6 +270,15 @@ curl -X POST localhost:3000/api/agent/execute -H 'content-type: application/json
   manifest claims neither. No `metadataBase`, canonical, or openGraph
   URL is declared, for the same reason robots declares no sitemap —
   no public URL exists to declare before hosting, and none is invented.
+- **Generated share image.** `src/app/opengraph-image.tsx` (re-exported
+  by `twitter-image.tsx`) generates the 1200×630 PNG share card with
+  `next/og` — the app's name and one-liner over its own colours and the
+  icon's ledger-rows motif — and the file conventions reference it in
+  the Open Graph / Twitter tags automatically (the Twitter card is
+  `summary_large_image`). It replaces a hand-declared share image that
+  pointed at the square SVG icon, which share crawlers do not render.
+  No external asset, font, or URL is fetched: the image renders
+  identically offline, locally, and on the hosted demo.
 
 ## Run it locally
 
@@ -282,7 +291,7 @@ are not blocked, the suite also runs on them).
 ```bash
 npm install
 npm run dev        # http://localhost:3000
-npm test           # full test suite (346 tests)
+npm test           # full test suite (354 tests)
 npm run typecheck  # tsc --noEmit
 npm run build      # production build
 ```
@@ -471,7 +480,7 @@ signatures mirror the REST resources one-to-one.
 ## Testing
 
 ```bash
-npm test           # vitest — 346 tests, all green
+npm test           # vitest — 354 tests, all green
 npm run typecheck  # TypeScript strict, clean
 npm run build      # Next.js production build
 ```
@@ -605,7 +614,13 @@ asserted directly — identity fields, colours matching the icon and
 globals.css, the icon pointing at the real file-convention icon,
 no external URL — the layout's Open Graph / Twitter fields and
 viewport theme colour agreeing with the manifest, and no invented
-metadataBase / canonical / public URL anywhere)
+metadataBase / canonical / public URL anywhere), and the generated
+share image (the opengraph-image constants — 1200×630 PNG, alt text —
+pinned, the app's own colours asserted against the icon, no external
+URL or fetch in the source, the rendered PNG's signature and IHDR
+dimensions verified, the twitter-image re-export, and the layout
+leaving share images to the conventions with a `summary_large_image`
+card)
 — fake credentials only, no network.
 
 ## Demo

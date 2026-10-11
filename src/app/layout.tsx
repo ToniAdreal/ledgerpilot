@@ -4,8 +4,11 @@ import "./globals.css";
 
 // Share/theme metadata for the hosted demo. No `metadataBase` and no
 // canonical/openGraph `url` is declared: no public URL exists before
-// the hosted deployment, and none is invented here — relative image
-// paths resolve against whatever host serves the app.
+// the hosted deployment, and none is invented here. No share image is
+// declared here either: the `opengraph-image` / `twitter-image` file
+// conventions generate the 1200x630 PNG share card and Next references
+// it automatically (the previous hand-declared image was the square
+// SVG icon, which share crawlers do not render).
 export const metadata: Metadata = {
   title: "LedgerPilot",
   description: "An AI money operator for solo sellers and freelancers, built on PayPal.",
@@ -15,13 +18,11 @@ export const metadata: Metadata = {
     description: "An AI money operator for solo sellers and freelancers, built on PayPal.",
     siteName: "LedgerPilot",
     type: "website",
-    images: [{ url: "/icon.svg", alt: "LedgerPilot" }],
   },
   twitter: {
-    card: "summary",
+    card: "summary_large_image",
     title: "LedgerPilot",
     description: "An AI money operator for solo sellers and freelancers, built on PayPal.",
-    images: ["/icon.svg"],
   },
 };
 
