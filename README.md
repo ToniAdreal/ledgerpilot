@@ -445,7 +445,7 @@ signatures mirror the REST resources one-to-one.
 ## Testing
 
 ```bash
-npm test           # vitest — 281 tests, all green
+npm test           # vitest — 289 tests, all green
 npm run typecheck  # TypeScript strict, clean
 npm run build      # Next.js production build
 ```
@@ -534,7 +534,12 @@ the package's own scripts, the health check probing the real
 `/api/health` route, mock mode as the credential-free default, every
 credential variable `sync: false` with no value stored anywhere in the
 file, and the blueprint's variable list matching `.env.example` in
-both directions)
+both directions), and the repository health files (`SECURITY.md` —
+private vulnerability reporting, the sandbox/mock-only scope, the
+enforced approval-gate / webhook / secrets model, the Judge Mode
+demo-controls warning, no invented contact address — and
+`.github/dependabot.yml` — npm + github-actions ecosystems, weekly,
+bounded open PRs, proposals only with no auto-merge and no secrets)
 — fake credentials only, no network.
 
 ## Demo
@@ -543,6 +548,17 @@ both directions)
   zero setup).
 - **Demo video:** public YouTube link published with the Devpost submission
   (≤ 3 minutes, screen recording of the 5-step spine above).
+
+## Security
+
+See [SECURITY.md](./SECURITY.md): report vulnerabilities privately
+through GitHub, never in a public issue. LedgerPilot runs against the
+PayPal sandbox and a local mock only — there is no real-money mode,
+credentials come from your own PayPal Developer app via environment
+variables, and the public hosted demo runs credential-free in mock
+mode. Dependency updates arrive as Dependabot pull requests
+(`.github/dependabot.yml`); every proposal is gated by CI and human
+review, nothing auto-merges.
 
 ## License
 

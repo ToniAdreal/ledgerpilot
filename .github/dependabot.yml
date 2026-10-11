@@ -1,0 +1,24 @@
+# Dependabot — dependency update proposals for the public repo.
+#
+# Proposals only: Dependabot opens pull requests, and every PR still
+# goes through the CI workflow (typecheck, test, build) and a human
+# review before merging. Nothing here auto-merges, and no secrets are
+# involved — the update jobs only read package manifests.
+version: 2
+updates:
+  - package-ecosystem: "npm"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+    open-pull-requests-limit: 5
+    commit-message:
+      prefix: "deps"
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+    open-pull-requests-limit: 5
+    commit-message:
+      prefix: "ci"
