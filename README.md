@@ -248,6 +248,18 @@ curl -X POST localhost:3000/api/agent/execute -H 'content-type: application/json
   `PAYPAL_CLIENT_SECRET`) instead of an opaque 500. Warnings only (e.g.
   sandbox without a webhook id — the sync reconciler remains the fallback)
   stay 200 `degraded`; mock mode is always `ok`.
+- **Branded app shell.** The App Router special files are LedgerPilot's own,
+  not the framework defaults: a mistyped or moved link lands on a branded
+  404 that routes back to the console and Judge Mode; a page error renders
+  a recovery surface with a Try-again (reset) action that never shows the
+  raw error message or stack (only the opaque support digest), with a
+  self-contained global-error fallback for a failure in the root layout
+  itself; the loading state is an accessible live region that points at
+  `GET /api/health`. The app icon (`src/app/icon.svg`, a ledger-lines mark)
+  is served by file convention, and `robots.txt` allows the public pages
+  while keeping the `/api/` machine surface out of search indexes — no
+  sitemap or host is declared, because no public URL exists to declare
+  before the hosted deployment.
 
 ## Run it locally
 
@@ -260,7 +272,7 @@ are not blocked, the suite also runs on them).
 ```bash
 npm install
 npm run dev        # http://localhost:3000
-npm test           # full test suite (331 tests)
+npm test           # full test suite (338 tests)
 npm run typecheck  # tsc --noEmit
 npm run build      # production build
 ```
@@ -449,7 +461,7 @@ signatures mirror the REST resources one-to-one.
 ## Testing
 
 ```bash
-npm test           # vitest — 331 tests, all green
+npm test           # vitest — 338 tests, all green
 npm run typecheck  # TypeScript strict, clean
 npm run build      # Next.js production build
 ```
@@ -570,7 +582,14 @@ same-origin Content-Security-Policy with no wildcard or external
 origin and frame-ancestors 'none', HSTS without a preload claim,
 nosniff / DENY framing / strict-origin referrer / device-feature
 denials, eval and the HMR socket scoped to development only, and
-the framework header disabled — all pinned)
+the framework header disabled — all pinned), and the app shell
+special files (the branded 404 routing back to the console and
+Judge Mode, the client error boundary retrying via `reset` and
+never rendering the error message or stack, the global-error
+fallback carrying its own html/body shell, the accessible loading
+region, the self-contained `icon.svg` with no external references,
+and `robots` allowing the pages while disallowing `/api/` — the
+robots function's return value is asserted directly)
 — fake credentials only, no network.
 
 ## Demo

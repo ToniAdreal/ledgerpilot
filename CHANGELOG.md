@@ -80,6 +80,12 @@ build record behind these summaries.
   Dependabot proposals, a CI workflow running typecheck → test →
   build with no secrets, and the Node 22 runtime pin (`.nvmrc`,
   `package.json` `engines`).
+- **Branded app shell.** App Router special files in the project's
+  own voice instead of the framework defaults: a branded 404 page,
+  error and global-error boundaries that offer a retry and never
+  render the raw error or stack, an accessible loading state, a
+  file-convention app icon, and a `robots.txt` that allows the
+  public pages while keeping `/api/` out of search indexes.
 
 ### Security
 
