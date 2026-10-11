@@ -1,0 +1,64 @@
+name: Bug report
+description: Report something that behaves incorrectly in mock or sandbox mode.
+title: "[Bug]: "
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for the report. Two ground rules first:
+        - **Security flaws do not belong here** — report them
+          privately, as SECURITY.md describes. Do not open a
+          public issue for a vulnerability.
+        - **Never paste real credentials, tokens, or personal
+          data.** LedgerPilot runs against the PayPal sandbox
+          and a local mock only — there is no real-money mode;
+          fake or redacted values are enough to reproduce
+          almost anything.
+  - type: dropdown
+    id: mode
+    attributes:
+      label: Mode
+      description: Which PayPal mode was the app running in?
+      options:
+        - Mock mode (default, no credentials)
+        - Sandbox mode (my own PayPal Developer app)
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      description: Exact steps, starting from a fresh start or a Judge Mode seed.
+      placeholder: |
+        1. Open /judge and seed the demo scenario
+        2. In the console, draft the brief "..."
+        3. Approve and execute
+        4. ...
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected behaviour
+    validations:
+      required: true
+  - type: textarea
+    id: actual
+    attributes:
+      label: Actual behaviour
+      description: |
+        What happened instead. A plan id, a webhook event id, or an
+        Activity grid row from the console is the most useful
+        detail — the audit log is designed for this.
+    validations:
+      required: true
+  - type: input
+    id: health
+    attributes:
+      label: Health report
+      description: |
+        Optional: the status line from GET /api/health (for example
+        "ok", "degraded", "misconfigured"). It carries booleans and
+        variable names only — safe to paste.
+      placeholder: "status: ok"

@@ -445,7 +445,7 @@ signatures mirror the REST resources one-to-one.
 ## Testing
 
 ```bash
-npm test           # vitest — 289 tests, all green
+npm test           # vitest — 301 tests, all green
 npm run typecheck  # TypeScript strict, clean
 npm run build      # Next.js production build
 ```
@@ -539,7 +539,14 @@ private vulnerability reporting, the sandbox/mock-only scope, the
 enforced approval-gate / webhook / secrets model, the Judge Mode
 demo-controls warning, no invented contact address — and
 `.github/dependabot.yml` — npm + github-actions ecosystems, weekly,
-bounded open PRs, proposals only with no auto-merge and no secrets)
+bounded open PRs, proposals only with no auto-merge and no secrets),
+and the contributor facade (`CONTRIBUTING.md` — the exact CI gate in
+order, the enforced invariants, security flaws routed privately,
+fictional demo data — plus the issue forms in
+`.github/ISSUE_TEMPLATE/` — bug form with mode + reproduction steps,
+feature form carrying the scope and the approval gate, blank issues
+disabled — and `.github/pull_request_template.md` — the gate,
+secrets, and money rules as a checklist)
 — fake credentials only, no network.
 
 ## Demo
@@ -559,6 +566,15 @@ variables, and the public hosted demo runs credential-free in mock
 mode. Dependency updates arrive as Dependabot pull requests
 (`.github/dependabot.yml`); every proposal is gated by CI and human
 review, nothing auto-merges.
+
+## Contributing
+
+See [CONTRIBUTING.md](./CONTRIBUTING.md): the verification gate
+(typecheck → test → build, exactly what CI runs), the invariants a
+change must not break (approval gate, deterministic-first AI,
+verified webhooks, per-currency money, labeled sample data), and
+how to report bugs through the issue templates. Security flaws
+never go in a public issue — see the Security section above.
 
 ## License
 

@@ -1,0 +1,9 @@
+# Issue-form configuration.
+#
+# Blank issues are disabled on purpose: the templates ask for the
+# mode and the reproduction steps a maintainer needs, and they carry
+# the two ground rules (security flaws are reported privately, never
+# in a public issue; no real credentials anywhere). Security reports
+# go through GitHub's private vulnerability reporting — see
+# SECURITY.md — not through an issue form or a contact link here.
+blank_issues_enabled: false
