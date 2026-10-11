@@ -256,7 +256,7 @@ curl -X POST localhost:3000/api/agent/execute -H 'content-type: application/json
 ```bash
 npm install
 npm run dev        # http://localhost:3000
-npm test           # full test suite (269 tests)
+npm test           # full test suite (274 tests)
 npm run typecheck  # tsc --noEmit
 npm run build      # production build
 ```
@@ -427,10 +427,14 @@ signatures mirror the REST resources one-to-one.
 ## Testing
 
 ```bash
-npm test           # vitest — 269 tests, all green
+npm test           # vitest — 274 tests, all green
 npm run typecheck  # TypeScript strict, clean
 npm run build      # Next.js production build
 ```
+
+The same sequence runs in CI (`.github/workflows/ci.yml`) on every
+push to `main` and every pull request — no secrets required, since
+the suite is fully offline and the build runs in mock mode.
 
 The suite covers: the mock PayPal surface (invoice lifecycle, partial
 payments, capture/payout guards, the full invoice→paid→payout loop),

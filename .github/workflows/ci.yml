@@ -1,0 +1,49 @@
+name: CI
+
+# Runs the exact verification sequence documented in the README
+# (typecheck -> test -> build) on every push to main and every
+# pull request. No secrets are required: the test suite is fully
+# offline (mock PayPal adapter + stubbed sandbox fetch), and the
+# build runs in the default mock mode.
+
+on:
+  push:
+    # The local build history lives on `master`; `main` is listed so
+    # the workflow also fires if the public repo's default branch is
+    # created as `main`.
+    branches: [main, master]
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  verify:
+    name: Typecheck, test, build
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Check out the repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Typecheck
+        run: npm run typecheck
+
+      - name: Test
+        run: npm test
+
+      - name: Build
+        run: npm run build
