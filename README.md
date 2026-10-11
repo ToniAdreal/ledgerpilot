@@ -106,6 +106,17 @@ curl -X POST localhost:3000/api/agent/execute -H 'content-type: application/json
   every gated step). Invalid input (bad currency, non-positive or
   over-cap amount, impossible due date, malformed email) is a 400 with
   the reason — never a half-valid plan.
+- **Payout batch builder (drafted batch, per-line validation, approval
+  release).** The payouts draft also accepts a batch form —
+  `{ items: [{ recipientName, amount, currency?, note? }, … ] }` (up to
+  25 lines) — where every line is validated on its own and a failure
+  names the line (`items[1]: 'amount' must be greater than zero`);
+  mixing the batch and single-recipient forms is rejected as ambiguous.
+  The drafted step executes as exactly **one** PayPal Payouts batch
+  after approval — never fanned out into per-line calls — and the
+  console's Payouts grid flattens it to one row per recipient under the
+  single batch id. A batch may be gated on one invoice's payment like
+  any payout draft, and then releases whole, exactly once.
 - **Verified, idempotent webhooks.** `POST /api/paypal/webhooks` verifies the
   event signature through the PayPal adapter before trusting the payload
   (unverified events are rejected, audited, and never marked processed),
@@ -203,7 +214,7 @@ curl -X POST localhost:3000/api/agent/execute -H 'content-type: application/json
 ```bash
 npm install
 npm run dev        # http://localhost:3000
-npm test           # full test suite (217 tests)
+npm test           # full test suite (224 tests)
 npm run typecheck  # tsc --noEmit
 npm run build      # production build
 ```
@@ -350,7 +361,7 @@ signatures mirror the REST resources one-to-one.
 ## Testing
 
 ```bash
-npm test           # vitest — 217 tests, all green
+npm test           # vitest — 224 tests, all green
 npm run typecheck  # TypeScript strict, clean
 npm run build      # Next.js production build
 ```
@@ -390,7 +401,12 @@ LLM-sourced plan), and the resource plan drafts behind
 `POST /api/paypal/invoices|orders|payouts` (parser-identical payloads,
 the no-execution-without-approval invariant over HTTP-shaped inputs,
 a payout gated on a named invoice firing only for that invoice, and
-the validation rejection matrix), and the invoice detail projection
+the validation rejection matrix), payout batches (per-line validated
+batch drafts with line-named errors and the ambiguous-shape rejection,
+drafting moves no money, an approved batch executing as exactly one
+PayPal batch with per-item console rows and per-currency totals, a
+batch gated on one invoice releasing whole and only for that invoice,
+and an explicitly empty items list failing the plan), and the invoice detail projection
 (timeline correlation rules for executor / webhook / sync / seed
 records, the rejected-signature entry, partial-payment state without
 an invented PAID event, seeded and adapter-direct invoices, and

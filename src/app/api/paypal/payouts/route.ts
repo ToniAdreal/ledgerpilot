@@ -11,8 +11,12 @@ export const dynamic = "force-dynamic";
  * `payWhenInvoicePaid: "<invoiceId>"` the drafted step is additionally
  * gated on that exact invoice's INVOICING.INVOICE.PAID event.
  *
- * Body: { recipientName, amount, currency?, recipientEmail?, note?,
- *         payWhenInvoicePaid? } → 201 { plan };
+ * Body (single): { recipientName, amount, currency?, recipientEmail?,
+ *         note?, payWhenInvoicePaid? } → 201 { plan }.
+ * Body (batch, CONCEPT.md §3.1's batch builder): { items: [{ recipientName,
+ *         amount, currency?, recipientEmail?, note? }, …], note?,
+ *         payWhenInvoicePaid? } — every line is validated (errors name the
+ *         line) and the drafted step executes as ONE Payouts batch.
  * 400 on malformed JSON or any validation failure.
  */
 export async function POST(req: Request) {

@@ -8,6 +8,9 @@
  *    is deferred, never executed early; `resumeTriggeredSteps` runs it
  *    when the matching event arrives (called by the webhook handler /
  *    sync reconciler in the next core-loop chunk).
+ *  - A `draft_payout` step pays as ONE Payouts batch, whether its
+ *    payload carries a single recipient or a multi-line `items` list
+ *    (the §3.1 batch builder drafts the latter) — never per-line calls.
  *  - Trigger resumption is resource-correlated: executing a plan binds
  *    its invoice-gated steps to the invoice that plan itself created
  *    (`trigger.resourceId`), and a later event only resumes the step
@@ -27,6 +30,7 @@ import type {
   Invoice,
   Party,
   Money,
+  PayoutItemInput,
   WebhookEventType,
 } from "../types";
 import type { LedgerStore } from "./store";
@@ -41,6 +45,25 @@ export interface StepOutcome {
 export interface ExecutionResult {
   plan: ActionPlan;
   outcomes: StepOutcome[];
+}
+
+/**
+ * Normalise a `draft_payout` step payload to the batch lines it will
+ * pay. A batch payload (`items`) wins when present; the legacy
+ * single-recipient payload becomes a one-line batch. An explicitly
+ * empty `items` array is a malformed step and fails loudly here rather
+ * than reaching the adapter as a zero-line batch.
+ */
+function payoutItemsOf(p: Record<string, unknown>): PayoutItemInput[] {
+  if (p.items !== undefined) {
+    if (!Array.isArray(p.items) || p.items.length === 0) {
+      throw new Error("Payout step carries an empty items list — a batch needs at least one line; nothing was paid.");
+    }
+    return p.items as PayoutItemInput[];
+  }
+  const amount = p.amount as Money;
+  const recipient = p.recipient as Party;
+  return [{ recipient, amount, note: (p.note as string) ?? undefined }];
 }
 
 async function runStep(
@@ -73,17 +96,36 @@ async function runStep(
       return { step, outcome: "executed", resultId: order.id };
     }
     if (step.type === "draft_payout") {
-      const amount = p.amount as Money;
-      const recipient = p.recipient as Party;
-      const batch = await client.createPayout({
-        items: [{ recipient, amount, note: (p.note as string) ?? undefined }],
-      });
-      store.record({
-        planId: plan.id,
-        kind: "paypal_call",
-        summary: `POST /v1/payments/payouts → batch ${batch.batch_header.payout_batch_id} (${batch.batch_header.batch_status}), ${amount.currency_code} ${amount.value} to ${recipient.name}`,
-        detail: { payoutBatchId: batch.batch_header.payout_batch_id, status: batch.batch_header.batch_status },
-      });
+      // Two payload shapes, one PayPal call: the parser / LLM / single
+      // drafts carry { recipient, amount, note } (one line); a batch
+      // draft carries { items: [...] } (the §3.1 batch builder). Either
+      // way the step executes as exactly ONE Payouts batch — a batch is
+      // never fanned out into per-line calls, so it lands (or fails) as
+      // the single auditable unit the plan review showed.
+      const items = payoutItemsOf(p);
+      const batch = await client.createPayout({ items });
+      if (items.length === 1) {
+        const { recipient, amount } = items[0]!;
+        store.record({
+          planId: plan.id,
+          kind: "paypal_call",
+          summary: `POST /v1/payments/payouts → batch ${batch.batch_header.payout_batch_id} (${batch.batch_header.batch_status}), ${amount.currency_code} ${amount.value} to ${recipient.name}`,
+          detail: { payoutBatchId: batch.batch_header.payout_batch_id, status: batch.batch_header.batch_status },
+        });
+      } else {
+        const lines = items.map((i) => `${i.amount.currency_code} ${i.amount.value} to ${i.recipient.name}`).join(", ");
+        store.record({
+          planId: plan.id,
+          kind: "paypal_call",
+          summary: `POST /v1/payments/payouts → batch ${batch.batch_header.payout_batch_id} (${batch.batch_header.batch_status}), ${items.length} items: ${lines}`,
+          detail: {
+            payoutBatchId: batch.batch_header.payout_batch_id,
+            status: batch.batch_header.batch_status,
+            itemCount: items.length,
+            items: items.map((i) => ({ receiver: i.recipient.email_address, amount: i.amount })),
+          },
+        });
+      }
       return { step, outcome: "executed", resultId: batch.batch_header.payout_batch_id };
     }
     // send_reminder: resolve the target invoice, then call the real

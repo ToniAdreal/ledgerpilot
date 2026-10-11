@@ -17,9 +17,16 @@
  * `INVOICING.INVOICE.PAID` trigger pre-bound to that invoice id, so the
  * executor's resource-correlated resumption releases it only when
  * *that* invoice is paid — never on another invoice's event.
+ *
+ * A payout draft may also carry a whole batch (CONCEPT.md §3.1's
+ * "payout batch builder: agent-drafted batch, per-line validation,
+ * approval release"): `items` lists every line, each line is validated
+ * on its own (errors name the line, e.g. `items[1].amount …`), and the
+ * drafted step's payload is the batch itself — the executor pays it as
+ * exactly one Payouts batch after approval, never line by line.
  */
 
-import type { ActionPlan, ActionStep, CurrencyCode, Money, Party } from "../types";
+import type { ActionPlan, ActionStep, CurrencyCode, Money, Party, PayoutItemInput } from "../types";
 import { DEMO_CONTACTS, resolveContact } from "./parser";
 
 export class DraftValidationError extends Error {
@@ -59,9 +66,27 @@ export interface PayoutDraftInput {
   amount?: unknown;
   currency?: unknown;
   note?: unknown;
+  /**
+   * Batch form: an array of per-line objects shaped like the single
+   * form ({ recipientName, recipientEmail?, amount, currency?, note? }).
+   * Mutually exclusive with the top-level recipientName/amount fields.
+   */
+  items?: unknown;
   /** Invoice id this payout waits for: gated on INVOICING.INVOICE.PAID for exactly that invoice. */
   payWhenInvoicePaid?: unknown;
 }
+
+/** One raw line of a batch payout draft (validated per line). */
+export interface PayoutBatchLineInput {
+  recipientName?: unknown;
+  recipientEmail?: unknown;
+  amount?: unknown;
+  currency?: unknown;
+  note?: unknown;
+}
+
+/** Most lines one drafted batch may carry (PayPal's own ceiling is far higher; this keeps a plan review readable). */
+export const MAX_PAYOUT_BATCH_ITEMS = 25;
 
 export interface DraftOptions {
   now?: Date;
@@ -123,6 +148,57 @@ function parseRecipient(nameRaw: unknown, emailRaw: unknown, contacts?: Record<s
     return { name, email_address: email };
   }
   return resolveContact(name, contacts ?? DEMO_CONTACTS);
+}
+
+/** Re-throw a line's validation error with its batch position named. */
+function withLineContext<T>(lineIndex: number, fn: () => T): T {
+  try {
+    return fn();
+  } catch (err) {
+    if (err instanceof DraftValidationError) {
+      throw new DraftValidationError(`items[${lineIndex}]: ${err.message}`);
+    }
+    throw err;
+  }
+}
+
+/**
+ * Validate one batch line into a payout item. The note falls back to
+ * the batch-level note, then to the standard per-recipient default —
+ * the same default the single-recipient draft uses.
+ */
+function parsePayoutLine(
+  raw: unknown,
+  lineIndex: number,
+  batchNote: string | undefined,
+  contacts?: Record<string, Party>,
+): PayoutItemInput {
+  if (typeof raw !== "object" || raw === null || Array.isArray(raw)) {
+    throw new DraftValidationError(`items[${lineIndex}] must be an object with recipientName and amount`);
+  }
+  const line = raw as PayoutBatchLineInput;
+  const recipient = withLineContext(lineIndex, () =>
+    parseRecipient(line.recipientName, line.recipientEmail, contacts),
+  );
+  const amount = withLineContext(lineIndex, () => parseMoney(line.amount, line.currency));
+  const note =
+    withLineContext(lineIndex, () => optionalText(line.note, "note")) ??
+    batchNote ??
+    `Payout to ${recipient.name} (LedgerPilot plan)`;
+  return { recipient, amount, note };
+}
+
+/** Per-currency totals for a batch, in first-seen currency order (money is never summed across currencies). */
+function batchTotals(items: PayoutItemInput[]): Money[] {
+  const byCurrency = new Map<CurrencyCode, number>();
+  for (const item of items) {
+    byCurrency.set(item.amount.currency_code, (byCurrency.get(item.amount.currency_code) ?? 0) + Number(item.amount.value));
+  }
+  return [...byCurrency.entries()].map(([currency_code, sum]) => ({ currency_code, value: sum.toFixed(2) }));
+}
+
+function formatMoney(money: Money): string {
+  return `${money.currency_code} ${money.value}`;
 }
 
 /** ISO yyyy-mm-dd and a real calendar date (2026-02-30 is rejected). */
@@ -189,14 +265,48 @@ export function draftOrderPlan(input: OrderDraftInput, options: DraftOptions = {
 
 /** Draft a `draft_payout` plan (POST /api/paypal/payouts). Nothing is paid out. */
 export function draftPayoutPlan(input: PayoutDraftInput, options: DraftOptions = {}): ActionPlan {
+  const gateRaw = input.payWhenInvoicePaid;
+  const gate = gateRaw === undefined || gateRaw === null || gateRaw === "" ? undefined : requireText(gateRaw, "payWhenInvoicePaid");
+  const gateSuffix = gate ? " — only after the invoice payment lands" : "";
+
+  if (input.items !== undefined && input.items !== null) {
+    // Batch form — the §3.1 batch builder. The single-recipient fields
+    // must not be mixed in: an ambiguous draft is rejected, never
+    // resolved by guessing which shape the caller meant.
+    if (input.recipientName !== undefined || input.recipientEmail !== undefined || input.amount !== undefined || input.currency !== undefined) {
+      throw new DraftValidationError(
+        "'items' (batch form) cannot be combined with the top-level recipientName/recipientEmail/amount/currency fields — put the currency on each line",
+      );
+    }
+    if (!Array.isArray(input.items)) {
+      throw new DraftValidationError("'items' must be an array of payout lines ({ recipientName, amount, currency?, note? })");
+    }
+    if (input.items.length === 0) {
+      throw new DraftValidationError("'items' must contain at least one payout line");
+    }
+    if (input.items.length > MAX_PAYOUT_BATCH_ITEMS) {
+      throw new DraftValidationError(`'items' must contain at most ${MAX_PAYOUT_BATCH_ITEMS} payout lines (got ${input.items.length})`);
+    }
+    const batchNote = optionalText(input.note, "note");
+    const items = input.items.map((raw, i) => parsePayoutLine(raw, i, batchNote, options.contacts));
+    const totals = batchTotals(items).map(formatMoney).join(" + ");
+    const lines = items.map((i) => `${formatMoney(i.amount)} to ${i.recipient.name}`).join(", ");
+    const step: ActionStep = {
+      type: "draft_payout",
+      description: `Pay out a batch of ${items.length}: ${lines} (total ${totals})${gateSuffix}`,
+      paypalCall: { method: "POST", path: "/v1/payments/payouts" },
+      payload: { items },
+    };
+    if (gate) step.trigger = { on: "INVOICING.INVOICE.PAID", resourceId: gate };
+    return basePlan(`API draft: payout batch of ${items.length} (total ${totals})`, step, options);
+  }
+
   const recipient = parseRecipient(input.recipientName, input.recipientEmail, options.contacts);
   const amount = parseMoney(input.amount, input.currency);
   const note = optionalText(input.note, "note") ?? `Payout to ${recipient.name} (LedgerPilot plan)`;
-  const gateRaw = input.payWhenInvoicePaid;
-  const gate = gateRaw === undefined || gateRaw === null || gateRaw === "" ? undefined : requireText(gateRaw, "payWhenInvoicePaid");
   const step: ActionStep = {
     type: "draft_payout",
-    description: `Pay out ${amount.currency_code} ${amount.value} to ${recipient.name}${gate ? " — only after the invoice payment lands" : ""}`,
+    description: `Pay out ${amount.currency_code} ${amount.value} to ${recipient.name}${gateSuffix}`,
     paypalCall: { method: "POST", path: "/v1/payments/payouts" },
     payload: { recipient, amount, note },
   };
