@@ -43,6 +43,18 @@ is pre-1.0 hackathon software; there are no maintained release lines.
 - **Read-only surfaces:** Disputes and Transaction Search are read
   only. Dispute-evidence summaries are drafts for a human to review —
   the app never submits evidence to PayPal.
+- **HTTP security headers:** every response (pages and API routes)
+  carries the baseline set configured in `next.config.mjs`: a
+  same-origin Content-Security-Policy (`default-src 'self'`,
+  `object-src 'none'`, `frame-ancestors 'none'` — no wildcard and no
+  external origin, because all assets are bundled and PayPal / LLM
+  traffic is server-side only; inline scripts/styles are allowed for
+  the App Router bootstrap and inline style attributes, and eval is
+  allowed in development only), HSTS without a preload claim,
+  `X-Content-Type-Options: nosniff`, `X-Frame-Options: DENY`, a
+  strict-origin referrer policy, and a Permissions-Policy disabling
+  camera, microphone, and geolocation. The framework's
+  `X-Powered-By` header is disabled.
 
 ## Deployment guidance
 

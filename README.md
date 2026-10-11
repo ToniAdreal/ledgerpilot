@@ -260,7 +260,7 @@ are not blocked, the suite also runs on them).
 ```bash
 npm install
 npm run dev        # http://localhost:3000
-npm test           # full test suite (323 tests)
+npm test           # full test suite (331 tests)
 npm run typecheck  # tsc --noEmit
 npm run build      # production build
 ```
@@ -449,7 +449,7 @@ signatures mirror the REST resources one-to-one.
 ## Testing
 
 ```bash
-npm test           # vitest — 323 tests, all green
+npm test           # vitest — 331 tests, all green
 npm run typecheck  # TypeScript strict, clean
 npm run build      # Next.js production build
 ```
@@ -564,7 +564,13 @@ Unreleased with no version claimed as released before the public
 launch, the pending version agreeing with `package.json`, the
 shipped capabilities and the honesty notes — sandbox not yet
 live-verified, AG Grid Community only, money never summed across
-currencies — all pinned)
+currencies — all pinned), and the HTTP security headers
+(`next.config.mjs` — one header set applied to every route, the
+same-origin Content-Security-Policy with no wildcard or external
+origin and frame-ancestors 'none', HSTS without a preload claim,
+nosniff / DENY framing / strict-origin referrer / device-feature
+denials, eval and the HMR socket scoped to development only, and
+the framework header disabled — all pinned)
 — fake credentials only, no network.
 
 ## Demo
@@ -581,7 +587,10 @@ through GitHub, never in a public issue. LedgerPilot runs against the
 PayPal sandbox and a local mock only — there is no real-money mode,
 credentials come from your own PayPal Developer app via environment
 variables, and the public hosted demo runs credential-free in mock
-mode. Dependency updates arrive as Dependabot pull requests
+mode. Every response carries the HTTP security headers
+configured in `next.config.mjs` (same-origin
+Content-Security-Policy, HSTS, anti-sniffing and anti-framing
+headers — see SECURITY.md for the full model). Dependency updates arrive as Dependabot pull requests
 (`.github/dependabot.yml`); every proposal is gated by CI and human
 review, nothing auto-merges.
 

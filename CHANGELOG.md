@@ -88,6 +88,11 @@ build record behind these summaries.
   so one plan's payment cannot release another plan's payout.
 - No credentials are stored in the repository; the health report and
   the deployment descriptor carry variable names and booleans only.
+- Every response carries HTTP security headers (`next.config.mjs`):
+  a same-origin Content-Security-Policy with no wildcard or external
+  origin, HSTS without a preload claim, and anti-sniffing,
+  anti-framing, referrer, and device-permission baselines; the
+  framework's `X-Powered-By` header is disabled.
 
 ## [0.1.0] — pending
 
