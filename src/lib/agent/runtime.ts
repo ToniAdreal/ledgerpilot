@@ -1,12 +1,15 @@
 /**
  * Process-wide agent runtime for the API routes: one PayPal client and
  * one ledger store per server process (globalThis so Next.js dev HMR
- * does not reset state between route invocations).
+ * does not reset state between route invocations). The store is
+ * in-memory by default, or file-backed when LEDGERPILOT_STORE_FILE is
+ * set (see store.ts) — a hosted instance can then keep its plans,
+ * audit log, and webhook idempotency across restarts.
  */
 
 import { getPayPalClient, type PayPalClient } from "../paypal";
 import { getDefaultLlmAdapter, type LlmBriefExtractor } from "./llm";
-import { LedgerStore } from "./store";
+import { ledgerStoreFromEnv, LedgerStore } from "./store";
 
 interface AgentRuntime {
   client: PayPalClient;
@@ -19,7 +22,7 @@ const g = globalThis as unknown as { __ledgerpilotRuntime?: AgentRuntime };
 
 export function getAgentRuntime(): AgentRuntime {
   if (!g.__ledgerpilotRuntime) {
-    g.__ledgerpilotRuntime = { client: getPayPalClient(), store: new LedgerStore(), llm: getDefaultLlmAdapter() };
+    g.__ledgerpilotRuntime = { client: getPayPalClient(), store: ledgerStoreFromEnv(), llm: getDefaultLlmAdapter() };
   }
   return g.__ledgerpilotRuntime;
 }

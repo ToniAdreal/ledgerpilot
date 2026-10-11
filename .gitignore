@@ -5,3 +5,6 @@ out/
 .env.local
 *.tsbuildinfo
 coverage/
+# Optional ledger-store snapshots (LEDGERPILOT_STORE_FILE) are local state.
+*.ledger.json
+*.ledger.json.tmp

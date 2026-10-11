@@ -164,6 +164,18 @@ curl -X POST localhost:3000/api/agent/execute -H 'content-type: application/json
   instances webhooks cannot reach: it drains undelivered events in order and
   sweeps resource state with stable synthetic event ids, so repeat syncs are
   no-ops. It never calls a mutating PayPal endpoint.
+- **Optional ledger persistence.** The ledger store (plans, the append-only
+  audit log, webhook event-id idempotency) is in-memory by default. Set
+  `LEDGERPILOT_STORE_FILE` to a JSON file path and every mutation is written
+  through to a versioned snapshot (temp file + atomic rename), so a hosted
+  single-process instance keeps its plans, audit trail, and idempotency
+  across restarts — activity ids continue the sequence and never repeat.
+  A corrupt or unsupported snapshot fails loudly at startup instead of
+  silently discarding the audit log. This is a zero-dependency snapshot
+  store, not a multi-writer database (one server process per file);
+  PayPal resources are not stored in it — in sandbox mode they live at
+  PayPal and are re-fetched, and in mock mode the adapter's resources
+  remain process-local.
 - **Operations console (AG Grid).** Four first-class grids — **Invoices**,
   **Orders / Checkout**, **Payouts**, and **Agent Activity & Webhook Audit** —
   plus two read-only surfaces: **Disputes** (buyer, reason, amount, lifecycle
@@ -219,7 +231,7 @@ curl -X POST localhost:3000/api/agent/execute -H 'content-type: application/json
 ```bash
 npm install
 npm run dev        # http://localhost:3000
-npm test           # full test suite (234 tests)
+npm test           # full test suite (241 tests)
 npm run typecheck  # tsc --noEmit
 npm run build      # production build
 ```
@@ -251,7 +263,8 @@ the orders this process created.
 
 See `.env.example`. `PAYPAL_MODE=mock|sandbox`; sandbox credentials and the
 optional LLM key are only read from your own environment — none are
-committed.
+committed. `LEDGERPILOT_STORE_FILE` (optional) turns on ledger persistence
+to a JSON snapshot file; unset, the ledger is in-memory.
 
 ## Architecture
 
@@ -279,8 +292,11 @@ mock mode a config swap rather than a rewrite.
   deterministic extraction→plan conversion, and `parseBriefWithFallback`
   (deterministic-first; LLM only on a parser miss; failures rethrow the
   parser's error).
-- `src/lib/agent/store.ts` — in-memory ledger: plans, the append-only
-  activity/audit log, and webhook event-id idempotency.
+- `src/lib/agent/store.ts` — the ledger: plans, the append-only
+  activity/audit log, and webhook event-id idempotency. In-memory by
+  default; with `LEDGERPILOT_STORE_FILE` set it is a file-backed
+  snapshot store (versioned JSON, atomic rename, loud failure on a
+  corrupt snapshot), wired into the runtime by `ledgerStoreFromEnv`.
 - `src/lib/agent/executor.ts` — the only path from an approved plan to
   PayPal calls; trigger-gated steps are deferred and resumed by
   `resumeTriggeredSteps` when the matching event arrives.
@@ -370,7 +386,7 @@ signatures mirror the REST resources one-to-one.
 ## Testing
 
 ```bash
-npm test           # vitest — 234 tests, all green
+npm test           # vitest — 241 tests, all green
 npm run typecheck  # TypeScript strict, clean
 npm run build      # Next.js production build
 ```
@@ -424,7 +440,13 @@ the gate), and the invoice detail projection
 (timeline correlation rules for executor / webhook / sync / seed
 records, the rejected-signature entry, partial-payment state without
 an invented PAID event, seeded and adapter-direct invoices, and
-trigger-bound related plans) — fake credentials only, no network.
+trigger-bound related plans), and the optional ledger persistence
+(in-memory default + blank-env handling, a full executed plan restored
+after a simulated restart with its trigger binding, activity sequence,
+and webhook idempotency intact, bare status updates persisted, the
+versioned snapshot shape with no temp file left behind, and loud
+refusal — without overwriting — of corrupt or unsupported snapshots)
+— fake credentials only, no network.
 
 ## Demo
 
