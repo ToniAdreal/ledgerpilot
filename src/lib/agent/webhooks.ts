@@ -52,12 +52,20 @@ export async function handleWebhookEvent(input: HandleWebhookInput): Promise<Web
   const { store, client, event } = input;
   const headers = normalizeHeaders(input.headers);
 
+  // The resource the event *claims* to concern. Recorded on every
+  // outcome — including rejections — so per-resource audit views (the
+  // invoice detail timeline) can show that an unverified event naming
+  // this resource was refused. The summaries keep the outcome
+  // unmistakable; the id alone never implies trust.
+  const claimedResourceId = typeof event.resource?.id === "string" ? event.resource.id : undefined;
+  const resourceDetail = claimedResourceId ? { resourceId: claimedResourceId } : {};
+
   const verified = await client.verifyWebhookSignature(headers, event);
   if (!verified) {
     store.record({
       kind: "webhook",
       summary: `Webhook ${event.id} (${event.event_type}) REJECTED — signature verification failed`,
-      detail: { eventId: event.id, eventType: event.event_type, verified: false },
+      detail: { eventId: event.id, eventType: event.event_type, verified: false, ...resourceDetail },
     });
     return { outcome: "rejected_signature", eventId: event.id, eventType: event.event_type, resumed: [] };
   }
@@ -66,7 +74,7 @@ export async function handleWebhookEvent(input: HandleWebhookInput): Promise<Web
     store.record({
       kind: "webhook",
       summary: `Webhook ${event.id} (${event.event_type}) duplicate delivery — already processed, ignored`,
-      detail: { eventId: event.id, eventType: event.event_type, duplicate: true },
+      detail: { eventId: event.id, eventType: event.event_type, duplicate: true, ...resourceDetail },
     });
     return { outcome: "duplicate", eventId: event.id, eventType: event.event_type, resumed: [] };
   }

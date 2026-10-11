@@ -68,7 +68,10 @@ export async function syncFromPayPal(store: LedgerStore, client: PayPalClient): 
     store.record({
       kind: "webhook",
       summary: `Sync reconciler processed ${eventType} (${eventId}): ${summary}`,
-      detail: { eventId, eventType, source },
+      // resourceId is recorded when known so per-resource audit views
+      // (the invoice detail timeline) can correlate sync-path events
+      // exactly like webhook-delivered ones.
+      detail: { eventId, eventType, source, ...(resourceId ? { resourceId } : {}) },
     });
     resumed.push(...(await resumeTriggeredSteps(store, client, eventType as WebhookEventType, resourceId)));
   };

@@ -67,6 +67,12 @@ function StatusPill(params: ICellRendererParams) {
   return <span className={`pill pill-${value.toLowerCase().replace(/[^a-z]+/g, "-")}`}>{value}</span>;
 }
 
+/** Invoice number as a link to the invoice detail page (/invoices/[id]). */
+function InvoiceLink(params: ICellRendererParams<InvoiceRow>) {
+  if (!params.data) return <>{String(params.value ?? "")}</>;
+  return <a href={`/invoices/${params.data.id}`}>{String(params.value ?? "")}</a>;
+}
+
 interface CaptureCellContext {
   capturingOrderId: string | null;
   onCaptureOrder: (orderId: string) => void;
@@ -327,7 +333,7 @@ export default function ConsoleClient() {
 
   const invoiceColumns = useMemo<ColDef<InvoiceRow>[]>(
     () => [
-      { field: "invoiceNumber", headerName: "Invoice", width: 130, filter: "agTextColumnFilter" },
+      { field: "invoiceNumber", headerName: "Invoice", width: 130, filter: "agTextColumnFilter", cellRenderer: InvoiceLink },
       { field: "recipientName", headerName: "Recipient", width: 150, filter: "agTextColumnFilter" },
       { field: "recipientEmail", headerName: "Email", width: 200, filter: "agTextColumnFilter" },
       { field: "status", headerName: "Status", width: 150, cellRenderer: StatusPill, filter: "agTextColumnFilter" },

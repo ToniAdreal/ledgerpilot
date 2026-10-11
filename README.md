@@ -147,7 +147,13 @@ curl -X POST localhost:3000/api/agent/execute -H 'content-type: application/json
   stage, and the seller-response deadline, overdue responses highlighted;
   seeded demo rows are always flagged "Sample") and **Reconciliation —
   Transaction Search** (the signed money ledger: invoice payments in,
-  payout batches out). All grids have sorting, column + floating filters,
+  payout batches out). Clicking an invoice number opens its **detail
+  page** (`/invoices/[id]`): billed/collected/still-due amounts, line
+  items, the plans related to it, and a chronological **status timeline**
+  projected from the audit log — every agent call, verified webhook
+  delivery (with its event id), rejected-signature attempt, and
+  sync-reconciler processing that concerned this invoice, and nothing
+  invented for invoices that predate the trail. All grids have sorting, column + floating filters,
   pagination, status pills, and a per-grid **Export CSV** button (dated
   file name, disabled while loading or when the grid is empty). When a
   refresh shows a row's state flipped — the invoice that just turned
@@ -183,7 +189,7 @@ curl -X POST localhost:3000/api/agent/execute -H 'content-type: application/json
 ```bash
 npm install
 npm run dev        # http://localhost:3000
-npm test           # full test suite (188 tests)
+npm test           # full test suite (197 tests)
 npm run typecheck  # tsc --noEmit
 npm run build      # production build
 ```
@@ -276,9 +282,11 @@ mock mode a config swap rather than a rewrite.
   `POST /execute`), `src/app/api/paypal/` (`POST /invoices|orders|payouts` —
   validated wrappers that draft plans, never execute; `POST /webhooks` — 401 on bad
   signature, 200 on processed/duplicate; `GET /sync`; `POST /orders/capture`),
-  `src/app/api/console/` (`GET /invoices|orders|payouts|activity|disputes|transactions|summary`),
+  `src/app/api/console/` (`GET /invoices|orders|payouts|activity|disputes|transactions|summary`,
+  plus `GET /invoices/[id]` for the detail projection),
   `src/app/api/judge/` (`GET /`, `POST /seed`, `POST /pay`).
-- UI — `src/app/` (operations console at `/`, Judge Mode at `/judge`).
+- UI — `src/app/` (operations console at `/`, Judge Mode at `/judge`,
+  invoice detail at `/invoices/[id]`).
 
 ## PayPal APIs used
 
@@ -319,7 +327,7 @@ signatures mirror the REST resources one-to-one.
 ## Testing
 
 ```bash
-npm test           # vitest — 188 tests, all green
+npm test           # vitest — 197 tests, all green
 npm run typecheck  # TypeScript strict, clean
 npm run build      # Next.js production build
 ```
@@ -355,7 +363,11 @@ LLM-sourced plan), and the resource plan drafts behind
 `POST /api/paypal/invoices|orders|payouts` (parser-identical payloads,
 the no-execution-without-approval invariant over HTTP-shaped inputs,
 a payout gated on a named invoice firing only for that invoice, and
-the validation rejection matrix) — fake credentials only, no network.
+the validation rejection matrix), and the invoice detail projection
+(timeline correlation rules for executor / webhook / sync / seed
+records, the rejected-signature entry, partial-payment state without
+an invented PAID event, seeded and adapter-direct invoices, and
+trigger-bound related plans) — fake credentials only, no network.
 
 ## Demo
 
