@@ -321,7 +321,7 @@ are not blocked, the suite also runs on them).
 ```bash
 npm install
 npm run dev        # http://localhost:3000
-npm test           # full test suite (401 tests)
+npm test           # full test suite (408 tests)
 npm run typecheck  # tsc --noEmit
 npm run build      # production build
 ```
@@ -513,7 +513,7 @@ signatures mirror the REST resources one-to-one.
 ## Testing
 
 ```bash
-npm test           # vitest — 401 tests, all green
+npm test           # vitest — 408 tests, all green
 npm run typecheck  # TypeScript strict, clean
 npm run build      # Next.js production build
 ```
@@ -682,7 +682,12 @@ push / pull-request / weekly-schedule triggers on main+master, the
 javascript-typescript matrix with `build-mode: none` so scanning
 never runs project scripts, init before analyze in the pinned
 official actions, permissions limited to contents read +
-security-events write, and no secrets anywhere)
+security-events write, and no secrets anywhere), and the package
+license metadata (the root `LICENSE` file's MIT heading and
+copyright, the `package.json` SPDX `license: "MIT"` field, and the
+`package-lock.json` root entry agreeing — a metadata change that
+does not re-sync the lockfile fails here — with the README License
+section linking the file and the package staying `private: true`)
 — fake credentials only, no network.
 
 ### Smoke check (a running instance, end to end)
@@ -751,4 +756,8 @@ so all changes are listed under Unreleased until then.
 
 ## License
 
-MIT — see [LICENSE](./LICENSE).
+MIT — see [LICENSE](./LICENSE). The same license is declared in
+the `package.json` metadata as the SPDX identifier `MIT` (mirrored
+in `package-lock.json`), so package tooling reads the same license
+as the repository file; the package itself stays `private: true`
+— LedgerPilot is an app, not a published library.

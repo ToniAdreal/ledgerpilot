@@ -87,6 +87,12 @@ build record behind these summaries.
   Dependabot proposals, a CI workflow running typecheck → test →
   build with no secrets, and the Node 22 runtime pin (`.nvmrc`,
   `package.json` `engines`).
+- **Package license metadata.** The SPDX identifier `MIT` is also
+  declared in the `package.json` metadata (mirrored in the
+  `package-lock.json` root entry), so package tooling reads the
+  same license as the root `LICENSE` file it previously had to
+  discover on its own; the three declarations are kept in
+  agreement by tests.
 - **Branded app shell.** App Router special files in the project's
   own voice instead of the framework defaults: a branded 404 page,
   error and global-error boundaries that offer a retry and never
