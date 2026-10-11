@@ -116,7 +116,12 @@ curl -X POST localhost:3000/api/agent/execute -H 'content-type: application/json
   after approval — never fanned out into per-line calls — and the
   console's Payouts grid flattens it to one row per recipient under the
   single batch id. A batch may be gated on one invoice's payment like
-  any payout draft, and then releases whole, exactly once.
+  any payout draft, and then releases whole, exactly once. The console
+  ships the builder as a form (above the Payouts grid): add/remove
+  lines, per-line inline validation mirroring the server's rules, a
+  live per-currency totals preview, an optional batch note and
+  invoice gate, and the same plan review → approve → execute gate —
+  the form only ever drafts via the API above.
 - **Verified, idempotent webhooks.** `POST /api/paypal/webhooks` verifies the
   event signature through the PayPal adapter before trusting the payload
   (unverified events are rejected, audited, and never marked processed),
@@ -214,7 +219,7 @@ curl -X POST localhost:3000/api/agent/execute -H 'content-type: application/json
 ```bash
 npm install
 npm run dev        # http://localhost:3000
-npm test           # full test suite (224 tests)
+npm test           # full test suite (234 tests)
 npm run typecheck  # tsc --noEmit
 npm run build      # production build
 ```
@@ -295,6 +300,10 @@ mock mode a config swap rather than a rewrite.
   example briefs, the plan-review model (step labels, exact PayPal call,
   trigger badges), and action-availability rules that mirror the server-side
   approval gate.
+- `src/lib/batch/` — payout batch builder view-model: form-line
+  editing guards (1–25 lines), the per-line validation mirror of the
+  server rules, request-body building, and the live per-currency
+  totals preview for the console's batch form.
 - `src/lib/ask/` — Ask-the-grid parser + filter-model validator.
 - `src/lib/checkout/` — the Orders checkout leg: the buyer-view
   resolution (`checkout-link.ts`: approval-link extraction —
@@ -361,7 +370,7 @@ signatures mirror the REST resources one-to-one.
 ## Testing
 
 ```bash
-npm test           # vitest — 224 tests, all green
+npm test           # vitest — 234 tests, all green
 npm run typecheck  # TypeScript strict, clean
 npm run build      # Next.js production build
 ```
@@ -406,7 +415,12 @@ batch drafts with line-named errors and the ambiguous-shape rejection,
 drafting moves no money, an approved batch executing as exactly one
 PayPal batch with per-item console rows and per-currency totals, a
 batch gated on one invoice releasing whole and only for that invoice,
-and an explicitly empty items list failing the plan), and the invoice detail projection
+and an explicitly empty items list failing the plan), the batch
+builder form view-model (line editing guards, the per-line validation
+mirror naming line + field, request-body normalisation, per-currency
+totals that skip invalid lines, and a form-built batch — example
+included — accepted by the real draft and paid as one batch through
+the gate), and the invoice detail projection
 (timeline correlation rules for executor / webhook / sync / seed
 records, the rejected-signature entry, partial-payment state without
 an invented PAID event, seeded and adapter-direct invoices, and

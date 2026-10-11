@@ -58,6 +58,7 @@ import { ASK_TARGETS, type AskResult, type AskTarget } from "../lib/ask";
 import type { DisputeEvidenceSummary } from "../lib/disputes";
 import CommandBar from "./command-bar";
 import AskBar from "./ask-bar";
+import BatchBuilder from "./batch-builder";
 
 ModuleRegistry.registerModules([AllCommunityModule]);
 
@@ -731,6 +732,8 @@ export default function ConsoleClient() {
           />
         </div>
       </div>
+
+      <BatchBuilder onSettled={() => void refresh()} />
 
       <div className="grid-section">
         {sectionHead("payouts")}
