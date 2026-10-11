@@ -1,5 +1,5 @@
 import type { PayPalClient } from "./client";
-import { MockPayPalClient } from "./mock";
+import { MOCK_PAYPAL_STORE_FILE_ENV, MockPayPalClient } from "./mock";
 import { SandboxPayPalClient } from "./sandbox";
 
 export * from "./client";
@@ -22,5 +22,8 @@ export function getPayPalClient(env: Record<string, string | undefined> = proces
       webhookId: env.PAYPAL_WEBHOOK_ID,
     });
   }
-  return new MockPayPalClient();
+  // Mock mode: in-memory by default; PAYPAL_MOCK_STORE_FILE (non-blank)
+  // turns on the mock adapter's opt-in snapshot persistence.
+  const mockFilePath = env[MOCK_PAYPAL_STORE_FILE_ENV]?.trim();
+  return new MockPayPalClient(mockFilePath ? { filePath: mockFilePath } : {});
 }

@@ -8,3 +8,6 @@ coverage/
 # Optional ledger-store snapshots (LEDGERPILOT_STORE_FILE) are local state.
 *.ledger.json
 *.ledger.json.tmp
+# Optional mock-adapter snapshots (PAYPAL_MOCK_STORE_FILE) are local state.
+*.mock-paypal.json
+*.mock-paypal.json.tmp

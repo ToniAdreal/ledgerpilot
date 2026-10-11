@@ -174,8 +174,15 @@ curl -X POST localhost:3000/api/agent/execute -H 'content-type: application/json
   silently discarding the audit log. This is a zero-dependency snapshot
   store, not a multi-writer database (one server process per file);
   PayPal resources are not stored in it — in sandbox mode they live at
-  PayPal and are re-fetched, and in mock mode the adapter's resources
-  remain process-local.
+  PayPal and are re-fetched. In mock mode the adapter now has the
+  matching opt-in: set `PAYPAL_MOCK_STORE_FILE` to a JSON file path and
+  the mock persists its invoices, orders, payout batches, transactions,
+  disputes, emitted events, sent reminders, and the id sequence through
+  the same versioned-snapshot discipline (atomic rename, loud refusal
+  of a corrupt snapshot instead of silently reseeding). With both
+  files set, a mock-mode restart loses nothing — a plan left in
+  `awaiting_trigger` still finds its invoice, and the gated payout
+  resumes exactly once when the payment lands.
 - **Operations console (AG Grid).** Four first-class grids — **Invoices**,
   **Orders / Checkout**, **Payouts**, and **Agent Activity & Webhook Audit** —
   plus two read-only surfaces: **Disputes** (buyer, reason, amount, lifecycle
@@ -231,7 +238,7 @@ curl -X POST localhost:3000/api/agent/execute -H 'content-type: application/json
 ```bash
 npm install
 npm run dev        # http://localhost:3000
-npm test           # full test suite (241 tests)
+npm test           # full test suite (249 tests)
 npm run typecheck  # tsc --noEmit
 npm run build      # production build
 ```
@@ -239,7 +246,9 @@ npm run build      # production build
 Mock mode (`PAYPAL_MODE=mock`) implements the full PayPal surface used by
 LedgerPilot — Invoicing v2, Orders v2, Payouts, webhook signature
 verification, Disputes and Transaction Search (read-only) — against in-memory
-fixtures, so the whole loop runs with zero setup.
+fixtures, so the whole loop runs with zero setup. Its state is in-memory by
+default; `PAYPAL_MOCK_STORE_FILE` (see Environment) makes it survive
+restarts.
 
 ### Sandbox mode (optional — your own sandbox app)
 
@@ -265,6 +274,8 @@ See `.env.example`. `PAYPAL_MODE=mock|sandbox`; sandbox credentials and the
 optional LLM key are only read from your own environment — none are
 committed. `LEDGERPILOT_STORE_FILE` (optional) turns on ledger persistence
 to a JSON snapshot file; unset, the ledger is in-memory.
+`PAYPAL_MOCK_STORE_FILE` (optional, mock mode only) does the same for the
+mock adapter's resources; unset, they are in-memory too.
 
 ## Architecture
 
@@ -279,6 +290,9 @@ mock mode a config swap rather than a rewrite.
   implementation with fictional seed data, invoice lifecycle incl. partial
   payments, emitted webhook events, and a deterministic mock
   webhook-signature scheme that mirrors the real verify flow's shape.
+  Opt-in file persistence (`PAYPAL_MOCK_STORE_FILE`, wired by the client
+  factory) snapshots every resource + the id sequence with the same
+  versioned/atomic/loud-on-corrupt discipline as the ledger store.
 - `src/lib/paypal/sandbox.ts` — sandbox adapter: live REST wiring behind
   the same contract (OAuth + token cache, all resource mappings, PayPal
   error translation), with an injectable fetch/clock so it is fully unit
@@ -386,7 +400,7 @@ signatures mirror the REST resources one-to-one.
 ## Testing
 
 ```bash
-npm test           # vitest — 241 tests, all green
+npm test           # vitest — 249 tests, all green
 npm run typecheck  # TypeScript strict, clean
 npm run build      # Next.js production build
 ```
@@ -445,7 +459,14 @@ trigger-bound related plans), and the optional ledger persistence
 after a simulated restart with its trigger binding, activity sequence,
 and webhook idempotency intact, bare status updates persisted, the
 versioned snapshot shape with no temp file left behind, and loud
-refusal — without overwriting — of corrupt or unsupported snapshots)
+refusal — without overwriting — of corrupt or unsupported snapshots),
+and the optional mock-adapter persistence (in-memory default + blank-env
+handling, a full resource round-trip — invoices/orders/payouts/
+transactions/events/reminders/disputes — restored after a simulated
+restart with no sample-dispute duplication, id-sequence continuation,
+the versioned snapshot shape, loud refusal of corrupt or unsupported
+snapshots, and the whole invoice→paid→payout loop closing across a
+restart when both stores are file-backed)
 — fake credentials only, no network.
 
 ## Demo

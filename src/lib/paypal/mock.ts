@@ -1,4 +1,6 @@
 import { createHash } from "node:crypto";
+import { mkdirSync, readFileSync, renameSync, writeFileSync } from "node:fs";
+import { dirname } from "node:path";
 import type {
   CreateInvoiceInput,
   CreateOrderInput,
@@ -27,6 +29,19 @@ import { PayPalError, type PayPalClient } from "./client";
  * `${transmissionId}|${event.id}|${MOCK_WEBHOOK_SECRET}`. This mirrors the
  * shape of PayPal's verify-webhook-signature flow (headers + raw event in,
  * boolean out) without pretending to be real PayPal cryptography.
+ *
+ * Persistence (opt-in): by default the mock is purely in-memory. When a
+ * file path is supplied (constructor option, or the
+ * `PAYPAL_MOCK_STORE_FILE` env var through the client factory), every
+ * mutation is written through to that file as a versioned JSON snapshot
+ * (sibling temp file + atomic rename), so a restarted instance restores
+ * its invoices, orders, payout batches, transactions, disputes,
+ * emitted events, sent reminders, and the id sequence. This is the
+ * mock-mode companion to the ledger store's `LEDGERPILOT_STORE_FILE`:
+ * with both set, a mock-mode restart loses nothing. It is NOT a
+ * multi-writer store — one server process per file. A corrupt or
+ * unsupported snapshot fails loudly (`MockPayPalPersistenceError`)
+ * instead of silently reseeding demo state over real mock history.
  */
 export const MOCK_WEBHOOK_SECRET = "ledgerpilot-mock-webhook-secret";
 export const MOCK_SELLER = { name: "LedgerPilot Demo Seller", email_address: "seller@ledgerpilot.example" };
@@ -50,9 +65,39 @@ function nextId(prefix: string): string {
   return `${prefix}-${String(seq).padStart(6, "0")}`;
 }
 
+export const MOCK_PAYPAL_SNAPSHOT_VERSION = 1;
+
+/** Env var that turns on file persistence for the mock adapter. */
+export const MOCK_PAYPAL_STORE_FILE_ENV = "PAYPAL_MOCK_STORE_FILE";
+
+export class MockPayPalPersistenceError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "MockPayPalPersistenceError";
+  }
+}
+
 export interface MockSeedOptions {
   /** Include the clearly-labeled sample dispute row (Judge Mode). Default true. */
   sampleDispute?: boolean;
+  /**
+   * Path of the JSON snapshot file. When set, the client loads any
+   * existing snapshot from it (the seed options then do not apply)
+   * and writes every mutation through. When unset, purely in-memory.
+   */
+  filePath?: string;
+}
+
+interface MockSnapshot {
+  version: number;
+  seq: number;
+  invoices: Invoice[];
+  orders: Order[];
+  payouts: PayoutBatch[];
+  transactions: Transaction[];
+  disputes: Dispute[];
+  emittedEvents: WebhookEvent[];
+  sentReminders: SentInvoiceReminder[];
 }
 
 export class MockPayPalClient implements PayPalClient {
@@ -66,8 +111,26 @@ export class MockPayPalClient implements PayPalClient {
   readonly emittedEvents: WebhookEvent[] = [];
   /** Reminders actually sent through this adapter, in order. */
   readonly sentReminders: SentInvoiceReminder[] = [];
+  private readonly filePath?: string;
 
   constructor(seed: MockSeedOptions = {}) {
+    this.filePath = seed.filePath;
+    const snap = this.filePath ? this.load() : null;
+    if (snap) {
+      // Restored from a snapshot: seed data (incl. the sample dispute,
+      // already inside the snapshot) must not be applied a second time.
+      for (const invoice of snap.invoices) this.invoices.set(invoice.id, invoice);
+      for (const order of snap.orders) this.orders.set(order.id, order);
+      for (const batch of snap.payouts) this.payouts.set(batch.batch_header.payout_batch_id, batch);
+      this.transactions = snap.transactions;
+      this.disputes = snap.disputes;
+      this.emittedEvents.push(...snap.emittedEvents);
+      this.sentReminders.push(...snap.sentReminders);
+      // Ids must never repeat after a restart: continue the sequence
+      // past both the snapshot's counter and this process's counter.
+      seq = Math.max(seq, snap.seq);
+      return;
+    }
     this.disputes =
       seed.sampleDispute === false
         ? []
@@ -90,6 +153,72 @@ export class MockPayPalClient implements PayPalClient {
               sample: true,
             },
           ];
+  }
+
+  /** The snapshot file this client persists to, when persistence is on. */
+  get persistenceFile(): string | undefined {
+    return this.filePath;
+  }
+
+  private load(): MockSnapshot | null {
+    const path = this.filePath!;
+    let raw: string;
+    try {
+      raw = readFileSync(path, "utf8");
+    } catch (err) {
+      // A missing file is the normal first run — anything else must not
+      // be mistaken for "no mock history yet".
+      if ((err as NodeJS.ErrnoException).code === "ENOENT") return null;
+      throw new MockPayPalPersistenceError(
+        `Cannot read mock PayPal store file ${path}: ${err instanceof Error ? err.message : String(err)}`,
+      );
+    }
+    let parsed: unknown;
+    try {
+      parsed = JSON.parse(raw);
+    } catch {
+      throw new MockPayPalPersistenceError(
+        `Mock PayPal store file ${path} is not valid JSON — refusing to reseed over corrupt mock history. Fix or remove the file to start fresh.`,
+      );
+    }
+    const snap = parsed as Partial<MockSnapshot> | null;
+    if (
+      !snap ||
+      typeof snap !== "object" ||
+      snap.version !== MOCK_PAYPAL_SNAPSHOT_VERSION ||
+      typeof snap.seq !== "number" ||
+      !Array.isArray(snap.invoices) ||
+      !Array.isArray(snap.orders) ||
+      !Array.isArray(snap.payouts) ||
+      !Array.isArray(snap.transactions) ||
+      !Array.isArray(snap.disputes) ||
+      !Array.isArray(snap.emittedEvents) ||
+      !Array.isArray(snap.sentReminders)
+    ) {
+      throw new MockPayPalPersistenceError(
+        `Mock PayPal store file ${path} has an unsupported or malformed snapshot (expected version ${MOCK_PAYPAL_SNAPSHOT_VERSION}) — refusing to discard it silently.`,
+      );
+    }
+    return snap as MockSnapshot;
+  }
+
+  private persist(): void {
+    if (!this.filePath) return;
+    const snapshot: MockSnapshot = {
+      version: MOCK_PAYPAL_SNAPSHOT_VERSION,
+      seq,
+      invoices: [...this.invoices.values()].map((i) => structuredClone(i)),
+      orders: [...this.orders.values()].map((o) => structuredClone(o)),
+      payouts: [...this.payouts.values()].map((p) => structuredClone(p)),
+      transactions: structuredClone(this.transactions),
+      disputes: structuredClone(this.disputes),
+      emittedEvents: structuredClone(this.emittedEvents),
+      sentReminders: structuredClone(this.sentReminders),
+    };
+    mkdirSync(dirname(this.filePath), { recursive: true });
+    const tmp = `${this.filePath}.tmp`;
+    writeFileSync(tmp, `${JSON.stringify(snapshot, null, 2)}\n`, "utf8");
+    renameSync(tmp, this.filePath);
   }
 
   private emit(event_type: string, summary: string, resource: Record<string, unknown>): void {
@@ -129,6 +258,7 @@ export class MockPayPalClient implements PayPalClient {
       links: [{ href: `mock://paypal/v2/invoicing/invoices/${id}`, rel: "self", method: "GET" }],
     };
     this.invoices.set(id, invoice);
+    this.persist();
     return structuredClone(invoice);
   }
 
@@ -138,6 +268,7 @@ export class MockPayPalClient implements PayPalClient {
       throw new PayPalError(`Invoice ${invoiceId} cannot be sent from status ${invoice.status}`, 422, "UNPROCESSABLE_ENTITY");
     }
     invoice.status = "SENT";
+    this.persist();
     return structuredClone(invoice);
   }
 
@@ -181,6 +312,7 @@ export class MockPayPalClient implements PayPalClient {
         transaction_id: txnId,
       });
     }
+    this.persist();
     return structuredClone(invoice);
   }
 
@@ -206,6 +338,7 @@ export class MockPayPalClient implements PayPalClient {
       note: input.note,
       sentAt: new Date().toISOString(),
     });
+    this.persist();
     return structuredClone(invoice);
   }
 
@@ -232,6 +365,7 @@ export class MockPayPalClient implements PayPalClient {
       ],
     };
     this.orders.set(id, order);
+    this.persist();
     return structuredClone(order);
   }
 
@@ -258,6 +392,7 @@ export class MockPayPalClient implements PayPalClient {
       status: "COMPLETED",
       amount: unit.amount,
     });
+    this.persist();
     return structuredClone(order);
   }
 
@@ -314,6 +449,7 @@ export class MockPayPalClient implements PayPalClient {
         transaction_status: "SUCCESS",
       });
     }
+    this.persist();
     return structuredClone(batch);
   }
 

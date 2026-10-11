@@ -24,8 +24,9 @@
  * store file. A corrupt or unsupported snapshot fails loudly
  * (`LedgerStorePersistenceError`) instead of silently discarding the
  * audit log. PayPal resources are not stored here — in sandbox mode
- * they live at PayPal and are re-fetched; in mock mode the adapter's
- * resources remain process-local (documented limit).
+ * they live at PayPal and are re-fetched; in mock mode the adapter has
+ * its own opt-in snapshot (`PAYPAL_MOCK_STORE_FILE`, see mock.ts), and
+ * setting both files makes a mock-mode restart lose nothing.
  */
 
 import { mkdirSync, readFileSync, renameSync, writeFileSync } from "node:fs";
