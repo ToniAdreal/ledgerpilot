@@ -291,6 +291,15 @@ curl -X POST localhost:3000/api/agent/execute -H 'content-type: application/json
   visitors who ask for less motion. (The global-error fallback replaces
   the root layout itself, so it carries neither the skip link nor
   `globals.css` — the same documented limit as its styling.)
+- **Page metadata.** Every addressable page carries its own typed
+  `Metadata` export with a distinct title and description — the
+  Operations Console (this page), Judge Mode, invoice detail, and the
+  404 surface — so browser tabs, bookmarks, and link shares name the
+  surface a judge is actually on instead of the bare app name the
+  console previously inherited from the root layout. No page declares
+  a URL, canonical, or `metadataBase`: no public host exists before
+  the hosted deployment, and none is invented (the same rule the root
+  layout and `robots` follow).
 
 ## Run it locally
 
@@ -303,7 +312,7 @@ are not blocked, the suite also runs on them).
 ```bash
 npm install
 npm run dev        # http://localhost:3000
-npm test           # full test suite (364 tests)
+npm test           # full test suite (378 tests)
 npm run typecheck  # tsc --noEmit
 npm run build      # production build
 ```
@@ -492,7 +501,7 @@ signatures mirror the REST resources one-to-one.
 ## Testing
 
 ```bash
-npm test           # vitest — 364 tests, all green
+npm test           # vitest — 378 tests, all green
 npm run typecheck  # TypeScript strict, clean
 npm run build      # Next.js production build
 ```
@@ -638,7 +647,13 @@ exactly one `<main id="main-content" tabIndex={-1}>` skip target, the
 skip link hidden until focused, the global `:focus-visible` outline
 with no outline-removal rule anywhere in `globals.css`, and the
 `prefers-reduced-motion` collapse of animations / transitions /
-smooth scrolling)
+smooth scrolling), and the page metadata (every addressable page —
+console, Judge Mode, invoice detail, the 404 surface — carrying a
+typed `Metadata` export with a distinct `LedgerPilot — …` title and
+a substantive, distinct description, the console description naming
+its surfaces and the sandbox / mock-only rule and differing from the
+layout's generic description, and no URL / canonical / `metadataBase`
+/ credential / email declared in any page's metadata)
 — fake credentials only, no network.
 
 ## Demo

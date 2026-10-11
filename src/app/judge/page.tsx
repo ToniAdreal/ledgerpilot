@@ -1,6 +1,7 @@
+import type { Metadata } from "next";
 import JudgeClient from "./judge-client";
 
-export const metadata = {
+export const metadata: Metadata = {
   title: "LedgerPilot — Judge Mode",
   description: "One-click seeded demo of the LedgerPilot money-operator loop on PayPal (sandbox / mock).",
 };

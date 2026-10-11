@@ -107,6 +107,13 @@ build record behind these summaries.
   rule removes an outline without replacing it), and a
   `prefers-reduced-motion` query collapses animations, transitions,
   and smooth scrolling.
+- **Page metadata.** Every addressable page — the Operations
+  Console, Judge Mode, invoice detail, and the 404 surface — now
+  carries its own typed `Metadata` export with a distinct title and
+  description, so tabs and shares name the surface instead of the
+  bare app name the console previously inherited from the root
+  layout. No page declares a URL or canonical before a public host
+  exists.
 
 ### Security
 

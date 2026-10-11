@@ -1,6 +1,7 @@
+import type { Metadata } from "next";
 import InvoiceDetailClient from "./invoice-detail-client";
 
-export const metadata = {
+export const metadata: Metadata = {
   title: "LedgerPilot — Invoice detail",
   description: "One PayPal invoice: amounts, line items, and the webhook-fed audit timeline.",
 };

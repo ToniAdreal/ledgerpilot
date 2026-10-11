@@ -1,4 +1,6 @@
-export const metadata = {
+import type { Metadata } from "next";
+
+export const metadata: Metadata = {
   title: "LedgerPilot — Page not found",
   description: "That LedgerPilot page does not exist.",
 };

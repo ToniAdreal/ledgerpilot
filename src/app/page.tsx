@@ -1,4 +1,18 @@
+import type { Metadata } from "next";
 import ConsoleClient from "./console-client";
+
+// Page-specific metadata for the console — the app's primary surface
+// and the page a judge lands on and shares. Without this export the
+// console inherited the root layout's bare app name as its title; the
+// other pages (Judge Mode, invoice detail, the 404 surface) already
+// carry their own. No URL is declared: no public host exists before
+// the hosted deployment, and none is invented here (same rule as the
+// root layout's metadata).
+export const metadata: Metadata = {
+  title: "LedgerPilot — Operations Console",
+  description:
+    "The LedgerPilot operations console: approval-gated PayPal invoices, checkout orders, payouts, disputes, and the agent activity & webhook audit trail. Sandbox / mock only — no real money moves.",
+};
 
 export default function HomePage() {
   return (
