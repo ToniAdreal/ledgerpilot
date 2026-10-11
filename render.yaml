@@ -1,0 +1,60 @@
+# LedgerPilot — Render Blueprint for the hosted demo.
+#
+# CONCEPT.md §3.1/§3.4 put the judges' primary path on a hosted URL.
+# This descriptor is that path: one free-tier Node web service that
+# builds and starts with the exact commands the README documents, in
+# the default mock mode (zero credentials — Judge Mode works the
+# moment the service is up). Creating the service from this blueprint
+# is a hosting step for whoever deploys the demo; this file alone
+# deploys nothing.
+#
+# Secrets discipline: every credential-shaped variable below is
+# `sync: false`, which means Render prompts for the value at deploy
+# time and the value is NEVER stored in this repository. The optional
+# LLM key follows the same rule. Do not replace `sync: false` with a
+# literal value.
+#
+# Persistence note: the free plan's filesystem is ephemeral, so the
+# two optional snapshot-file variables are listed (sync: false) but
+# should be left unset on the free tier — a restart simply returns
+# the demo to its fresh state, and Judge Mode can be re-seeded (and
+# reset via POST /api/judge/reset) in seconds. Set them only on a
+# plan with a persistent disk mounted at the same paths.
+
+services:
+  - type: web
+    name: ledgerpilot
+    runtime: node
+    plan: free
+    buildCommand: npm ci && npm run build
+    # `next start` binds the port Render injects via $PORT.
+    startCommand: npm start
+    healthCheckPath: /api/health
+    envVars:
+      - key: NODE_VERSION
+        value: "22"
+      - key: NODE_ENV
+        value: production
+      # Default mode: the full loop with no PayPal account at all.
+      - key: PAYPAL_MODE
+        value: mock
+      # Sandbox mode only (PAYPAL_MODE=sandbox): values come from the
+      # deployer's own PayPal Developer app, entered at deploy time.
+      - key: PAYPAL_CLIENT_ID
+        sync: false
+      - key: PAYPAL_CLIENT_SECRET
+        sync: false
+      - key: PAYPAL_WEBHOOK_ID
+        sync: false
+      # Optional opt-in persistence (see the note above).
+      - key: LEDGERPILOT_STORE_FILE
+        sync: false
+      - key: PAYPAL_MOCK_STORE_FILE
+        sync: false
+      # Optional LLM adapter — off unless a key is provided.
+      - key: LLM_API_KEY
+        sync: false
+      - key: LLM_BASE_URL
+        sync: false
+      - key: LLM_MODEL
+        sync: false

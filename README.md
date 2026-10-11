@@ -256,7 +256,7 @@ curl -X POST localhost:3000/api/agent/execute -H 'content-type: application/json
 ```bash
 npm install
 npm run dev        # http://localhost:3000
-npm test           # full test suite (274 tests)
+npm test           # full test suite (281 tests)
 npm run typecheck  # tsc --noEmit
 npm run build      # production build
 ```
@@ -294,6 +294,24 @@ committed. `LEDGERPILOT_STORE_FILE` (optional) turns on ledger persistence
 to a JSON snapshot file; unset, the ledger is in-memory.
 `PAYPAL_MOCK_STORE_FILE` (optional, mock mode only) does the same for the
 mock adapter's resources; unset, they are in-memory too.
+
+### Hosted deployment
+
+`render.yaml` (repo root) is a Render Blueprint for the hosted demo:
+one free-tier Node web service that builds with `npm ci && npm run build`,
+starts with `npm start` (Next.js binds Render's `$PORT`), and is
+health-checked at `GET /api/health`. It deploys in the default mock
+mode, so Judge Mode works the moment the service is up — no PayPal
+account, no keys. Every credential-shaped variable is declared
+`sync: false`: Render prompts for the value at deploy time and no
+secret value is ever stored in this repository. On the free tier the
+filesystem is ephemeral, so leave the two snapshot-file variables
+unset (a restart returns the demo to its fresh state; re-seed — or
+reset via `POST /api/judge/reset` — in seconds). The blueprint's shape
+is pinned by the test suite, and the variables it lists match
+`.env.example` exactly. On Vercel no descriptor is needed: import the
+repo, keep the default Next.js settings, and set the same environment
+variables.
 
 ## Architecture
 
@@ -427,7 +445,7 @@ signatures mirror the REST resources one-to-one.
 ## Testing
 
 ```bash
-npm test           # vitest — 274 tests, all green
+npm test           # vitest — 281 tests, all green
 npm run typecheck  # TypeScript strict, clean
 npm run build      # Next.js production build
 ```
@@ -510,7 +528,13 @@ the sample dispute restored exactly once — and not restored for a
 `sampleDispute: false` client — a completed loop resetting to a clean
 slate and closing a second time under a new plan id, sandbox-mode and
 no-reset-adapter refusals that touch nothing, and emptied file-backed
-snapshots reopening fresh)
+snapshots reopening fresh), and the deployment descriptor
+(`render.yaml` — one free-tier Node service building and starting with
+the package's own scripts, the health check probing the real
+`/api/health` route, mock mode as the credential-free default, every
+credential variable `sync: false` with no value stored anywhere in the
+file, and the blueprint's variable list matching `.env.example` in
+both directions)
 — fake credentials only, no network.
 
 ## Demo
