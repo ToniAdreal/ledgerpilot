@@ -16,6 +16,12 @@ build record behind these summaries.
 
 ### Added
 
+- **Activity page.** The agent activity & webhook audit trail has
+  its own addressable page at `/activity` (the page CONCEPT.md §3.1
+  lists for the audit grid): the same read model and route as the
+  console's Activity grid, rendered full-width with the console's
+  state and CSV-export view-models. Read-only — actions stay in
+  the console.
 - **Invoice record-payment leg.** Any open invoice — not only the
   Judge Mode spine invoice — can be recorded as paid in-app: the
   console's Record payment action and

@@ -26,6 +26,11 @@ const PAGES: Array<{ name: string; parts: string[]; title: string }> = [
     title: "LedgerPilot — Invoice detail",
   },
   {
+    name: "activity audit",
+    parts: ["activity", "page.tsx"],
+    title: "LedgerPilot — Agent Activity & Webhook Audit",
+  },
+  {
     name: "not-found",
     parts: ["not-found.tsx"],
     title: "LedgerPilot — Page not found",

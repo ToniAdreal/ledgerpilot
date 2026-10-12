@@ -270,6 +270,17 @@ curl -X POST localhost:3000/api/agent/execute -H 'content-type: application/json
   grouping is an AG Grid Enterprise feature, so the Activity grid's
   Plan column + filter serves as the grouping substitute instead of
   loading a licensed module.
+- **Activity page (the §3.1 `/activity` surface).** The audit trail
+  also has its own addressable page at `/activity`: the same
+  ActivityRow read model from the same `GET /api/console/activity`
+  route the console grid consumes — no second data path — rendered
+  full-width with the console's own state and CSV-export view-models
+  (loading / error / empty / filtered-empty, dated export file), the
+  detail payload as an inspectable column, and 25 rows per page.
+  It is read-only by construction (its only fetch is that one GET):
+  actions stay in the console, so the page a judge deep-links to —
+  or the video lingers on — can never approve, execute, or move
+  money.
 - **Honest console states.** Loading, load-error, empty, and filtered-empty
   are four different states with four different messages — resolved by a
   pure, unit-tested view-model, never a bare grid: a fresh console explains
@@ -409,7 +420,7 @@ are not blocked, the suite also runs on them).
 ```bash
 npm install
 npm run dev        # http://localhost:3000
-npm test           # full test suite (496 tests)
+npm test           # full test suite (507 tests)
 npm run typecheck  # tsc --noEmit
 npm run build      # production build
 ```
@@ -586,7 +597,8 @@ mock mode a config swap rather than a rewrite.
   `GET /disputes/[id]/evidence` for the draft-only evidence summary),
   `src/app/api/judge/` (`GET /`, `POST /seed`, `POST /pay`, `POST /reset`).
 - UI — `src/app/` (operations console at `/`, Judge Mode at `/judge`,
-  invoice detail at `/invoices/[id]`).
+  invoice detail at `/invoices/[id]`, agent activity & webhook audit
+  at `/activity`).
 
 ## PayPal APIs used
 
@@ -627,7 +639,7 @@ signatures mirror the REST resources one-to-one.
 ## Testing
 
 ```bash
-npm test           # vitest — 496 tests, all green
+npm test           # vitest — 507 tests, all green
 npm run typecheck  # TypeScript strict, clean
 npm run build      # Next.js production build
 ```
@@ -686,7 +698,12 @@ flashes, new rows never do, append-only grids watch nothing), the
 console sync view-model (wire-shape validation with field-named
 rejections, resumed-plan / new-event / nothing-new outcome summaries,
 and a real reconciler run over the demo spine whose route-shaped
-result parses and names the resumed plan), the
+result parses and names the resumed plan), the standalone
+activity page (typed page metadata + skip target, the same
+activity route and read model as the console grid, the console
+state/export view-models reused, no mutating endpoint called,
+the home page linking to it, and its rows projected from a real
+executed loop), the
 command-bar gate matrix, Ask-the-grid parsing +
 validator negative cases, the full Judge Mode loop (seed idempotency,
 the historical-event guard, double-payment no-op), and the sandbox REST

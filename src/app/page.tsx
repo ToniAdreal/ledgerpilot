@@ -26,7 +26,9 @@ export default function HomePage() {
       </p>
       <ConsoleClient />
       <p style={{ color: "#6b7280", fontSize: 13 }}>
-        New here? <a href="/judge">Judge Mode</a> seeds the full demo scenario in one click —
+        The audit trail also has its own page at <a href="/activity">/activity</a> — the
+        full-width, deep-linkable view of the Activity grid below. New here?{" "}
+        <a href="/judge">Judge Mode</a> seeds the full demo scenario in one click —
         no PayPal account or API key needed. Sandbox / mock mode only — no real money moves.
         Agent pipeline: briefs via{" "}
         <code>POST /api/agent/plan</code>, approval via <code>/api/agent/approve</code>, execution
