@@ -281,6 +281,16 @@ curl -X POST localhost:3000/api/agent/execute -H 'content-type: application/json
   actions stay in the console, so the page a judge deep-links to —
   or the video lingers on — can never approve, execute, or move
   money.
+- **Invoices page (the §3.1 `/invoices` list surface).** The invoice
+  list also has its own addressable page at `/invoices`: the same
+  InvoiceRow read model from the same `GET /api/console/invoices`
+  route the console grid consumes — no second data path — rendered
+  full-width with the console's own state and CSV-export view-models,
+  25 rows per page, and each invoice number linking to its detail
+  page at `/invoices/[id]` (the status timeline fed by webhooks).
+  It is read-only as a list (its only fetch is that one GET):
+  creating invoices, recording payments, and approving plans stay
+  in the console.
 - **Honest console states.** Loading, load-error, empty, and filtered-empty
   are four different states with four different messages — resolved by a
   pure, unit-tested view-model, never a bare grid: a fresh console explains
@@ -420,7 +430,7 @@ are not blocked, the suite also runs on them).
 ```bash
 npm install
 npm run dev        # http://localhost:3000
-npm test           # full test suite (507 tests)
+npm test           # full test suite (519 tests)
 npm run typecheck  # tsc --noEmit
 npm run build      # production build
 ```
@@ -597,8 +607,8 @@ mock mode a config swap rather than a rewrite.
   `GET /disputes/[id]/evidence` for the draft-only evidence summary),
   `src/app/api/judge/` (`GET /`, `POST /seed`, `POST /pay`, `POST /reset`).
 - UI — `src/app/` (operations console at `/`, Judge Mode at `/judge`,
-  invoice detail at `/invoices/[id]`, agent activity & webhook audit
-  at `/activity`).
+  invoice list at `/invoices`, invoice detail at `/invoices/[id]`,
+  agent activity & webhook audit at `/activity`).
 
 ## PayPal APIs used
 
@@ -639,7 +649,7 @@ signatures mirror the REST resources one-to-one.
 ## Testing
 
 ```bash
-npm test           # vitest — 507 tests, all green
+npm test           # vitest — 519 tests, all green
 npm run typecheck  # TypeScript strict, clean
 npm run build      # Next.js production build
 ```
@@ -703,6 +713,11 @@ activity page (typed page metadata + skip target, the same
 activity route and read model as the console grid, the console
 state/export view-models reused, no mutating endpoint called,
 the home page linking to it, and its rows projected from a real
+executed loop), the standalone invoices page (typed page metadata
++ skip target, the same invoices route and read model as the
+console grid, the console state/export view-models reused, a
+detail link per invoice row, no mutating endpoint called, the
+home page linking to it, and its rows projected from a real
 executed loop), the
 command-bar gate matrix, Ask-the-grid parsing +
 validator negative cases, the full Judge Mode loop (seed idempotency,

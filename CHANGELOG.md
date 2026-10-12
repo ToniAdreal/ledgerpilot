@@ -16,6 +16,14 @@ build record behind these summaries.
 
 ### Added
 
+- **Invoices page.** The invoice list has its own addressable page
+  at `/invoices` (the list half of the page CONCEPT.md §3.1 lists
+  as "invoice list + detail"): the same read model and route as
+  the console's Invoices grid, rendered full-width with the
+  console's state and CSV-export view-models, each invoice number
+  linking to its detail timeline at `/invoices/[id]`. Read-only
+  as a list — creating, recording payments, and approving stay
+  in the console.
 - **Activity page.** The agent activity & webhook audit trail has
   its own addressable page at `/activity` (the page CONCEPT.md §3.1
   lists for the audit grid): the same read model and route as the
