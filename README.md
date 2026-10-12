@@ -309,6 +309,17 @@ curl -X POST localhost:3000/api/agent/execute -H 'content-type: application/json
   flattened in. It is read-only as a list (its only fetch is that
   one GET): drafting batches in the payout batch builder and
   releasing them through the approval gate stay in the console.
+- **Command page (the §3.1 `/command` surface).** The Agent Command
+  bar also has its own addressable page at `/command`: the console's
+  own CommandBar component rendered standalone — no second command
+  implementation — so a brief can be drafted, reviewed as a checklist
+  with the exact PayPal calls and trigger-gated steps marked, and
+  approved / rejected / executed from its own route. Unlike the
+  standalone list pages it is not read-only: plan review *is* the
+  approval gate, and it drives only the `/api/agent/*` routes — it
+  never calls PayPal directly, and the server-side gate remains the
+  enforcement point. Plans drafted here are the console's plans; the
+  pending-decision queue is shared.
 - **Honest console states.** Loading, load-error, empty, and filtered-empty
   are four different states with four different messages — resolved by a
   pure, unit-tested view-model, never a bare grid: a fresh console explains
@@ -448,7 +459,7 @@ are not blocked, the suite also runs on them).
 ```bash
 npm install
 npm run dev        # http://localhost:3000
-npm test           # full test suite (543 tests)
+npm test           # full test suite (554 tests)
 npm run typecheck  # tsc --noEmit
 npm run build      # production build
 ```
@@ -627,6 +638,7 @@ mock mode a config swap rather than a rewrite.
 - UI — `src/app/` (operations console at `/`, Judge Mode at `/judge`,
   invoice list at `/invoices`, invoice detail at `/invoices/[id]`,
   checkout orders at `/checkout`, payouts at `/payouts`,
+  agent command / plan review at `/command`,
   agent activity & webhook audit at `/activity`).
 
 ## PayPal APIs used
@@ -668,7 +680,7 @@ signatures mirror the REST resources one-to-one.
 ## Testing
 
 ```bash
-npm test           # vitest — 543 tests, all green
+npm test           # vitest — 554 tests, all green
 npm run typecheck  # TypeScript strict, clean
 npm run build      # Next.js production build
 ```
@@ -748,7 +760,12 @@ payouts route and read model as the console grid, the console
 state/export view-models reused, no batch-builder form or
 release action and no mutating endpoint called, the home page
 linking to it, and its rows projected from a real executed
-payout loop), the
+payout loop), the standalone command page (typed page metadata
++ skip target, the console's own CommandBar rendered standalone
+with no second implementation and no direct PayPal call, the
+home page linking to it, and the demo spine's review listing its
+exact calls with the payout trigger-gated, executing nothing
+until approved), the
 command-bar gate matrix, Ask-the-grid parsing +
 validator negative cases, the full Judge Mode loop (seed idempotency,
 the historical-event guard, double-payment no-op), and the sandbox REST

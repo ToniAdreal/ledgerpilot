@@ -32,7 +32,9 @@ export default function HomePage() {
         timeline. The checkout orders likewise have their own page at{" "}
         <a href="/checkout">/checkout</a>, with the buyer view for each payable order. The
         payouts likewise have their own page at <a href="/payouts">/payouts</a>, one row
-        per payout item with its batch context. New here?{" "}
+        per payout item with its batch context. The Agent Command bar likewise has its
+        own page at <a href="/command">/command</a>, the plan-review surface for drafting
+        a brief and approving the typed plan. New here?{" "}
         <a href="/judge">Judge Mode</a> seeds the full demo scenario in one click —
         no PayPal account or API key needed. Sandbox / mock mode only — no real money moves.
         Agent pipeline: briefs via{" "}

@@ -16,6 +16,14 @@ build record behind these summaries.
 
 ### Added
 
+- **Command page.** The Agent Command bar has its own addressable
+  page at `/command` (the plan-review surface CONCEPT.md §3.1
+  lists, "or console drawer"): the console's own CommandBar
+  rendered standalone — brief → typed plan review with the exact
+  PayPal calls and trigger-gated steps marked → approve / reject /
+  execute through the same server-side approval gate, driving
+  only the `/api/agent/*` routes and never calling PayPal
+  directly.
 - **Payouts page.** The payouts list has its own addressable page
   at `/payouts` (the list surface of the page CONCEPT.md §3.1
   lists as the payout batch builder): the same read model and
