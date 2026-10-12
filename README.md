@@ -140,6 +140,14 @@ curl -X POST localhost:3000/api/agent/execute -H 'content-type: application/json
   never silently downgraded to a draft), and with no reference the
   recipient's most-overdue open invoice wins. The adapter refuses
   non-open invoices (a reminder for a PAID invoice fails honestly).
+- **Sell form (the §3.1 “Sell something” flow).** The console ships a
+  structured sell form (above the Orders grid): description, amount,
+  currency, and an optional reference, with inline validation mirroring
+  the server's draft rules, a live preview, and an example sale. The form
+  only ever drafts via `POST /api/paypal/orders` — the order is created
+  through the same plan review → approve → execute gate as every other
+  surface, and its buyer checkout link then appears in the Orders grid's
+  Buyer view.
 - **Checkout capture leg (the sell loop closes).** A `create_order` step
   creates a `CREATED` order. The Orders grid's **Buyer view** column
   surfaces the order's PayPal checkout link — the `approve` (or
@@ -358,7 +366,7 @@ are not blocked, the suite also runs on them).
 ```bash
 npm install
 npm run dev        # http://localhost:3000
-npm test           # full test suite (463 tests)
+npm test           # full test suite (470 tests)
 npm run typecheck  # tsc --noEmit
 npm run build      # production build
 ```
@@ -492,9 +500,11 @@ mock mode a config swap rather than a rewrite.
   resolution (`checkout-link.ts`: approval-link extraction —
   `approve` before `payer-action`, mock links flagged — plus the
   payable / captured / voided / unavailable view states projected
-  into the Orders grid rows) and the capture leg (buyer-side checkout
+  into the Orders grid rows), the capture leg (buyer-side checkout
   completion for a created order: status guards, audit record, capture
-  event processed via the reconciler, idempotent re-capture).
+  event processed via the reconciler, idempotent re-capture), and the
+  sell-form view-model (`order-form.ts`: validation mirror of the
+  order draft rules, request-body building, live preview).
 - `src/lib/disputes/` — draft-only dispute-evidence summaries:
   deterministic assembly from the dispute record, Transaction Search,
   and invoices (conservative matching, evidence checklist + gaps,
@@ -562,7 +572,7 @@ signatures mirror the REST resources one-to-one.
 ## Testing
 
 ```bash
-npm test           # vitest — 463 tests, all green
+npm test           # vitest — 470 tests, all green
 npm run typecheck  # TypeScript strict, clean
 npm run build      # Next.js production build
 ```
@@ -580,6 +590,11 @@ a real mock create → capture loop),
 the checkout capture leg (an agent-created order captured to COMPLETED
 with the capture event processed once, re-capture no-op, unknown /
 VOIDED / adapter-refusal paths audit-logged),
+the sell form view-model (validation mirror naming the failing field,
+request-body normalisation, a preview that never guesses an invalid
+amount, and a form-built draft — example included — accepted by the
+real order draft, refused unapproved, then executed into a payable
+order that captures),
 invoice reminders (mock open-invoice rules, executor resolution by
 reference and by most-overdue open invoice, unmatched-reference and
 already-paid failures, the sandbox `/remind` request shape), the

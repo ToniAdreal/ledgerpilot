@@ -16,6 +16,11 @@ build record behind these summaries.
 
 ### Added
 
+- **Sell form.** The console's structured “Sell something” form
+  (description, amount, currency, optional reference) drafts a
+  checkout order through the approval gate — the structured seller
+  surface for the Orders draft endpoint, completing the checkout
+  sketch whose buyer surface (Buyer view + Capture) already shipped.
 - **Approval-gated agent pipeline.** A plain-English brief becomes a
   typed action plan (`create_invoice`, `create_order`, `draft_payout`,
   `send_reminder`) through a deterministic parser — no API key needed.

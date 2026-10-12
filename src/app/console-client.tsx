@@ -63,6 +63,7 @@ import type { DisputeEvidenceSummary } from "../lib/disputes";
 import CommandBar from "./command-bar";
 import AskBar from "./ask-bar";
 import BatchBuilder from "./batch-builder";
+import SellForm from "./sell-form";
 
 ModuleRegistry.registerModules([AllCommunityModule]);
 
@@ -773,6 +774,8 @@ export default function ConsoleClient() {
           />
         </div>
       </div>
+
+      <SellForm onSettled={() => void refresh()} />
 
       <div className="grid-section">
         {sectionHead("orders")}
