@@ -141,6 +141,17 @@ curl -X POST localhost:3000/api/agent/execute -H 'content-type: application/json
   approval gate is an application invariant rather than
   authentication, and a publicly exposed instance needs the
   deployer's own access controls (see SECURITY.md).
+- **API documentation page (the human-readable API map).** The
+  `/api-docs` page renders the same registry as a browsable page —
+  every operation grouped by surface (Agent, Console, Health,
+  Judge Mode, PayPal) with its summary, description, request-body
+  note, and response codes, plus the no-authentication and
+  approval-gate honesty notes and a link to the machine-readable
+  document. There is exactly one list of operations in the
+  codebase, so the human page and the OpenAPI document can never
+  drift apart; the grouping is a pure view-model
+  (`buildApiDocsSections`) that a test pins to cover every
+  registered operation exactly once.
 - **Payout batch builder (drafted batch, per-line validation, approval
   release).** The payouts draft also accepts a batch form —
   `{ items: [{ recipientName, amount, currency?, note? }, … ] }` (up to
@@ -516,7 +527,7 @@ are not blocked, the suite also runs on them).
 ```bash
 npm install
 npm run dev        # http://localhost:3000
-npm test           # full test suite (617 tests)
+npm test           # full test suite (627 tests)
 npm run typecheck  # tsc --noEmit
 npm run build      # production build
 ```
@@ -699,7 +710,9 @@ mock mode a config swap rather than a rewrite.
   `GET /api/openapi`: one registry entry per API operation, the
   shared Error schema, relative-only server entry, and
   `security: []` throughout (no auth layer exists to declare);
-  completeness against the route files is test-enforced.
+  completeness against the route files is test-enforced. The same
+  module's documentation sections (`buildApiDocsSections`) group
+  the registry by tag for the human-readable `/api-docs` page.
 - API routes — `GET /api/health` (readiness; 200 ok/degraded, 503
   misconfigured), `GET /api/openapi` (the OpenAPI 3.1 document), `src/app/api/agent/` (`POST /plan`, `POST /approve`,
   `POST /execute`, `GET|POST /tools` — tool definitions + tool-call
@@ -718,7 +731,9 @@ mock mode a config swap rather than a rewrite.
   disputes (read-only, with the draft-only evidence summary) at `/disputes`,
   reconciliation — the signed Transaction Search ledger (read-only) at
   `/transactions`,
-  agent activity & webhook audit at `/activity`).
+  agent activity & webhook audit at `/activity`, API documentation —
+  the human-readable rendering of the OpenAPI registry — at
+  `/api-docs`).
 
 ## PayPal APIs used
 
@@ -759,7 +774,7 @@ signatures mirror the REST resources one-to-one.
 ## Testing
 
 ```bash
-npm test           # vitest — 617 tests, all green
+npm test           # vitest — 627 tests, all green
 npm run typecheck  # TypeScript strict, clean
 npm run build      # Next.js production build
 ```
@@ -881,7 +896,11 @@ export — walked and compared in the suite — relative server only,
 no credential or email anywhere, the shared Error schema referenced
 by every error response, path parameters declared, request bodies
 present exactly where a route takes one, and the gate wording on
-every draft surface), payout batches (per-line validated
+every draft surface), the API documentation page (sections built
+from the same registry in tag order, every registered operation
+rendered exactly once, an operation-less tag omitted, and the page
+itself carrying no hardcoded API path, no fetch, and no external
+URL), payout batches (per-line validated
 batch drafts with line-named errors and the ambiguous-shape rejection,
 drafting moves no money, an approved batch executing as exactly one
 PayPal batch with per-item console rows and per-currency totals, a

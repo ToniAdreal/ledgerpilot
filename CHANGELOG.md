@@ -16,6 +16,15 @@ build record behind these summaries.
 
 ### Added
 
+- **API documentation page.** The human-readable rendering of
+  the OpenAPI registry at `/api-docs`: every operation grouped
+  by surface with its summary, description, request-body note,
+  and response codes, rendered from the same registry that
+  builds `GET /api/openapi` — exactly one list of operations
+  exists, so the page and the machine document cannot drift.
+  The page states the no-authentication and approval-gate
+  honesty notes and links the machine-readable document; the
+  home console links to it.
 - **Agent tool definitions.** The agent's four typed actions are
   published as tool definitions in MCP / PayPal Agent Toolkit shape
   (`{ name, description, inputSchema }`, closed schemas carrying the
