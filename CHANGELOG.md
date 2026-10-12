@@ -136,6 +136,12 @@ build record behind these summaries.
   conversion. The three tracked files that lacked a final newline
   (`.nvmrc`, `package.json`, `tsconfig.json`) now carry one, and
   tests keep the declarations in agreement and the tree compliant.
+- **Code owners.** `.github/CODEOWNERS` routes review on the public
+  repository: LedgerPilot is a solo project, so a default rule
+  covers the whole tree and the security- and automation-sensitive
+  surfaces (workflows, Dependabot config, `SECURITY.md`, the
+  deployment descriptor, this file) are explicitly owned — every
+  rule names the same one project owner, by GitHub username only.
 - **Legacy ICO favicon.** `src/app/favicon.ico` (16 / 32 / 48 px,
   classic 32-bpp BMP entries) redraws the same motif for the
   `/favicon.ico` surface browsers and tooling still request directly

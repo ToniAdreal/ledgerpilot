@@ -350,7 +350,7 @@ are not blocked, the suite also runs on them).
 ```bash
 npm install
 npm run dev        # http://localhost:3000
-npm test           # full test suite (444 tests)
+npm test           # full test suite (452 tests)
 npm run typecheck  # tsc --noEmit
 npm run build      # production build
 ```
@@ -543,7 +543,7 @@ signatures mirror the REST resources one-to-one.
 ## Testing
 
 ```bash
-npm test           # vitest — 444 tests, all green
+npm test           # vitest — 452 tests, all green
 npm run typecheck  # TypeScript strict, clean
 npm run build      # Next.js production build
 ```
@@ -741,7 +741,14 @@ Markdown trim exception and the Python indent, `.gitattributes`
 storing text as LF and marking the icon assets binary, the two
 files agreeing on LF, and the tree's text files themselves
 carrying no CR endings, ending with a final newline, and carrying
-no trailing whitespace outside Markdown and no tab indentation)
+no trailing whitespace outside Markdown and no tab indentation),
+and the code owners file (`.github/CODEOWNERS` — the solo owner's
+default rule covering the whole tree, the security- and
+automation-sensitive surfaces — workflows, Dependabot config,
+`SECURITY.md`, the deployment descriptor, the file itself —
+explicitly owned, every rule naming the same one owner, the
+last-match-wins rule documented, and no email address or
+credential-shaped value published)
 — fake credentials only, no network.
 
 ### Smoke check (a running instance, end to end)
@@ -802,7 +809,11 @@ See [CONTRIBUTING.md](./CONTRIBUTING.md): the verification gate
 (typecheck → test → build, exactly what CI runs), the invariants a
 change must not break (approval gate, deterministic-first AI,
 verified webhooks, per-currency money, labeled sample data), and
-how to report bugs through the issue templates. Security flaws
+how to report bugs through the issue templates. Review routing
+lives in [`.github/CODEOWNERS`](./.github/CODEOWNERS): LedgerPilot
+is a solo project, so the project owner owns the whole tree, with
+the security- and automation-sensitive surfaces named explicitly.
+Security flaws
 never go in a public issue — see the Security section above.
 Participation is governed by [CODE_OF_CONDUCT.md](./CODE_OF_CONDUCT.md)
 (Contributor Covenant 2.1); conduct concerns are likewise reported

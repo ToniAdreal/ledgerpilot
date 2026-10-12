@@ -1,0 +1,20 @@
+# Code owners — LedgerPilot
+#
+# LedgerPilot is a solo project: every path is owned by the project
+# owner, so once the repository is public GitHub requests their
+# review on pull requests that touch owned files. Owners are GitHub
+# usernames only — no email addresses are published here.
+#
+# The default rule below covers the whole tree. The explicit rules
+# after it keep ownership of the security- and automation-sensitive
+# surfaces visible even if the default ever narrows; in CODEOWNERS
+# the last matching pattern wins, and every rule names the same
+# owner.
+
+* @ToniAdreal
+
+.github/workflows/ @ToniAdreal
+.github/dependabot.yml @ToniAdreal
+.github/CODEOWNERS @ToniAdreal
+SECURITY.md @ToniAdreal
+render.yaml @ToniAdreal
