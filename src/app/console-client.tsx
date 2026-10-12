@@ -64,6 +64,7 @@ import CommandBar from "./command-bar";
 import AskBar from "./ask-bar";
 import BatchBuilder from "./batch-builder";
 import SellForm from "./sell-form";
+import InvoiceForm from "./invoice-form";
 
 ModuleRegistry.registerModules([AllCommunityModule]);
 
@@ -754,6 +755,8 @@ export default function ConsoleClient() {
           ) : null}
         </div>
       )}
+
+      <InvoiceForm onSettled={() => void refresh()} />
 
       <div className="grid-section">
         {sectionHead("invoices")}

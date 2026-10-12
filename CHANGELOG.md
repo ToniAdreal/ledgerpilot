@@ -16,6 +16,13 @@ build record behind these summaries.
 
 ### Added
 
+- **Invoice form.** The console's structured “New invoice” form
+  (recipient, optional email, description, amount, currency, optional
+  due date / note / reference) drafts an invoice through the approval
+  gate — the structured surface for the Invoicing draft endpoint,
+  completing the structured-form set whose sell form and payout batch
+  builder already shipped. Its validation mirrors the server's draft
+  rules, including the real-calendar due-date rule.
 - **Sell form.** The console's structured “Sell something” form
   (description, amount, currency, optional reference) drafts a
   checkout order through the approval gate — the structured seller

@@ -140,6 +140,16 @@ curl -X POST localhost:3000/api/agent/execute -H 'content-type: application/json
   never silently downgraded to a draft), and with no reference the
   recipient's most-overdue open invoice wins. The adapter refuses
   non-open invoices (a reminder for a PAID invoice fails honestly).
+- **Invoice form (the §3.1 invoice surface).** The console ships a
+  structured invoice form (above the Invoices grid): recipient (with an
+  optional explicit email), description, amount, currency, and optional
+  due date / note / reference, with inline validation mirroring the
+  server's draft rules — including the real-calendar due-date rule
+  (2026-02-30 is rejected, never rolled over) — a live preview, and an
+  example invoice (the demo spine's Ana invoice). The form only ever
+  drafts via `POST /api/paypal/invoices` — the invoice is created and
+  sent through the same plan review → approve → execute gate as every
+  other surface, and it then appears in the Invoices grid.
 - **Sell form (the §3.1 “Sell something” flow).** The console ships a
   structured sell form (above the Orders grid): description, amount,
   currency, and an optional reference, with inline validation mirroring
@@ -366,7 +376,7 @@ are not blocked, the suite also runs on them).
 ```bash
 npm install
 npm run dev        # http://localhost:3000
-npm test           # full test suite (470 tests)
+npm test           # full test suite (478 tests)
 npm run typecheck  # tsc --noEmit
 npm run build      # production build
 ```
@@ -495,6 +505,10 @@ mock mode a config swap rather than a rewrite.
   editing guards (1–25 lines), the per-line validation mirror of the
   server rules, request-body building, and the live per-currency
   totals preview for the console's batch form.
+- `src/lib/invoice/` — invoice-form view-model: validation mirror of
+  the invoice draft rules (incl. the real-calendar due-date rule),
+  request-body building, and the live preview for the console's
+  invoice form.
 - `src/lib/ask/` — Ask-the-grid parser + filter-model validator.
 - `src/lib/checkout/` — the Orders checkout leg: the buyer-view
   resolution (`checkout-link.ts`: approval-link extraction —
@@ -572,7 +586,7 @@ signatures mirror the REST resources one-to-one.
 ## Testing
 
 ```bash
-npm test           # vitest — 470 tests, all green
+npm test           # vitest — 478 tests, all green
 npm run typecheck  # TypeScript strict, clean
 npm run build      # Next.js production build
 ```
@@ -595,6 +609,12 @@ request-body normalisation, a preview that never guesses an invalid
 amount, and a form-built draft — example included — accepted by the
 real order draft, refused unapproved, then executed into a payable
 order that captures),
+the invoice form view-model (validation mirror naming the failing
+field incl. the real-calendar due-date rule, request-body
+normalisation with empty optionals omitted, a preview that never
+guesses an invalid amount, and a form-built draft — example
+included — accepted by the real invoice draft, refused unapproved,
+then executed into a SENT invoice with its due date),
 invoice reminders (mock open-invoice rules, executor resolution by
 reference and by most-overdue open invoice, unmatched-reference and
 already-paid failures, the sandbox `/remind` request shape), the
