@@ -223,7 +223,7 @@ export interface ActionPlan {
     | "failed";
   createdAt: string;
   /** Which brain produced this plan. Absent on plans stored before the field existed. */
-  source?: "deterministic" | "llm" | "api";
+  source?: "deterministic" | "llm" | "api" | "tool";
 }
 
 export interface ActivityRecord {

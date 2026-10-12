@@ -16,6 +16,16 @@ build record behind these summaries.
 
 ### Added
 
+- **Agent tool definitions.** The agent's four typed actions are
+  published as tool definitions in MCP / PayPal Agent Toolkit shape
+  (`{ name, description, inputSchema }`, closed schemas carrying the
+  drafts' field rules), with `GET /api/agent/tools` as the discovery
+  surface and `POST /api/agent/tools` drafting `source: "tool"`
+  pending-approval plans from one or more validated tool calls —
+  steps identical to the resource drafts, both payout-gating forms
+  supported, and no execution path around the approval gate. This
+  is CONCEPT.md §1's tool-layer stretch goal, built REST-first as
+  planned.
 - **Sandbox verification smoke.** `npm run smoke:sandbox`
   (`scripts/smoke-sandbox.mjs`, zero dependencies) automates the
   sandbox exit test against a running sandbox-mode instance: it

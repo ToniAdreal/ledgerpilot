@@ -106,6 +106,26 @@ curl -X POST localhost:3000/api/agent/execute -H 'content-type: application/json
   every gated step). Invalid input (bad currency, non-positive or
   over-cap amount, impossible due date, malformed email) is a 400 with
   the reason — never a half-valid plan.
+- **Agent tool definitions (the tool-call-shaped action layer).**
+  CONCEPT.md's stretch goal, built REST-first as planned: the agent's
+  four operations are also published as tool definitions in MCP /
+  PayPal Agent Toolkit shape — `{ name, description, inputSchema }`
+  per tool, the names exactly the typed action types, each schema a
+  closed object (`additionalProperties: false`) carrying the drafts'
+  field rules (required fields, USD/EUR/GBP enum, amount > 0 and
+  ≤ 100,000, ISO due-date pattern, payout batch of 1–25 lines).
+  `GET /api/agent/tools` is the discovery surface; `POST
+  /api/agent/tools` accepts one call (`{ name, arguments }`) or a
+  sequence (`{ calls: […] }`, at most four) and *drafts* a typed
+  action plan (`source: "tool"`, `pending_approval`) — conversion
+  delegates field validation to the same resource drafts the REST
+  wrappers use, so a tool step is payload-identical to the equivalent
+  draft step, and unknown tool names or undeclared argument keys are
+  rejected, never ignored. A payout call gates itself with
+  `payWhenInvoicePaid` (one named invoice) or `gatedOnInvoicePaid`
+  (this plan's own invoice payment, bound at execution) — never both.
+  Nothing executes without the ordinary approve → execute flow: the
+  approval gate has no tool-call back door either.
 - **Payout batch builder (drafted batch, per-line validation, approval
   release).** The payouts draft also accepts a batch form —
   `{ items: [{ recipientName, amount, currency?, note? }, … ] }` (up to
@@ -481,7 +501,7 @@ are not blocked, the suite also runs on them).
 ```bash
 npm install
 npm run dev        # http://localhost:3000
-npm test           # full test suite (591 tests)
+npm test           # full test suite (603 tests)
 npm run typecheck  # tsc --noEmit
 npm run build      # production build
 ```
@@ -587,6 +607,13 @@ mock mode a config swap rather than a rewrite.
   deterministic extraction→plan conversion, and `parseBriefWithFallback`
   (deterministic-first; LLM only on a parser miss; failures rethrow the
   parser's error).
+- `src/lib/agent/tools.ts` — the agent tool definitions: the four
+  typed actions as MCP / Agent Toolkit-shaped tools (name, description,
+  closed JSON input schemas), the tool-call envelope validator
+  (unknown tools / undeclared arguments rejected), and conversion of
+  one or more calls into a `source: "tool"` plan — delegating field
+  validation to the resource drafts so tool steps are identical to
+  draft steps, with both payout-gating forms supported.
 - `src/lib/agent/store.ts` — the ledger: plans, the append-only
   activity/audit log, and webhook event-id idempotency. In-memory by
   default; with `LEDGERPILOT_STORE_FILE` set it is a file-backed
@@ -655,7 +682,8 @@ mock mode a config swap rather than a rewrite.
   value — only the names of missing variables.
 - API routes — `GET /api/health` (readiness; 200 ok/degraded, 503
   misconfigured), `src/app/api/agent/` (`POST /plan`, `POST /approve`,
-  `POST /execute`), `src/app/api/paypal/` (`POST /invoices|orders|payouts|reminders` —
+  `POST /execute`, `GET|POST /tools` — tool definitions + tool-call
+  plan drafting), `src/app/api/paypal/` (`POST /invoices|orders|payouts|reminders` —
   validated wrappers that draft plans, never execute; `POST /webhooks` — 401 on bad
   signature, 200 on processed/duplicate; `GET /sync`; `POST /orders/capture`;
   `POST /invoices/record-payment`),
@@ -711,7 +739,7 @@ signatures mirror the REST resources one-to-one.
 ## Testing
 
 ```bash
-npm test           # vitest — 591 tests, all green
+npm test           # vitest — 603 tests, all green
 npm run typecheck  # TypeScript strict, clean
 npm run build      # Next.js production build
 ```
@@ -821,7 +849,13 @@ LLM-sourced plan), and the resource plan drafts behind
 `POST /api/paypal/invoices|orders|payouts` (parser-identical payloads,
 the no-execution-without-approval invariant over HTTP-shaped inputs,
 a payout gated on a named invoice firing only for that invoice, and
-the validation rejection matrix), payout batches (per-line validated
+the validation rejection matrix), the agent tool definitions
+(the four closed input schemas agreeing with the validator's accepted
+arguments, steps identical to the resource drafts for every action —
+batch payouts and both gating forms included — unknown-tool and
+undeclared-argument rejection, the four-call plan cap, and a
+tool-sourced plan closing the full invoice → paid → payout loop
+through the gate), payout batches (per-line validated
 batch drafts with line-named errors and the ambiguous-shape rejection,
 drafting moves no money, an approved batch executing as exactly one
 PayPal batch with per-item console rows and per-currency totals, a
