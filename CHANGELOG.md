@@ -16,6 +16,16 @@ build record behind these summaries.
 
 ### Added
 
+- **PayPal mode indicator.** The console carries a mode strip
+  above the KPI strip stating the instance's actual PayPal mode —
+  Mock, Sandbox, Sandbox without a webhook id (sync reconciler
+  named as the fallback), or Sandbox misconfigured (missing
+  credential variables named as the remedy) — resolved from
+  `GET /api/health` by a pure view-model that validates the
+  report's wire shape, keeps only whitelisted fields, and builds
+  the badge copy from configuration booleans, so no credential
+  value can reach the screen through it. An unreadable report
+  resolves to "unknown", never a guessed mode.
 - **Verification script.** `npm run verify` runs the whole
   verification gate (`npm run typecheck && npm test && npm run build`,
   in CI's order) as one command. It installs nothing, starts no

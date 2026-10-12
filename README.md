@@ -411,6 +411,19 @@ curl -X POST localhost:3000/api/agent/execute -H 'content-type: application/json
   sandbox mode: sandbox resources live at PayPal and cannot be cleared
   from here. Id sequences never rewind across a reset, so no invoice,
   plan, or event id is ever reused.
+- **PayPal mode indicator.** The console's mode strip (above the KPI
+  strip) states the instance's *actual* PayPal mode on screen — Mock,
+  Sandbox, Sandbox without a webhook id (the sync reconciler named as
+  the fallback), or Sandbox misconfigured (the missing credential
+  variables named as the remedy) — resolved from `GET /api/health` by
+  the pure view-model in `src/lib/console/mode.ts`, which validates
+  the report's wire shape, keeps only whitelisted fields (mode,
+  status, configuration booleans), and builds the badge copy from
+  those booleans, so no report free text — and no credential value —
+  can reach the screen through it. An unreadable report resolves to
+  "unknown", never a guessed mode. A judge watching a loop close can
+  therefore tell from the screen whether it closed against the mock
+  adapter or the live sandbox.
 - **Deployment readiness.** `GET /api/health` reports whether this instance
   can actually do PayPal work — effective mode, sandbox credentials /
   webhook id configured (booleans + missing-variable names only, never a
@@ -535,7 +548,7 @@ are not blocked, the suite also runs on them).
 ```bash
 npm install
 npm run dev        # http://localhost:3000
-npm test           # full test suite (634 tests)
+npm test           # full test suite (647 tests)
 npm run typecheck  # tsc --noEmit
 npm run build      # production build
 ```
@@ -667,8 +680,11 @@ mock mode a config swap rather than a rewrite.
   loading / error / empty / filtered-empty resolution, overlay templates,
   the console banner, and KPI/caption rules), the grid-tools
   view-model (`grid-tools.ts`: CSV export naming/gating + change-flash
-  detection), and the sync view-model (`sync.ts`: wire-shape validation
-  + outcome summary for the console's Sync from PayPal action).
+  detection), the sync view-model (`sync.ts`: wire-shape validation
+  + outcome summary for the console's Sync from PayPal action), and
+  the mode view-model (`mode.ts`: health-report wire validation +
+  the PayPal mode badge — mock / sandbox / degraded / misconfigured /
+  unknown — rendered as the console's mode strip).
 - `src/lib/command/` — Agent Command bar view-model: brief validation,
   example briefs, the plan-review model (step labels, exact PayPal call,
   trigger badges), and action-availability rules that mirror the server-side
@@ -782,7 +798,7 @@ signatures mirror the REST resources one-to-one.
 ## Testing
 
 ```bash
-npm test           # vitest — 634 tests, all green
+npm test           # vitest — 647 tests, all green
 npm run typecheck  # TypeScript strict, clean
 npm run build      # Next.js production build
 npm run verify     # the whole gate below, as one command
@@ -846,7 +862,13 @@ flashes, new rows never do, append-only grids watch nothing), the
 console sync view-model (wire-shape validation with field-named
 rejections, resumed-plan / new-event / nothing-new outcome summaries,
 and a real reconciler run over the demo spine whose route-shaped
-result parses and names the resumed plan), the standalone
+result parses and names the resumed plan), the console mode
+view-model (health-report wire validation keeping only whitelisted
+fields, mock / sandbox / degraded / misconfigured / unknown badge
+resolution, a sentinel secret in the payload never surviving parsing
+or rendering, and end-to-end badges resolved from the real health
+report for mock, misconfigured-sandbox, and configured-sandbox
+environments), the standalone
 activity page (typed page metadata + skip target, the same
 activity route and read model as the console grid, the console
 state/export view-models reused, no mutating endpoint called,

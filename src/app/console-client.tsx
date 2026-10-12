@@ -13,6 +13,10 @@
  * Judge Mode (src/lib/judge) seeds the demo scenario from /judge; the
  * console is where its spine plan is approved and executed.
  *
+ * The mode strip above the KPI strip shows the instance's actual
+ * PayPal mode (mock vs sandbox, from GET /api/health), resolved by
+ * the pure view-model in src/lib/console/mode.ts.
+ *
  * Loading / error / empty / filtered-empty presentation is resolved
  * by the pure view-model in src/lib/console/states.ts: this component
  * tracks load status + per-grid displayed counts, renders the console
@@ -35,7 +39,9 @@ import {
 } from "ag-grid-community";
 import {
   GRID_TITLES,
+  parseHealthWireResult,
   parseSyncWireResult,
+  resolveModeDisplay,
   summarizeSyncResult,
   syncBlockReason,
   type SyncSummary,
@@ -49,6 +55,7 @@ import {
   resolveKpiDisplay,
   type ActivityRow,
   type ConsoleGridId,
+  type ConsoleModeInfo,
   type ConsoleLoadStatus,
   type ConsoleSummary,
   type DisputeRow,
@@ -227,6 +234,8 @@ export default function ConsoleClient() {
   const [syncing, setSyncing] = useState(false);
   const [syncSummary, setSyncSummary] = useState<SyncSummary | null>(null);
   const [syncError, setSyncError] = useState<string | null>(null);
+  const [modeInfo, setModeInfo] = useState<ConsoleModeInfo | null>(null);
+  const [modeChecked, setModeChecked] = useState(false);
   const [loadStatus, setLoadStatus] = useState<ConsoleLoadStatus>("loading");
   const [gridDisplay, setGridDisplay] = useState<Record<ConsoleGridId, GridDisplay>>(EMPTY_DISPLAY);
 
@@ -252,6 +261,19 @@ export default function ConsoleClient() {
 
   const refresh = useCallback(async () => {
     setLoadStatus("loading");
+    /* Mode indicator (src/lib/console/mode.ts): read the deployment
+     * health report independently of the console data — a health
+     * failure (or a 503 from a misconfigured sandbox, whose body is
+     * still the JSON report) must never fail the console load, and an
+     * unparsable report resolves to "unknown", never a guessed mode. */
+    try {
+      const healthData: unknown = await fetch("/api/health").then((r) => r.json());
+      setModeInfo(parseHealthWireResult(healthData));
+    } catch {
+      setModeInfo(null);
+    } finally {
+      setModeChecked(true);
+    }
     try {
       const [s, i, o, p, a, d, t] = await Promise.all([
         fetch("/api/console/summary").then((r) => r.json()),
@@ -731,6 +753,17 @@ export default function ConsoleClient() {
     <section>
       <CommandBar onSettled={() => void refresh()} />
       <AskBar onApply={applyAsk} onClear={clearAsk} />
+
+      {(() => {
+        const mode = resolveModeDisplay({ info: modeInfo, checked: modeChecked });
+        return (
+          <div className={`mode-strip mode-strip-${mode.tone}`} role="status">
+            <strong>{mode.label}</strong>
+            <span>{mode.detail}</span>
+            <a href="/api/health">Deployment health</a>
+          </div>
+        );
+      })()}
 
       {banner.kind !== "none" && (
         <div
