@@ -190,6 +190,27 @@ curl -X POST localhost:3000/api/agent/execute -H 'content-type: application/json
   Re-capturing a `COMPLETED` order is an `alreadyCaptured` no-op; a
   `VOIDED` or unknown order is an honest error, and an adapter refusal
   is audit-logged as a failed capture.
+- **Invoice record-payment leg (any open invoice, not just the spine).**
+  An open invoice can be recorded as paid from inside the app — the
+  Invoicing record-payment path (`POST /v2/invoicing/invoices/:id/payments`)
+  that CONCEPT.md documents for payments made outside PayPal and for
+  local runs. Until now only the Judge Mode spine invoice had an
+  in-app payment path; the general leg lives in the Invoices grid
+  (**Record payment** button, full amount due) and at
+  `POST /api/paypal/invoices/record-payment` (an explicit amount
+  records a partial payment — the invoice flips to `PARTIALLY_PAID`
+  and no PAID event fires until the balance reaches zero). Amounts
+  are validated before any call (positive, the invoice's own
+  currency, never more than the amount due — an overpayment is
+  refused, never clamped). A full payment is written to the audit
+  log as the exact call and its `INVOICING.INVOICE.PAID` event is
+  processed by the sync reconciler, so a trigger-gated payout bound
+  to that invoice fires here exactly as it would on a webhook. It is
+  deliberately *not* an agent action: recording money that already
+  arrived needs no plan approval and does not weaken the gate.
+  Re-recording a `PAID` invoice is an `alreadyPaid` no-op; an unknown
+  invoice is a 404, a non-open one a 409, and an adapter refusal is
+  audit-logged as a failed recording.
 - **Sync reconciler.** `GET /api/paypal/sync` is the polling fallback for
   instances webhooks cannot reach: it drains undelivered events in order and
   sweeps resource state with stable synthetic event ids, so repeat syncs are
@@ -388,7 +409,7 @@ are not blocked, the suite also runs on them).
 ```bash
 npm install
 npm run dev        # http://localhost:3000
-npm test           # full test suite (489 tests)
+npm test           # full test suite (496 tests)
 npm run typecheck  # tsc --noEmit
 npm run build      # production build
 ```
@@ -520,7 +541,10 @@ mock mode a config swap rather than a rewrite.
 - `src/lib/invoice/` — invoice-form view-model: validation mirror of
   the invoice draft rules (incl. the real-calendar due-date rule),
   request-body building, and the live preview for the console's
-  invoice form.
+  invoice form; plus the record-payment leg (`record-payment.ts`:
+  full/partial payment recording for any open invoice — amount
+  validation, audit record, the PAID event processed via the
+  reconciler, idempotent re-recording).
 - `src/lib/reminder/` — reminder-form view-model: validation mirror
   of the reminder draft rules, request-body building (empty optionals
   omitted), and the live preview stating the targeting rule for the
@@ -555,7 +579,8 @@ mock mode a config swap rather than a rewrite.
   misconfigured), `src/app/api/agent/` (`POST /plan`, `POST /approve`,
   `POST /execute`), `src/app/api/paypal/` (`POST /invoices|orders|payouts|reminders` —
   validated wrappers that draft plans, never execute; `POST /webhooks` — 401 on bad
-  signature, 200 on processed/duplicate; `GET /sync`; `POST /orders/capture`),
+  signature, 200 on processed/duplicate; `GET /sync`; `POST /orders/capture`;
+  `POST /invoices/record-payment`),
   `src/app/api/console/` (`GET /invoices|orders|payouts|activity|disputes|transactions|summary`,
   plus `GET /invoices/[id]` for the detail projection and
   `GET /disputes/[id]/evidence` for the draft-only evidence summary),
@@ -567,7 +592,7 @@ mock mode a config swap rather than a rewrite.
 
 | API | How LedgerPilot uses it |
 |---|---|
-| **Invoicing v2** | Create/send invoices from briefs; get/list; record-payment for the local-run payment path; send payment reminders (`POST /v2/invoicing/invoices/:id/remind`) for open invoices |
+| **Invoicing v2** | Create/send invoices from briefs; get/list; record-payment for any open invoice (console Record payment action / `POST /api/paypal/invoices/record-payment`, full or partial); send payment reminders (`POST /v2/invoicing/invoices/:id/remind`) for open invoices |
 | **Orders v2 / Checkout** | Create checkout orders for one-off sales ("sell" briefs); the buyer approval link (`approve` / `payer-action`) is surfaced in the console's Buyer view column; capture on buyer checkout completion (console Capture action / `POST /api/paypal/orders/capture`) |
 | **Payouts** | Batch payouts drafted by the agent, released only after approval; per-item status tracked |
 | **Webhooks** | `INVOICING.INVOICE.PAID`, `INVOICING.INVOICE.CANCELLED`, `PAYMENT.CAPTURE.COMPLETED`, `PAYMENT.PAYOUTS-ITEM.SUCCEEDED`, `PAYMENT.PAYOUTS-ITEM.FAILED` — signature-verified, idempotent event log |
@@ -602,7 +627,7 @@ signatures mirror the REST resources one-to-one.
 ## Testing
 
 ```bash
-npm test           # vitest — 489 tests, all green
+npm test           # vitest — 496 tests, all green
 npm run typecheck  # TypeScript strict, clean
 npm run build      # Next.js production build
 ```
@@ -620,6 +645,12 @@ a real mock create → capture loop),
 the checkout capture leg (an agent-created order captured to COMPLETED
 with the capture event processed once, re-capture no-op, unknown /
 VOIDED / adapter-refusal paths audit-logged),
+the invoice record-payment leg (a spine invoice recorded paid closing
+the full loop with its gated payout, a partial payment flipping to
+PARTIALLY_PAID with no event until the remainder lands, a seeded
+non-spine invoice paid through the same path, already-paid no-op,
+unknown / DRAFT / invalid-amount refusals before any adapter call,
+and an adapter refusal audit-logged as a failure),
 the sell form view-model (validation mirror naming the failing field,
 request-body normalisation, a preview that never guesses an invalid
 amount, and a form-built draft — example included — accepted by the

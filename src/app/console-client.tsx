@@ -87,6 +87,38 @@ interface CaptureCellContext {
   onCaptureOrder: (orderId: string) => void;
 }
 
+interface InvoicePaymentCellContext {
+  payingInvoiceId: string | null;
+  onRecordInvoicePayment: (invoiceId: string) => void;
+}
+
+/**
+ * Record-payment for an open invoice (the Invoicing leg's payment
+ * step, src/lib/invoice/record-payment): rendered only while the
+ * invoice is open; the button records the full amount due — partial
+ * amounts stay available on the API route. Paid / draft / cancelled
+ * rows show a dash.
+ */
+function RecordInvoicePaymentCell(params: ICellRendererParams<InvoiceRow>) {
+  const row = params.data;
+  if (!row || (row.status !== "SENT" && row.status !== "PARTIALLY_PAID" && row.status !== "SCHEDULED")) {
+    return <span>—</span>;
+  }
+  const ctx = params.context as InvoicePaymentCellContext;
+  const busy = ctx.payingInvoiceId === row.id;
+  return (
+    <button
+      type="button"
+      className="command-btn capture-btn"
+      disabled={busy || ctx.payingInvoiceId !== null}
+      onClick={() => ctx.onRecordInvoicePayment(row.id)}
+      title="Record a payment made outside PayPal for the full amount due"
+    >
+      {busy ? "Recording…" : "Record payment"}
+    </button>
+  );
+}
+
 /**
  * Buyer-side checkout completion for an uncaptured order (the Orders
  * leg's capture step, src/lib/checkout): rendered only while the order
@@ -187,6 +219,8 @@ export default function ConsoleClient() {
   const [error, setError] = useState<string | null>(null);
   const [capturingOrderId, setCapturingOrderId] = useState<string | null>(null);
   const [captureError, setCaptureError] = useState<string | null>(null);
+  const [payingInvoiceId, setPayingInvoiceId] = useState<string | null>(null);
+  const [invoicePaymentError, setInvoicePaymentError] = useState<string | null>(null);
   const [draftingDisputeId, setDraftingDisputeId] = useState<string | null>(null);
   const [evidenceSummary, setEvidenceSummary] = useState<DisputeEvidenceSummary | null>(null);
   const [evidenceError, setEvidenceError] = useState<string | null>(null);
@@ -312,6 +346,33 @@ export default function ConsoleClient() {
         setCaptureError(err instanceof Error ? err.message : "Capture failed");
       } finally {
         setCapturingOrderId(null);
+        void refresh();
+      }
+    },
+    [refresh],
+  );
+
+  /* Record a payment (full amount due) for an open invoice, then
+   * refresh — the flipped PAID row flashes via the usual change-flash
+   * path, and a trigger-gated payout bound to the invoice resumes
+   * through the reconciler inside the route. A refusal is shown
+   * under the Invoices grid, never silently swallowed. */
+  const recordInvoicePayment = useCallback(
+    async (invoiceId: string) => {
+      setPayingInvoiceId(invoiceId);
+      setInvoicePaymentError(null);
+      try {
+        const res = await fetch("/api/paypal/invoices/record-payment", {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ invoiceId }),
+        });
+        const data = (await res.json()) as { error?: string };
+        if (!res.ok) throw new Error(data.error ?? `Recording the payment failed (${res.status})`);
+      } catch (err) {
+        setInvoicePaymentError(err instanceof Error ? err.message : "Recording the payment failed");
+      } finally {
+        setPayingInvoiceId(null);
         void refresh();
       }
     },
@@ -477,6 +538,7 @@ export default function ConsoleClient() {
         valueFormatter: (p) => (p.value ? "Yes" : "—"),
         cellStyle: (p) => (p.value ? { color: "#b91c1c", fontWeight: 600 } : null),
       },
+      { headerName: "Payment", width: 150, filter: false, sortable: false, cellRenderer: RecordInvoicePaymentCell },
     ],
     [],
   );
@@ -763,10 +825,16 @@ export default function ConsoleClient() {
 
       <div className="grid-section">
         {sectionHead("invoices")}
+        {invoicePaymentError && (
+          <p className="capture-error" role="alert">
+            Recording the payment failed: {invoicePaymentError}
+          </p>
+        )}
         <div className="grid-wrap">
           <AgGridReact<InvoiceRow>
             theme={gridTheme}
             rowData={invoices}
+            context={{ payingInvoiceId, onRecordInvoicePayment: recordInvoicePayment } satisfies InvoicePaymentCellContext}
             getRowId={getRowId}
             columnDefs={invoiceColumns}
             defaultColDef={defaultColDef}

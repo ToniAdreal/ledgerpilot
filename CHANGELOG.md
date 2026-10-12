@@ -16,6 +16,15 @@ build record behind these summaries.
 
 ### Added
 
+- **Invoice record-payment leg.** Any open invoice — not only the
+  Judge Mode spine invoice — can be recorded as paid in-app: the
+  console's Record payment action and
+  `POST /api/paypal/invoices/record-payment` (full amount due, or an
+  explicit partial amount) call the Invoicing record-payment API,
+  audit-log the exact call, and process the resulting
+  `INVOICING.INVOICE.PAID` event through the sync reconciler so a
+  trigger-gated payout bound to that invoice fires. Amounts are
+  validated before any call; re-recording a paid invoice is a no-op.
 - **Reminder form + draft wrapper.** `POST /api/paypal/reminders`
   drafts a `send_reminder` plan (payload-identical to the parser's
   reminder step) and the console's structured “Send a reminder” form
