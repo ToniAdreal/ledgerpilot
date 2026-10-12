@@ -56,6 +56,11 @@ const PAGES: Array<{ name: string; parts: string[]; title: string }> = [
     title: "LedgerPilot — Disputes",
   },
   {
+    name: "reconciliation transactions",
+    parts: ["transactions", "page.tsx"],
+    title: "LedgerPilot — Reconciliation",
+  },
+  {
     name: "not-found",
     parts: ["not-found.tsx"],
     title: "LedgerPilot — Page not found",

@@ -19,6 +19,7 @@ const MAIN_PAGES: Array<[string, ...string[]]> = [
   ["payouts page", "payouts", "page.tsx"],
   ["command page", "command", "page.tsx"],
   ["disputes page", "disputes", "page.tsx"],
+  ["transactions page", "transactions", "page.tsx"],
   ["not-found", "not-found.tsx"],
   ["error boundary", "error.tsx"],
   ["loading", "loading.tsx"],

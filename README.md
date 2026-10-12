@@ -332,6 +332,16 @@ curl -X POST localhost:3000/api/agent/execute -H 'content-type: application/json
   for seller review and never submits anything — the Disputes
   integration is read-only end to end, so the page's only fetches are
   those two GETs and nothing here approves, executes, or moves money.
+- **Reconciliation page (the read-only Transaction Search surface, standalone).**
+  The reconciliation ledger also has its own addressable page at
+  `/transactions`: the same TransactionRow read model from the same
+  `GET /api/console/transactions` route the console grid consumes — no
+  second data path — rendered full-width with the console's own state
+  and CSV-export view-models, 25 rows per page, signed amounts
+  (payments in positive, payouts out negative in red). It is read-only
+  end to end (its only fetch is that one GET): Transaction Search never
+  moves money, and this page is the ledger the KPI totals reconcile
+  against. With this page, every console grid has a standalone route.
 - **Honest console states.** Loading, load-error, empty, and filtered-empty
   are four different states with four different messages — resolved by a
   pure, unit-tested view-model, never a bare grid: a fresh console explains
@@ -471,7 +481,7 @@ are not blocked, the suite also runs on them).
 ```bash
 npm install
 npm run dev        # http://localhost:3000
-npm test           # full test suite (567 tests)
+npm test           # full test suite (578 tests)
 npm run typecheck  # tsc --noEmit
 npm run build      # production build
 ```
@@ -652,6 +662,8 @@ mock mode a config swap rather than a rewrite.
   checkout orders at `/checkout`, payouts at `/payouts`,
   agent command / plan review at `/command`,
   disputes (read-only, with the draft-only evidence summary) at `/disputes`,
+  reconciliation — the signed Transaction Search ledger (read-only) at
+  `/transactions`,
   agent activity & webhook audit at `/activity`).
 
 ## PayPal APIs used
@@ -693,7 +705,7 @@ signatures mirror the REST resources one-to-one.
 ## Testing
 
 ```bash
-npm test           # vitest — 567 tests, all green
+npm test           # vitest — 578 tests, all green
 npm run typecheck  # TypeScript strict, clean
 npm run build      # Next.js production build
 ```
@@ -784,7 +796,12 @@ console grid, the console state/export view-models reused, the
 evidence draft carried over as a GET-only never-submitted draft
 with no mutating endpoint called, the home page linking to it,
 and its rows projected from the mock dispute set with the sample
-flag and deadline intact), the
+flag and deadline intact), the standalone reconciliation page
+(typed page metadata + skip target, the same transactions route
+and read model as the console grid, the console state/export
+view-models reused, no mutating endpoint called, the home page
+linking to it, and its rows projected as the signed ledger of a
+real invoice→payout loop), the
 command-bar gate matrix, Ask-the-grid parsing +
 validator negative cases, the full Judge Mode loop (seed idempotency,
 the historical-event guard, double-payment no-op), and the sandbox REST

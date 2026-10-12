@@ -16,6 +16,13 @@ build record behind these summaries.
 
 ### Added
 
+- **Reconciliation page.** The signed Transaction Search ledger
+  has its own addressable page at `/transactions`: the same read
+  model and route as the console's Reconciliation grid, rendered
+  full-width with the console's state and CSV-export view-models,
+  signed amounts (payouts out negative, in red). Read-only end
+  to end — Transaction Search never moves money. With this page,
+  every console grid has a standalone route.
 - **Disputes page.** The disputes list has its own addressable
   page at `/disputes`: the same read model and route as the
   console's Disputes grid, rendered full-width with the console's
