@@ -16,6 +16,17 @@ build record behind these summaries.
 
 ### Added
 
+- **Sandbox verification smoke.** `npm run smoke:sandbox`
+  (`scripts/smoke-sandbox.mjs`, zero dependencies) automates the
+  sandbox exit test against a running sandbox-mode instance: it
+  refuses a mock-mode or misconfigured target at the health step
+  before drafting anything, then drives the invoice →
+  record-payment, payout, and order legs through the approval
+  gate with fictional verification amounts, verifies the buyer
+  checkout link is a real PayPal URL (capture deliberately not
+  attempted — it needs the buyer's hosted-checkout approval), and
+  finishes with the sync reconciler. It reads no credentials;
+  credentials live in the target instance's own environment.
 - **Reconciliation page.** The signed Transaction Search ledger
   has its own addressable page at `/transactions`: the same read
   model and route as the console's Reconciliation grid, rendered

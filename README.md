@@ -481,7 +481,7 @@ are not blocked, the suite also runs on them).
 ```bash
 npm install
 npm run dev        # http://localhost:3000
-npm test           # full test suite (578 tests)
+npm test           # full test suite (591 tests)
 npm run typecheck  # tsc --noEmit
 npm run build      # production build
 ```
@@ -510,6 +510,12 @@ adapter. Two PayPal shapes worth knowing: create-invoice returns only
 HATEOAS links, so the adapter reads the id from the `self` link and then
 GETs the invoice; and Orders v2 has no list endpoint, so listing re-GETs
 the orders this process created.
+
+Once your sandbox app exists, `npm run smoke:sandbox` (see Testing)
+verifies this mode end to end against a running sandbox instance —
+it refuses a mock-mode or misconfigured target before drafting
+anything, then runs the invoice → record-payment, payout, and order
+legs through the approval gate with fictional verification amounts.
 
 ### Environment
 
@@ -705,7 +711,7 @@ signatures mirror the REST resources one-to-one.
 ## Testing
 
 ```bash
-npm test           # vitest — 578 tests, all green
+npm test           # vitest — 591 tests, all green
 npm run typecheck  # TypeScript strict, clean
 npm run build      # Next.js production build
 ```
@@ -944,7 +950,16 @@ re-runnability with its disposable-instance warning, the approval
 gate passed through rather than shortcut, the README's exact
 post-loop totals asserted per currency, no credential read and no
 import beyond Node's fetch, and the named-step failure with exit
-code 1), and the CodeQL workflow (`.github/workflows/codeql.yml` —
+code 1), and the sandbox verification smoke script
+(`scripts/smoke-sandbox.mjs` — the sandbox-mode gate on
+`GET /api/health` before any draft, a misconfigured instance
+stopped at that step, the invoice / payout / order legs driven in
+order through the approval gate with no Judge Mode reset or seed,
+the fictional verification amounts and counterparty, the payout
+acceptance statuses, the real-https buyer-link check with capture
+deliberately not attempted, no credential read and no import
+beyond Node's fetch, and the named-step failure with exit code 1),
+and the CodeQL workflow (`.github/workflows/codeql.yml` —
 push / pull-request / weekly-schedule triggers on main+master, the
 javascript-typescript matrix with `build-mode: none` so scanning
 never runs project scripts, init before analyze in the pinned
@@ -1004,6 +1019,38 @@ instance** — never at sandbox mode (the reset refuses there and
 the script stops) and never at an instance holding data you care
 about. It reads no credentials; the only environment variable it
 consults is `SMOKE_BASE_URL`.
+
+### Sandbox verification (a running sandbox instance, end to end)
+
+```bash
+PAYPAL_MODE=sandbox PAYPAL_CLIENT_ID=... PAYPAL_CLIENT_SECRET=... npm start   # one terminal, your own sandbox app
+npm run smoke:sandbox                        # in another — http://127.0.0.1:3000
+npm run smoke:sandbox -- --base-url http://127.0.0.1:3100
+```
+
+`scripts/smoke-sandbox.mjs` (zero dependencies, Node ≥ 22) is the
+automated form of the sandbox exit test. It first reads
+`GET /api/health` and **refuses to draft anything** unless the
+target is in sandbox mode with credentials configured — a
+mock-mode target fails that step (use `npm run smoke` there), and
+a misconfigured sandbox stops there too, naming the missing
+variables. It then drives the instance's own API surfaces through
+the approval gate — an invoice drafted, approved, executed
+(created + SENT) and recorded PAID; a payout batch drafted,
+approved, and executed (an item status of SUCCESS, UNCLAIMED, or
+PENDING counts as PayPal acceptance; a refusal, e.g. Payouts not
+enabled on the sandbox Business account, fails the step with
+PayPal's error verbatim); an order drafted, approved, and executed
+with its buyer checkout link verified as a real PayPal URL
+(capture is deliberately not attempted — sandbox capture needs the
+buyer's approval on the hosted checkout, a browser step) — and
+finishes with the sync reconciler. Amounts are fictional
+verification amounts (USD 10.00 / 2.00 / 5.00) to a fictional
+"Sandbox Check" counterparty; all money is sandbox money. The
+script reads no credentials (credentials live in the target
+instance's own environment); the only environment variable it
+consults is `SMOKE_BASE_URL`. There is no reset in sandbox mode,
+so each run creates fresh sandbox resources and prints their ids.
 
 ## Demo
 
