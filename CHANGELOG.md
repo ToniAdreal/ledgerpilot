@@ -127,6 +127,15 @@ build record behind these summaries.
   iOS / Safari do not use the SVG favicon or the manifest's SVG icon
   for the touch surface, so the hosted demo previously had no touch
   icon on Apple devices. No external asset or font is fetched.
+- **Repository text hygiene.** `.editorconfig` declares the tree's
+  text conventions where editors read them (UTF-8, LF, final
+  newline, no trailing whitespace, space indentation — Markdown
+  exempt from the trim rule, Python at 4), and `.gitattributes`
+  declares the same LF rule to Git and marks icon assets binary,
+  protecting the byte-pinned `favicon.ico` from line-ending
+  conversion. The three tracked files that lacked a final newline
+  (`.nvmrc`, `package.json`, `tsconfig.json`) now carry one, and
+  tests keep the declarations in agreement and the tree compliant.
 - **Legacy ICO favicon.** `src/app/favicon.ico` (16 / 32 / 48 px,
   classic 32-bpp BMP entries) redraws the same motif for the
   `/favicon.ico` surface browsers and tooling still request directly

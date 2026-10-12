@@ -1,0 +1,28 @@
+# EditorConfig for LedgerPilot — https://editorconfig.org
+#
+# The text conventions the tree already follows, declared where
+# editors actually read them: UTF-8, LF line endings, a final
+# newline, no trailing whitespace, and space indentation (2 in
+# general, 4 for Python — scripts/generate-favicon.py follows
+# PEP 8). `.gitattributes` declares the same LF rule to Git, and
+# the test suite keeps the two files in agreement and checks the
+# tracked text files themselves against these rules.
+
+root = true
+
+[*]
+charset = utf-8
+end_of_line = lf
+insert_final_newline = true
+trim_trailing_whitespace = true
+indent_style = space
+indent_size = 2
+
+# Markdown: trailing double-spaces are a hard line break, so the
+# trim rule does not apply (the shipped Markdown carries none, but
+# a future hard break must not be silently stripped by an editor).
+[*.md]
+trim_trailing_whitespace = false
+
+[*.py]
+indent_size = 4

@@ -326,6 +326,18 @@ curl -X POST localhost:3000/api/agent/execute -H 'content-type: application/json
   a URL, canonical, or `metadataBase`: no public host exists before
   the hosted deployment, and none is invented (the same rule the root
   layout and `robots` follow).
+- **Repository text hygiene.** `.editorconfig` declares the tree's
+  text conventions where editors read them (UTF-8, LF line endings,
+  a final newline, no trailing whitespace, space indentation — 2 in
+  general, 4 for Python; Markdown exempt from the trim rule because
+  trailing double-spaces are a hard break), and `.gitattributes`
+  declares the same LF rule to Git (`* text=auto eol=lf`), so a
+  clone made with `core.autocrlf` cannot hand back whole-file CRLF
+  diffs. The attributes also mark `*.ico` / `*.png` binary —
+  concretely protecting the committed `favicon.ico`, whose suite
+  asserts exact bytes and rendered pixels, from any line-ending
+  conversion pass. The test suite keeps the two files in agreement
+  and checks the tree's text files against the rules themselves.
 
 ## Run it locally
 
@@ -338,7 +350,7 @@ are not blocked, the suite also runs on them).
 ```bash
 npm install
 npm run dev        # http://localhost:3000
-npm test           # full test suite (434 tests)
+npm test           # full test suite (444 tests)
 npm run typecheck  # tsc --noEmit
 npm run build      # production build
 ```
@@ -531,7 +543,7 @@ signatures mirror the REST resources one-to-one.
 ## Testing
 
 ```bash
-npm test           # vitest — 434 tests, all green
+npm test           # vitest — 444 tests, all green
 npm run typecheck  # TypeScript strict, clean
 npm run build      # Next.js production build
 ```
@@ -723,7 +735,13 @@ invented contact channel, self-diagnosis via the health check and
 Judge Mode first, bugs and features routed to the issue forms,
 vulnerabilities and conduct routed privately and never to a public
 issue, and the scope limits — no PayPal account access, no
-real-money mode, latest default branch only)
+real-money mode, latest default branch only), and the repository
+text hygiene (`.editorconfig` root + global conventions, the
+Markdown trim exception and the Python indent, `.gitattributes`
+storing text as LF and marking the icon assets binary, the two
+files agreeing on LF, and the tree's text files themselves
+carrying no CR endings, ending with a final newline, and carrying
+no trailing whitespace outside Markdown and no tab indentation)
 — fake credentials only, no network.
 
 ### Smoke check (a running instance, end to end)

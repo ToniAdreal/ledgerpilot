@@ -36,6 +36,12 @@ pin the same major, and the test suite keeps all five sites in
 agreement). Judge Mode at `/judge` seeds the full demo scenario with
 one click.
 
+Text conventions live in `.editorconfig` (UTF-8, LF, final newline,
+no trailing whitespace, space indentation) and `.gitattributes`
+(the same LF rule at the Git layer, icon assets marked binary);
+most editors and Git apply them automatically — the test suite
+checks the tree against them.
+
 ## The verification gate
 
 Every change must pass the same sequence CI runs
