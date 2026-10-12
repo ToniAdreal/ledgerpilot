@@ -96,6 +96,12 @@ build record behind these summaries.
   same license as the root `LICENSE` file it previously had to
   discover on its own; the three declarations are kept in
   agreement by tests.
+- **Support routing.** `SUPPORT.md` states the whole support
+  route: best-effort with no SLA and no invented contact channel,
+  self-diagnosis via `GET /api/health` and Judge Mode first, bugs
+  and feature requests through the issue forms, vulnerabilities
+  and conduct concerns routed privately (never a public issue),
+  and the honest scope limits.
 - **Branded app shell.** App Router special files in the project's
   own voice instead of the framework defaults: a branded 404 page,
   error and global-error boundaries that offer a retry and never

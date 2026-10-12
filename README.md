@@ -326,7 +326,7 @@ are not blocked, the suite also runs on them).
 ```bash
 npm install
 npm run dev        # http://localhost:3000
-npm test           # full test suite (415 tests)
+npm test           # full test suite (424 tests)
 npm run typecheck  # tsc --noEmit
 npm run build      # production build
 ```
@@ -519,7 +519,7 @@ signatures mirror the REST resources one-to-one.
 ## Testing
 
 ```bash
-npm test           # vitest — 415 tests, all green
+npm test           # vitest — 424 tests, all green
 npm run typecheck  # TypeScript strict, clean
 npm run build      # Next.js production build
 ```
@@ -697,7 +697,13 @@ license metadata (the root `LICENSE` file's MIT heading and
 copyright, the `package.json` SPDX `license: "MIT"` field, and the
 `package-lock.json` root entry agreeing — a metadata change that
 does not re-sync the lockfile fails here — with the README License
-section linking the file and the package staying `private: true`)
+section linking the file and the package staying `private: true`),
+and the support file (`SUPPORT.md` — best-effort with no SLA and no
+invented contact channel, self-diagnosis via the health check and
+Judge Mode first, bugs and features routed to the issue forms,
+vulnerabilities and conduct routed privately and never to a public
+issue, and the scope limits — no PayPal account access, no
+real-money mode, latest default branch only)
 — fake credentials only, no network.
 
 ### Smoke check (a running instance, end to end)
@@ -744,6 +750,13 @@ review, nothing auto-merges. The shipped code is also scanned by a
 CodeQL workflow (`.github/workflows/codeql.yml`) on every push and
 pull request and weekly, reporting to GitHub code scanning; it runs
 with no secrets and writes nothing but scanning results.
+
+## Support
+
+See [SUPPORT.md](./SUPPORT.md): best-effort support through GitHub
+only — self-diagnose with `GET /api/health` and Judge Mode first,
+bugs and feature requests through the issue forms, and never a
+public issue for a vulnerability or a conduct concern.
 
 ## Contributing
 
