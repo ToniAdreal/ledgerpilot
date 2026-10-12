@@ -29,7 +29,8 @@ export default function HomePage() {
         The audit trail also has its own page at <a href="/activity">/activity</a> — the
         full-width, deep-linkable view of the Activity grid below. The invoice list likewise
         has its own page at <a href="/invoices">/invoices</a>, each row linking to its detail
-        timeline. New here?{" "}
+        timeline. The checkout orders likewise have their own page at{" "}
+        <a href="/checkout">/checkout</a>, with the buyer view for each payable order. New here?{" "}
         <a href="/judge">Judge Mode</a> seeds the full demo scenario in one click —
         no PayPal account or API key needed. Sandbox / mock mode only — no real money moves.
         Agent pipeline: briefs via{" "}

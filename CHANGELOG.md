@@ -16,6 +16,13 @@ build record behind these summaries.
 
 ### Added
 
+- **Checkout page.** The checkout orders have their own addressable
+  page at `/checkout` (the page CONCEPT.md §3.1 lists as the
+  "Sell something" flow): the same read model and route as the
+  console's Orders grid, rendered full-width with the console's
+  state and CSV-export view-models and the Buyer view per payable
+  order. Read-only as a list — creating orders and capturing stay
+  in the console.
 - **Invoices page.** The invoice list has its own addressable page
   at `/invoices` (the list half of the page CONCEPT.md §3.1 lists
   as "invoice list + detail"): the same read model and route as
