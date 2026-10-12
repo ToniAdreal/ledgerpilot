@@ -1,6 +1,8 @@
 /**
  * Resource-shaped plan drafts — the `POST /api/paypal/invoices|orders|payouts`
- * wrappers CONCEPT.md §3.1 lists.
+ * wrappers CONCEPT.md §3.1 lists, plus `POST /api/paypal/reminders` for
+ * the fourth typed action (`send_reminder`), which §3.1's sketch folds
+ * into the Invoicing surface rather than listing as its own wrapper.
  *
  * These wrappers are deliberately **not** a second execution path. The
  * executor's header states the product invariant: nothing executes
@@ -58,6 +60,13 @@ export interface OrderDraftInput {
   amount?: unknown;
   currency?: unknown;
   reference?: unknown;
+}
+
+export interface ReminderDraftInput {
+  recipientName?: unknown;
+  recipientEmail?: unknown;
+  /** Invoice id, invoice number, or detail reference; omit to target the recipient's most-overdue open invoice. */
+  invoiceRef?: unknown;
 }
 
 export interface PayoutDraftInput {
@@ -261,6 +270,33 @@ export function draftOrderPlan(input: OrderDraftInput, options: DraftOptions = {
     payload: { description, amount, ...(reference ? { reference_id: reference } : {}) },
   };
   return basePlan(`API draft: checkout order "${description}" ${amount.currency_code} ${amount.value}`, step, options);
+}
+
+/**
+ * Draft a `send_reminder` plan (POST /api/paypal/reminders). Nothing is
+ * sent. The step payload is identical to the deterministic parser's
+ * reminder step ({ recipient, invoiceRef }) — an explicit reference is
+ * carried verbatim (the executor must match it to an invoice id,
+ * invoice number, or detail reference, and fails the step when nothing
+ * matches); with no reference the payload carries `invoiceRef: null`
+ * and the executor resolves the recipient's most-overdue open invoice.
+ */
+export function draftReminderPlan(input: ReminderDraftInput, options: DraftOptions = {}): ActionPlan {
+  const recipient = parseRecipient(input.recipientName, input.recipientEmail, options.contacts);
+  const refRaw = input.invoiceRef;
+  const ref =
+    refRaw === undefined || refRaw === null || refRaw === "" ? undefined : requireText(refRaw, "invoiceRef");
+  const step: ActionStep = {
+    type: "send_reminder",
+    description: `Send a payment reminder to ${recipient.name}${ref ? ` about invoice ${ref}` : " about their most-overdue open invoice"}`,
+    paypalCall: { method: "POST", path: "/v2/invoicing/invoices/:id/remind" },
+    payload: { recipient, invoiceRef: ref ?? null },
+  };
+  return basePlan(
+    `API draft: payment reminder to ${recipient.name}${ref ? ` about invoice ${ref}` : ""}`,
+    step,
+    options,
+  );
 }
 
 /** Draft a `draft_payout` plan (POST /api/paypal/payouts). Nothing is paid out. */

@@ -16,6 +16,11 @@ build record behind these summaries.
 
 ### Added
 
+- **Reminder form + draft wrapper.** `POST /api/paypal/reminders`
+  drafts a `send_reminder` plan (payload-identical to the parser's
+  reminder step) and the console's structured “Send a reminder” form
+  drafts through the same approval gate — completing the structured
+  draft + form set for all four typed actions.
 - **Invoice form.** The console's structured “New invoice” form
   (recipient, optional email, description, amount, currency, optional
   due date / note / reference) drafts an invoice through the approval

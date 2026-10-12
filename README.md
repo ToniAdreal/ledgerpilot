@@ -158,6 +158,18 @@ curl -X POST localhost:3000/api/agent/execute -H 'content-type: application/json
   through the same plan review → approve → execute gate as every other
   surface, and its buyer checkout link then appears in the Orders grid's
   Buyer view.
+- **Reminder form + draft wrapper (the fourth typed action).**
+  `send_reminder` now has the same structured path as the other three
+  actions: `POST /api/paypal/reminders` drafts a `pending_approval`
+  plan whose step is payload-identical to the NL parser's reminder
+  step, and the console ships a structured reminder form (above the
+  Invoices grid): recipient (with an optional explicit email) and an
+  optional invoice reference, with inline validation mirroring the
+  server's draft rules, a live preview stating the targeting rule,
+  and an example reminder (Marco's most-overdue open invoice — the
+  Command bar's canonical example). The form only ever drafts — the
+  reminder is sent through the same plan review → approve → execute
+  gate, and the send then appears in the Activity audit grid.
 - **Checkout capture leg (the sell loop closes).** A `create_order` step
   creates a `CREATED` order. The Orders grid's **Buyer view** column
   surfaces the order's PayPal checkout link — the `approve` (or
@@ -376,7 +388,7 @@ are not blocked, the suite also runs on them).
 ```bash
 npm install
 npm run dev        # http://localhost:3000
-npm test           # full test suite (478 tests)
+npm test           # full test suite (489 tests)
 npm run typecheck  # tsc --noEmit
 npm run build      # production build
 ```
@@ -509,6 +521,10 @@ mock mode a config swap rather than a rewrite.
   the invoice draft rules (incl. the real-calendar due-date rule),
   request-body building, and the live preview for the console's
   invoice form.
+- `src/lib/reminder/` — reminder-form view-model: validation mirror
+  of the reminder draft rules, request-body building (empty optionals
+  omitted), and the live preview stating the targeting rule for the
+  console's reminder form.
 - `src/lib/ask/` — Ask-the-grid parser + filter-model validator.
 - `src/lib/checkout/` — the Orders checkout leg: the buyer-view
   resolution (`checkout-link.ts`: approval-link extraction —
@@ -537,7 +553,7 @@ mock mode a config swap rather than a rewrite.
   value — only the names of missing variables.
 - API routes — `GET /api/health` (readiness; 200 ok/degraded, 503
   misconfigured), `src/app/api/agent/` (`POST /plan`, `POST /approve`,
-  `POST /execute`), `src/app/api/paypal/` (`POST /invoices|orders|payouts` —
+  `POST /execute`), `src/app/api/paypal/` (`POST /invoices|orders|payouts|reminders` —
   validated wrappers that draft plans, never execute; `POST /webhooks` — 401 on bad
   signature, 200 on processed/duplicate; `GET /sync`; `POST /orders/capture`),
   `src/app/api/console/` (`GET /invoices|orders|payouts|activity|disputes|transactions|summary`,
@@ -586,7 +602,7 @@ signatures mirror the REST resources one-to-one.
 ## Testing
 
 ```bash
-npm test           # vitest — 478 tests, all green
+npm test           # vitest — 489 tests, all green
 npm run typecheck  # TypeScript strict, clean
 npm run build      # Next.js production build
 ```
@@ -615,6 +631,14 @@ normalisation with empty optionals omitted, a preview that never
 guesses an invalid amount, and a form-built draft — example
 included — accepted by the real invoice draft, refused unapproved,
 then executed into a SENT invoice with its due date),
+the reminder draft + form (the draft's step is payload-identical to
+the parser's reminder step with and without a reference, a 400
+validation matrix naming the field, the form's validation mirror /
+request body / targeting-rule preview, and form-built drafts —
+example included — refused unapproved, then executed through the
+gate to remind Marco about Judge Mode's seeded overdue invoice and
+to send by explicit invoice number, with an unmatched reference
+failing the plan),
 invoice reminders (mock open-invoice rules, executor resolution by
 reference and by most-overdue open invoice, unmatched-reference and
 already-paid failures, the sandbox `/remind` request shape), the

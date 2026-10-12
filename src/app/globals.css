@@ -191,6 +191,8 @@ body { margin: 0; color: #111827; background: #ffffff; }
 .sell-form { margin-top: 1.5rem; }
 /* Invoice form — shares the batch form's field styles */
 .invoice-form { margin-top: 1.5rem; }
+/* Reminder form — shares the batch form's field styles */
+.reminder-form { margin-top: 1.5rem; }
 .batch-lines { display: flex; flex-direction: column; gap: 0.6rem; }
 .batch-line { display: flex; flex-wrap: wrap; gap: 0.6rem; align-items: flex-end; border: 1px solid #f3f4f6; border-radius: 8px; padding: 0.6rem 0.75rem; background: #f9fafb; }
 .batch-line-num { font-weight: 650; font-size: 13px; color: #6b7280; padding-bottom: 0.6rem; }
