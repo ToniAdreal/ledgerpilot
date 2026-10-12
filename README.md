@@ -293,6 +293,18 @@ curl -X POST localhost:3000/api/agent/execute -H 'content-type: application/json
   hosted demo would have had no touch icon on Apple devices. The
   background is full-bleed (Apple masks and rounds the corners
   itself), and no external asset, font, or URL is fetched.
+- **Legacy ICO favicon.** `src/app/favicon.ico` serves the surface
+  browsers and tooling still request directly at `/favicon.ico`,
+  which 404'd while only the modern conventions existed. Its three
+  entries (16 / 32 / 48 px, classic 32-bpp BMP) redraw the app icon's
+  own motif — ink square, white ledger rows at the SVG's opacities,
+  green status dot — and are generated deterministically by
+  `scripts/generate-favicon.py` (pure Python standard library, no
+  Pillow, no network; re-run it if `icon.svg` changes). Because the
+  entries are uncompressed, the test suite asserts the rendered
+  pixels themselves — transparency outside the rounded square, the
+  0.65-opacity row composited over the ink, the dot — not just the
+  file's presence.
 - **Accessibility shell.** The root layout's first focusable element is
   a "Skip to main content" link that stays off-viewport until focused,
   then pins to the top-left and jumps to the page's single
@@ -326,7 +338,7 @@ are not blocked, the suite also runs on them).
 ```bash
 npm install
 npm run dev        # http://localhost:3000
-npm test           # full test suite (424 tests)
+npm test           # full test suite (434 tests)
 npm run typecheck  # tsc --noEmit
 npm run build      # production build
 ```
@@ -519,7 +531,7 @@ signatures mirror the REST resources one-to-one.
 ## Testing
 
 ```bash
-npm test           # vitest — 424 tests, all green
+npm test           # vitest — 434 tests, all green
 npm run typecheck  # TypeScript strict, clean
 npm run build      # Next.js production build
 ```
@@ -681,6 +693,14 @@ the app icon's own colours asserted against `icon.svg`, the
 full-bleed root with no border radius of its own, no external URL
 or fetch in the source, the rendered PNG's signature and IHDR
 dimensions verified, and the layout leaving the touch icon to the
+convention), and the legacy ICO favicon (`src/app/favicon.ico` —
+the ICONDIR header and the 16 / 32 / 48 entries parsed, each a
+32-bpp BMP of the declared size, the rendered pixels asserted
+(transparent corners outside the rounded square, the ink
+background, the full-opacity row, the 0.65-opacity row composited
+over the ink, the green status dot, the motif still rendering at
+16 px), the committed stdlib-only generator script redrawn from
+the `icon.svg` motif, and the layout leaving the favicon to the
 convention), and the publish-day smoke script (`scripts/smoke.mjs` —
 the documented endpoints driven in loop order, the reset-before-seed
 re-runnability with its disposable-instance warning, the approval

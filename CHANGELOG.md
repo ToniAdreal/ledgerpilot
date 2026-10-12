@@ -127,6 +127,15 @@ build record behind these summaries.
   iOS / Safari do not use the SVG favicon or the manifest's SVG icon
   for the touch surface, so the hosted demo previously had no touch
   icon on Apple devices. No external asset or font is fetched.
+- **Legacy ICO favicon.** `src/app/favicon.ico` (16 / 32 / 48 px,
+  classic 32-bpp BMP entries) redraws the same motif for the
+  `/favicon.ico` surface browsers and tooling still request directly
+  — the one icon request that 404'd while only the modern
+  conventions existed. It is generated deterministically by
+  `scripts/generate-favicon.py` (Python standard library only) and
+  committed; because the entries are uncompressed, tests assert the
+  rendered pixels, including the translucent row composited over
+  the ink.
 - **Accessibility shell.** A "Skip to main content" link is the root
   layout's first focusable element — off-viewport until focused, then
   pinned visible — targeting each page's single
