@@ -18,3 +18,5 @@
 .github/CODEOWNERS @ToniAdreal
 SECURITY.md @ToniAdreal
 render.yaml @ToniAdreal
+Dockerfile @ToniAdreal
+.dockerignore @ToniAdreal

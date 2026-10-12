@@ -67,6 +67,8 @@ describe(".github/CODEOWNERS", () => {
     expect(patterns).toContain(".github/CODEOWNERS");
     expect(patterns).toContain("SECURITY.md");
     expect(patterns).toContain("render.yaml");
+    expect(patterns).toContain("Dockerfile");
+    expect(patterns).toContain(".dockerignore");
   });
 
   it("documents that the last matching pattern wins", () => {

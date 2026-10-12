@@ -84,6 +84,14 @@ build record behind these summaries.
   booleans and missing-variable names only — never a credential
   value. A Render Blueprint (`render.yaml`) deploys the hosted demo
   in mock mode with every credential variable declared `sync: false`.
+- **Container deployment.** A `Dockerfile` packages the same hosted
+  demo for any container host: every stage pins Node 22, the image
+  builds and starts with the package's own scripts as the non-root
+  `node` user, defaults to credential-free mock mode (no secret
+  value is ever baked into the image — sandbox credentials are a
+  runtime decision), and health-checks `GET /api/health`.
+  `.dockerignore` keeps `.env` files, local snapshots, dependencies,
+  and build output out of the build context.
 - **Repository façade.** MIT `LICENSE`, `SECURITY.md` with private
   vulnerability reporting, `CONTRIBUTING.md`, issue forms and a pull
   request template, `CODE_OF_CONDUCT.md` (Contributor Covenant 2.1),

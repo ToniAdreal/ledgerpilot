@@ -1,0 +1,21 @@
+# Build-context exclusions for the Dockerfile.
+#
+# Dependencies and build output are recreated inside the image
+# (npm ci + npm run build), local state and secrets never enter
+# the context at all — the same discipline as .gitignore, plus
+# the repository itself.
+
+.git
+node_modules
+.next
+out
+coverage
+.env
+.env.local
+*.tsbuildinfo
+*.ledger.json
+*.ledger.json.tmp
+*.mock-paypal.json
+*.mock-paypal.json.tmp
+Dockerfile
+.dockerignore

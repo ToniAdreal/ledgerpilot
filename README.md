@@ -253,6 +253,14 @@ curl -X POST localhost:3000/api/agent/execute -H 'content-type: application/json
   `PAYPAL_CLIENT_SECRET`) instead of an opaque 500. Warnings only (e.g.
   sandbox without a webhook id — the sync reconciler remains the fallback)
   stay 200 `degraded`; mock mode is always `ok`.
+- **Container deployment.** A `Dockerfile` (repo root) packages the same
+  hosted demo for any container host: every stage pins Node 22, the
+  image installs with `npm ci`, builds with `npm run build`, and starts
+  with `npm start` as the non-root `node` user, in production mode and
+  the default mock mode, health-checked at `GET /api/health`. No
+  credential value is ever baked into the image — sandbox mode is a
+  runtime `-e` decision with your own variables. `.dockerignore` keeps
+  local state, snapshots, and `.env` files out of the build context.
 - **Branded app shell.** The App Router special files are LedgerPilot's own,
   not the framework defaults: a mistyped or moved link lands on a branded
   404 that routes back to the console and Judge Mode; a page error renders
@@ -350,7 +358,7 @@ are not blocked, the suite also runs on them).
 ```bash
 npm install
 npm run dev        # http://localhost:3000
-npm test           # full test suite (452 tests)
+npm test           # full test suite (463 tests)
 npm run typecheck  # tsc --noEmit
 npm run build      # production build
 ```
@@ -409,6 +417,17 @@ variables. Once a hosted instance is up, verify it end to end with
 `SMOKE_BASE_URL=<hosted demo URL> npm run smoke` (see Testing) — the
 script runs the full Judge Mode loop against the live instance and
 asserts the README totals.
+
+For any container host, the `Dockerfile` (repo root) packages the
+same demo: `docker build -t ledgerpilot .` then
+`docker run --rm -p 3000:3000 ledgerpilot` serves it on port 3000 in
+the default mock mode (Judge Mode included), as the non-root `node`
+user, with a container health check probing `GET /api/health`. No
+credential value is baked into the image; to run your own sandbox
+app instead, pass the same variables from `.env.example` at run time
+(`docker run -e PAYPAL_MODE=sandbox -e PAYPAL_CLIENT_ID=... ...`).
+`.dockerignore` keeps `.env` files, local snapshots, and build
+output out of the build context.
 
 ## Architecture
 
@@ -543,7 +562,7 @@ signatures mirror the REST resources one-to-one.
 ## Testing
 
 ```bash
-npm test           # vitest — 452 tests, all green
+npm test           # vitest — 463 tests, all green
 npm run typecheck  # TypeScript strict, clean
 npm run build      # Next.js production build
 ```
@@ -651,8 +670,9 @@ disabled — and `.github/pull_request_template.md` — the gate,
 secrets, and money rules as a checklist), and the Node runtime pin
 (`.nvmrc` naming the pinned major, the `package.json` `engines` floor
 at that major, CI and the Render blueprint pinning the same major,
-`@types/node` tracking it, and CONTRIBUTING.md stating it — a version
-bump must move all five sites at once), and the code of conduct
+`@types/node` tracking it, CONTRIBUTING.md stating it, and every
+Dockerfile stage pinning it — a version
+bump must move all six sites at once), and the code of conduct
 (`CODE_OF_CONDUCT.md` — Contributor Covenant 2.1 pledge and standards,
 the four-step enforcement ladder in order, conduct reports routed
 privately through GitHub with no public issue and no invented contact
@@ -748,7 +768,15 @@ automation-sensitive surfaces — workflows, Dependabot config,
 `SECURITY.md`, the deployment descriptor, the file itself —
 explicitly owned, every rule naming the same one owner, the
 last-match-wins rule documented, and no email address or
-credential-shaped value published)
+credential-shaped value published), and the container descriptor
+(`Dockerfile` — every stage pinning Node 22, install / build / start
+via the package's own scripts, mock mode as the credential-free
+default with no secret value baked in, production mode on port 3000
+bound to all interfaces, the non-root `node` user set before the
+start command, and a health check probing the real `/api/health`
+route — plus `.dockerignore` keeping `.env` files, local snapshots,
+dependencies, and build output out of the context while never
+excluding the sources or manifests the build needs)
 — fake credentials only, no network.
 
 ### Smoke check (a running instance, end to end)
