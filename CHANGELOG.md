@@ -16,6 +16,14 @@ build record behind these summaries.
 
 ### Added
 
+- **Disputes page.** The disputes list has its own addressable
+  page at `/disputes`: the same read model and route as the
+  console's Disputes grid, rendered full-width with the console's
+  state and CSV-export view-models, response deadlines with
+  overdue highlighting, and seeded rows flagged "Sample". The
+  draft-only evidence summary is carried over as a GET-only,
+  never-submitted draft — the Disputes integration stays
+  read-only end to end.
 - **Command page.** The Agent Command bar has its own addressable
   page at `/command` (the plan-review surface CONCEPT.md §3.1
   lists, "or console drawer"): the console's own CommandBar

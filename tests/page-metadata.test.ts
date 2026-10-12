@@ -51,6 +51,11 @@ const PAGES: Array<{ name: string; parts: string[]; title: string }> = [
     title: "LedgerPilot — Agent Command",
   },
   {
+    name: "disputes list",
+    parts: ["disputes", "page.tsx"],
+    title: "LedgerPilot — Disputes",
+  },
+  {
     name: "not-found",
     parts: ["not-found.tsx"],
     title: "LedgerPilot — Page not found",

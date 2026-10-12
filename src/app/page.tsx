@@ -34,7 +34,9 @@ export default function HomePage() {
         payouts likewise have their own page at <a href="/payouts">/payouts</a>, one row
         per payout item with its batch context. The Agent Command bar likewise has its
         own page at <a href="/command">/command</a>, the plan-review surface for drafting
-        a brief and approving the typed plan. New here?{" "}
+        a brief and approving the typed plan. The disputes likewise have their own page
+        at <a href="/disputes">/disputes</a>, the read-only list with response deadlines
+        and the draft-only evidence summary per dispute. New here?{" "}
         <a href="/judge">Judge Mode</a> seeds the full demo scenario in one click —
         no PayPal account or API key needed. Sandbox / mock mode only — no real money moves.
         Agent pipeline: briefs via{" "}
