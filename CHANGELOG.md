@@ -26,6 +26,14 @@ build record behind these summaries.
   supported, and no execution path around the approval gate. This
   is CONCEPT.md §1's tool-layer stretch goal, built REST-first as
   planned.
+- **OpenAPI document.** `GET /api/openapi` serves an OpenAPI 3.1
+  document for the whole HTTP API (27 paths, 29 operations), built
+  from a registry in `src/lib/api/` whose completeness the test
+  suite enforces against the route files on disk. It declares a
+  single relative server (no invented host), no credentials, and
+  `security: []` on every operation — the API has no authentication
+  layer, and the document says so, with the deployer-access-controls
+  warning for publicly exposed instances.
 - **Sandbox verification smoke.** `npm run smoke:sandbox`
   (`scripts/smoke-sandbox.mjs`, zero dependencies) automates the
   sandbox exit test against a running sandbox-mode instance: it

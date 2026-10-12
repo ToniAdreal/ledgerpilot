@@ -126,6 +126,21 @@ curl -X POST localhost:3000/api/agent/execute -H 'content-type: application/json
   (this plan's own invoice payment, bound at execution) — never both.
   Nothing executes without the ordinary approve → execute flow: the
   approval gate has no tool-call back door either.
+- **OpenAPI document (the machine-readable API map).** `GET
+  /api/openapi` serves an OpenAPI 3.1 document covering every API
+  operation in the app (27 paths, 29 operations): summaries, the
+  approval-gate wording on every draft surface, the shared
+  `{ error }` response shape, and the webhook event body. It is
+  built from a registry in `src/lib/api/`, and the test suite walks
+  the route files on disk and requires the document to describe
+  exactly the operations they export — a route added without a
+  document entry fails the suite. The document declares no host
+  (a single relative server entry, the same no-invented-URL rule
+  as the rest of the app), no credentials, and `security: []` on
+  every operation: this API has no authentication layer, the
+  approval gate is an application invariant rather than
+  authentication, and a publicly exposed instance needs the
+  deployer's own access controls (see SECURITY.md).
 - **Payout batch builder (drafted batch, per-line validation, approval
   release).** The payouts draft also accepts a batch form —
   `{ items: [{ recipientName, amount, currency?, note? }, … ] }` (up to
@@ -501,7 +516,7 @@ are not blocked, the suite also runs on them).
 ```bash
 npm install
 npm run dev        # http://localhost:3000
-npm test           # full test suite (603 tests)
+npm test           # full test suite (617 tests)
 npm run typecheck  # tsc --noEmit
 npm run build      # production build
 ```
@@ -680,8 +695,13 @@ mock mode a config swap rather than a rewrite.
   resolving to `ok` / `degraded` / `misconfigured` checks. It never
   constructs the runtime or a PayPal client and never reports a secret
   value — only the names of missing variables.
+- `src/lib/api/` — the OpenAPI registry + document builder behind
+  `GET /api/openapi`: one registry entry per API operation, the
+  shared Error schema, relative-only server entry, and
+  `security: []` throughout (no auth layer exists to declare);
+  completeness against the route files is test-enforced.
 - API routes — `GET /api/health` (readiness; 200 ok/degraded, 503
-  misconfigured), `src/app/api/agent/` (`POST /plan`, `POST /approve`,
+  misconfigured), `GET /api/openapi` (the OpenAPI 3.1 document), `src/app/api/agent/` (`POST /plan`, `POST /approve`,
   `POST /execute`, `GET|POST /tools` — tool definitions + tool-call
   plan drafting), `src/app/api/paypal/` (`POST /invoices|orders|payouts|reminders` —
   validated wrappers that draft plans, never execute; `POST /webhooks` — 401 on bad
@@ -739,7 +759,7 @@ signatures mirror the REST resources one-to-one.
 ## Testing
 
 ```bash
-npm test           # vitest — 603 tests, all green
+npm test           # vitest — 617 tests, all green
 npm run typecheck  # TypeScript strict, clean
 npm run build      # Next.js production build
 ```
@@ -855,7 +875,13 @@ arguments, steps identical to the resource drafts for every action —
 batch payouts and both gating forms included — unknown-tool and
 undeclared-argument rejection, the four-call plan cap, and a
 tool-sourced plan closing the full invoice → paid → payout loop
-through the gate), payout batches (per-line validated
+through the gate), the OpenAPI document (the registry-built
+document describing exactly the operations the route files on disk
+export — walked and compared in the suite — relative server only,
+no credential or email anywhere, the shared Error schema referenced
+by every error response, path parameters declared, request bodies
+present exactly where a route takes one, and the gate wording on
+every draft surface), payout batches (per-line validated
 batch drafts with line-named errors and the ambiguous-shape rejection,
 drafting moves no money, an approved batch executing as exactly one
 PayPal batch with per-item console rows and per-currency totals, a
