@@ -53,6 +53,10 @@ npm test           # vitest — must be fully green
 npm run build      # Next.js production build — must succeed
 ```
 
+`npm run verify` runs that exact sequence as one command (it
+installs nothing — run `npm ci` first on a fresh clone, as CI
+does).
+
 The suite is fully offline: it runs against the mock PayPal adapter
 and a stubbed sandbox fetch, with fake credentials only, so no
 network or account is needed to verify a change. If a test fails

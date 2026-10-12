@@ -515,6 +515,14 @@ curl -X POST localhost:3000/api/agent/execute -H 'content-type: application/json
   asserts exact bytes and rendered pixels, from any line-ending
   conversion pass. The test suite keeps the two files in agreement
   and checks the tree's text files against the rules themselves.
+- **Verification script.** `npm run verify` runs the whole
+  verification gate — `npm run typecheck && npm test && npm run build`,
+  in the order CI runs them — as one command, so a contributor or
+  the publish-day gate never has to retype the sequence (or risk
+  running it out of order). It installs nothing, starts no server,
+  and reads no credentials; its exact command string is pinned by
+  tests against the CI workflow's step order, so the shortcut
+  cannot drift from the gate it abbreviates.
 
 ## Run it locally
 
@@ -527,7 +535,7 @@ are not blocked, the suite also runs on them).
 ```bash
 npm install
 npm run dev        # http://localhost:3000
-npm test           # full test suite (627 tests)
+npm test           # full test suite (634 tests)
 npm run typecheck  # tsc --noEmit
 npm run build      # production build
 ```
@@ -774,14 +782,19 @@ signatures mirror the REST resources one-to-one.
 ## Testing
 
 ```bash
-npm test           # vitest — 627 tests, all green
+npm test           # vitest — 634 tests, all green
 npm run typecheck  # TypeScript strict, clean
 npm run build      # Next.js production build
+npm run verify     # the whole gate below, as one command
 ```
 
 The same sequence runs in CI (`.github/workflows/ci.yml`) on every
 push to `main` and every pull request — no secrets required, since
 the suite is fully offline and the build runs in mock mode.
+`npm run verify` is the single-command form of the gate
+(`npm run typecheck && npm test && npm run build`, in CI's order);
+it installs nothing and starts no server — run `npm ci` (or
+`npm install`) first on a fresh clone, exactly as CI does.
 
 The suite covers: the mock PayPal surface (invoice lifecycle, partial
 payments, capture/payout guards, the full invoice→paid→payout loop),
@@ -1075,7 +1088,11 @@ bound to all interfaces, the non-root `node` user set before the
 start command, and a health check probing the real `/api/health`
 route — plus `.dockerignore` keeping `.env` files, local snapshots,
 dependencies, and build output out of the context while never
-excluding the sources or manifests the build needs)
+excluding the sources or manifests the build needs), and the
+verification script (`npm run verify` — the exact gate command
+string, its step order agreeing with the CI workflow's, no
+install / server / smoke / credential anywhere in it, and every
+script it references existing in `package.json`)
 — fake credentials only, no network.
 
 ### Smoke check (a running instance, end to end)

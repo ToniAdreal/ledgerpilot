@@ -16,6 +16,11 @@ build record behind these summaries.
 
 ### Added
 
+- **Verification script.** `npm run verify` runs the whole
+  verification gate (`npm run typecheck && npm test && npm run build`,
+  in CI's order) as one command. It installs nothing, starts no
+  server, and reads no credentials; the exact command string is
+  pinned by tests against the CI workflow's step order.
 - **API documentation page.** The human-readable rendering of
   the OpenAPI registry at `/api-docs`: every operation grouped
   by surface with its summary, description, request-body note,
