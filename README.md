@@ -300,6 +300,15 @@ curl -X POST localhost:3000/api/agent/execute -H 'content-type: application/json
   order's checkout link (mock links labeled as mock). It is
   read-only as a list (its only fetch is that one GET): creating
   orders through the Sell form and capturing stay in the console.
+- **Payouts page (the §3.1 `/payouts` list surface).** The payouts
+  list also has its own addressable page at `/payouts`: the same
+  PayoutRow read model from the same `GET /api/console/payouts`
+  route the console grid consumes — no second data path — rendered
+  full-width with the console's own state and CSV-export view-models,
+  25 rows per page, one row per payout item with its batch context
+  flattened in. It is read-only as a list (its only fetch is that
+  one GET): drafting batches in the payout batch builder and
+  releasing them through the approval gate stay in the console.
 - **Honest console states.** Loading, load-error, empty, and filtered-empty
   are four different states with four different messages — resolved by a
   pure, unit-tested view-model, never a bare grid: a fresh console explains
@@ -439,7 +448,7 @@ are not blocked, the suite also runs on them).
 ```bash
 npm install
 npm run dev        # http://localhost:3000
-npm test           # full test suite (531 tests)
+npm test           # full test suite (543 tests)
 npm run typecheck  # tsc --noEmit
 npm run build      # production build
 ```
@@ -617,7 +626,7 @@ mock mode a config swap rather than a rewrite.
   `src/app/api/judge/` (`GET /`, `POST /seed`, `POST /pay`, `POST /reset`).
 - UI — `src/app/` (operations console at `/`, Judge Mode at `/judge`,
   invoice list at `/invoices`, invoice detail at `/invoices/[id]`,
-  checkout orders at `/checkout`,
+  checkout orders at `/checkout`, payouts at `/payouts`,
   agent activity & webhook audit at `/activity`).
 
 ## PayPal APIs used
@@ -659,7 +668,7 @@ signatures mirror the REST resources one-to-one.
 ## Testing
 
 ```bash
-npm test           # vitest — 531 tests, all green
+npm test           # vitest — 543 tests, all green
 npm run typecheck  # TypeScript strict, clean
 npm run build      # Next.js production build
 ```
@@ -733,7 +742,13 @@ executed loop), the standalone checkout page (typed page metadata
 console grid, the console state/export view-models reused, the
 buyer view per order row with no capture action and no mutating
 endpoint called, the home page linking to it, and its rows
-projected from a real executed sell loop), the
+projected from a real executed sell loop), the standalone
+payouts page (typed page metadata + skip target, the same
+payouts route and read model as the console grid, the console
+state/export view-models reused, no batch-builder form or
+release action and no mutating endpoint called, the home page
+linking to it, and its rows projected from a real executed
+payout loop), the
 command-bar gate matrix, Ask-the-grid parsing +
 validator negative cases, the full Judge Mode loop (seed idempotency,
 the historical-event guard, double-payment no-op), and the sandbox REST

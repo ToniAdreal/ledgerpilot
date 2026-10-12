@@ -16,6 +16,14 @@ build record behind these summaries.
 
 ### Added
 
+- **Payouts page.** The payouts list has its own addressable page
+  at `/payouts` (the list surface of the page CONCEPT.md §3.1
+  lists as the payout batch builder): the same read model and
+  route as the console's Payouts grid, rendered full-width with
+  the console's state and CSV-export view-models, one row per
+  payout item with its batch context flattened in. Read-only
+  as a list — drafting batches and releasing payouts stay in
+  the console.
 - **Checkout page.** The checkout orders have their own addressable
   page at `/checkout` (the page CONCEPT.md §3.1 lists as the
   "Sell something" flow): the same read model and route as the
