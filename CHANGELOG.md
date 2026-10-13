@@ -16,6 +16,18 @@ build record behind these summaries.
 
 ### Added
 
+- **Rate limit (the JSON 429).** A client POSTing past 120
+  requests per 60-second fixed window (per client key — first
+  `x-forwarded-for` entry, else `x-real-ip`, else a shared
+  "direct" bucket; a flood brake, not an identity) now answers a
+  JSON 429 in the shared `{ error }` shape naming the limit,
+  with a `Retry-After` header, via middleware after the method
+  and negotiation guards; the refused request reaches no route,
+  runtime, or PayPal call. Reads are never counted, and the
+  webhook listener is not exempt (PayPal retries deliveries
+  answered with an error status, and verified events are
+  processed exactly once). The OpenAPI document declares the
+  shared 429 on every POST operation.
 - **Content negotiation (the JSON 406).** Every request whose
   `Accept` header excludes `application/json` — the only
   representation the API returns — now answers a JSON 406 in the

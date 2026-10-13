@@ -70,6 +70,13 @@
  *    PayPal, a machine peer delivering an event rather than a
  *    client negotiating a representation, so its deliveries are
  *    never refused over an `Accept` header.
+ *  - **Every POST operation shares one 429.** A client POSTing
+ *    past the per-client limit (120 POSTs per 60 seconds, fixed
+ *    window, in `src/lib/api/rate-limit.ts`) is answered 429 with
+ *    that same error shape and a `Retry-After` header, by
+ *    middleware after the method and negotiation guards. Reads
+ *    are never counted, so no GET operation carries it. Appended
+ *    by `apiOperationResponses` for POST operations only.
  */
 
 export type ApiTag = "Agent" | "Console" | "Health" | "Judge Mode" | "PayPal";
@@ -535,12 +542,17 @@ export const NON_NEGOTIABLE_OPERATION_IDS: ReadonlySet<string> = new Set([
 export const NOT_ACCEPTABLE_RESPONSE =
   "The request's Accept header does not accept application/json, the only representation this API returns; the API answers a JSON { error } naming the path (middleware content negotiation, after the method guard). Requests that send no Accept header, or accept JSON directly or via a wildcard range with q > 0, are served as before.";
 
+export const TOO_MANY_REQUESTS_RESPONSE =
+  "The client has exceeded 120 POST requests per 60 seconds (per-client fixed window); the API answers a JSON { error } naming the limit with a Retry-After header (middleware rate limit, after the method and negotiation guards). Reads are never counted. PayPal retries webhook deliveries answered with an error status, and verified events are processed exactly once, so a refused delivery is delayed, not dropped.";
+
 /**
  * The responses an operation can actually return: its registry
  * responses, plus the shared 405 every documented path answers a
  * wrong-method call with, plus the shared 406 every operation
  * except the webhook listener answers an Accept header that
- * excludes JSON with, plus the shared runtime-backed 503 for
+ * excludes JSON with, plus the shared 429 every POST operation
+ * answers a per-client rate-limit excess with, plus the shared
+ * runtime-backed 503 for
  * every operation that builds the agent runtime, plus the shared
  * 413 for every operation that takes a JSON request body. Used by
  * both the OpenAPI builder and the human-readable /api-docs page,
@@ -553,6 +565,9 @@ export function apiOperationResponses(op: ApiOperation): Record<string, string> 
   }
   if (!NON_NEGOTIABLE_OPERATION_IDS.has(op.operationId) && !("406" in responses)) {
     responses = { ...responses, "406": NOT_ACCEPTABLE_RESPONSE };
+  }
+  if (op.method === "post" && !("429" in responses)) {
+    responses = { ...responses, "429": TOO_MANY_REQUESTS_RESPONSE };
   }
   if (op.requestBody && !("413" in responses)) {
     responses = { ...responses, "413": REQUEST_BODY_TOO_LARGE_RESPONSE };

@@ -9,6 +9,7 @@ import {
   NOT_ACCEPTABLE_RESPONSE,
   REQUEST_BODY_TOO_LARGE_RESPONSE,
   RUNTIME_NOT_CONFIGURED_RESPONSE,
+  TOO_MANY_REQUESTS_RESPONSE,
   UNSUPPORTED_MEDIA_TYPE_RESPONSE,
   apiOperationResponses,
   buildOpenApiDocument,
@@ -145,6 +146,15 @@ describe("OpenAPI consistency — the shared runtime-backed 503", () => {
         expectedLength += 1;
       } else if (NON_NEGOTIABLE_OPERATION_IDS.has(op.operationId)) {
         expect(responses["406"], op.operationId).toBeUndefined();
+      }
+      // The shared 429 lands on POST operations only (reads are
+      // never counted by the rate limiter) — counted here so this
+      // suite's no-extra-responses guarantee covers it too.
+      if (op.method === "post" && !("429" in op.responses)) {
+        expect(responses["429"], op.operationId).toBe(TOO_MANY_REQUESTS_RESPONSE);
+        expectedLength += 1;
+      } else if (op.method !== "post") {
+        expect(responses["429"], op.operationId).toBeUndefined();
       }
       // The shared 413 lands on body-bearing operations only (a GET
       // has no body to refuse) — counted here so this suite's

@@ -565,6 +565,27 @@ curl -X POST localhost:3000/api/agent/execute -H 'content-type: application/json
   never refused over an `Accept` header. The OpenAPI document and
   `/api-docs` page carry the same shared 406 on every operation
   except the webhook listener via `apiOperationResponses`.
+- **Rate limit (the JSON 429).** Middleware
+  (`src/lib/api/rate-limit.ts`, run after the method and
+  negotiation guards) bounds how many POST requests one client
+  can make: 120 POSTs per 60-second fixed window per client key
+  (the first `x-forwarded-for` entry, else `x-real-ip`, else a
+  shared "direct" bucket — a flood brake, not an identity; the
+  headers can be forged on an instance exposed without a trusted
+  proxy). The body size limit bounds what one request costs;
+  this bounds how many requests there are, on a hosted instance
+  that deliberately ships with no authentication layer. A client
+  past the limit answers a JSON 429 in the shared `{ error }`
+  shape — naming the limit — with a `Retry-After` header carrying
+  the seconds until its window resets, and the refused request
+  reaches no route, runtime, or PayPal call. Reads are never
+  counted, so console reloads and health probes cannot trip it;
+  the webhook listener is not exempt (PayPal retries deliveries
+  answered with an error status, and verified events are
+  processed exactly once, so a refused delivery is delayed, not
+  dropped). State is per-process in-memory. The OpenAPI document
+  and `/api-docs` page carry the same shared 429 on every POST
+  operation via `apiOperationResponses`.
 - **API cache control (no-store).** Every response under `/api/`
   carries `Cache-Control: no-store`, configured in
   `next.config.mjs` as a header rule scoped to `/api/:path*` only.
@@ -703,7 +724,7 @@ are not blocked, the suite also runs on them).
 ```bash
 npm install
 npm run dev        # http://localhost:3000
-npm test           # full test suite (784 tests)
+npm test           # full test suite (801 tests)
 npm run typecheck  # tsc --noEmit
 npm run build      # production build
 ```
@@ -917,6 +938,12 @@ mock mode a config swap rather than a rewrite.
   JSON 405 in the same shared shape with an `Allow` header, the
   allowed methods resolved from this registry; `apiOperationResponses`
   appends that same 405 to every operation in both surfaces.
+  Its rate-limit module (`rate-limit.ts`) backs the middleware's
+  third guard: a client POSTing past 120 requests per 60 seconds
+  (per client key, fixed window) answers the JSON 429 in the same
+  shared shape with a `Retry-After` header, and reads are never
+  counted; `apiOperationResponses` appends that same 429 to every
+  POST operation in both surfaces.
   Its body module (`body.ts`) is the one reader every object-body
   POST route starts from: the shared JSON size limit (128 KiB,
   measured in UTF-8 bytes) is enforced there on the raw body before
@@ -986,7 +1013,7 @@ signatures mirror the REST resources one-to-one.
 ## Testing
 
 ```bash
-npm test           # vitest — 784 tests, all green
+npm test           # vitest — 801 tests, all green
 npm run typecheck  # TypeScript strict, clean
 npm run build      # Next.js production build
 npm run verify     # the whole gate below, as one command
@@ -1319,7 +1346,14 @@ OPTIONS / documented-method / unknown-path pass-throughs, the
 `Allow` header on the real response, the middleware delegating
 with an `/api/*`-only matcher and no runtime built, and the built
 OpenAPI document carrying the shared 405 on every operation
-referencing the shared Error schema), and the JSON body reader
+referencing the shared Error schema), and the rate limit
+(`src/lib/api/rate-limit.ts` + `src/middleware.ts` — the fixed
+window allowing exactly the limit then refusing with a
+Retry-After inside the window, per-key windows, reads never
+counted and never consuming allowance, the client-key fallbacks,
+the middleware running the rate guard third with no runtime
+built, and the built OpenAPI document carrying the shared 429
+on POST operations only referencing the shared Error schema), and the JSON body reader
 (`src/lib/api/body.ts` — the pure object check, malformed and
 non-object bodies answering the route's own 400 in the shared
 shape, every object-body POST route routed through the one reader

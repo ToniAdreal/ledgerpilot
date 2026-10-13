@@ -5,3 +5,4 @@ export * from "./body";
 export * from "./unknown-route";
 export * from "./method-not-allowed";
 export * from "./not-acceptable";
+export * from "./rate-limit";
