@@ -40,10 +40,14 @@ import {
 import {
   GRID_TITLES,
   parseHealthWireResult,
+  parseSuggestWireResult,
   parseSyncWireResult,
   resolveModeDisplay,
+  summarizeSuggestResult,
+  suggestBlockReason,
   summarizeSyncResult,
   syncBlockReason,
+  type SuggestSummary,
   type SyncSummary,
   buildCsvExportParams,
   buildOverlayTemplate,
@@ -234,6 +238,10 @@ export default function ConsoleClient() {
   const [syncing, setSyncing] = useState(false);
   const [syncSummary, setSyncSummary] = useState<SyncSummary | null>(null);
   const [syncError, setSyncError] = useState<string | null>(null);
+  const [planQueueKey, setPlanQueueKey] = useState(0);
+  const [suggesting, setSuggesting] = useState(false);
+  const [suggestSummary, setSuggestSummary] = useState<SuggestSummary | null>(null);
+  const [suggestError, setSuggestError] = useState<string | null>(null);
   const [modeInfo, setModeInfo] = useState<ConsoleModeInfo | null>(null);
   const [modeChecked, setModeChecked] = useState(false);
   const [loadStatus, setLoadStatus] = useState<ConsoleLoadStatus>("loading");
@@ -347,6 +355,38 @@ export default function ConsoleClient() {
       void refresh();
     }
   }, [refresh, syncing]);
+
+  /* Suggest next actions (src/lib/agent/suggestions.ts): the agent
+   * scans for overdue open invoices and drafts one pending-approval
+   * reminder plan per uncovered invoice, then refresh — the drafted
+   * plans render in the Command bar's pending-decision queue. The
+   * endpoint only drafts behind the approval gate, so re-running it
+   * is safe: covered invoices return as skips, which the summary
+   * reports honestly. Errors surface in the suggest notice. */
+  const runSuggest = useCallback(async () => {
+    if (suggestBlockReason({ suggesting })) return;
+    setSuggesting(true);
+    setSuggestError(null);
+    try {
+      const res = await fetch("/api/agent/suggest", { method: "POST" });
+      const data: unknown = await res.json();
+      if (!res.ok) {
+        const message =
+          typeof data === "object" && data !== null && "error" in data
+            ? String((data as { error: unknown }).error)
+            : `Suggest failed (${res.status})`;
+        throw new Error(message);
+      }
+      setSuggestSummary(summarizeSuggestResult(parseSuggestWireResult(data)));
+    } catch (err) {
+      setSuggestError(err instanceof Error ? err.message : "Suggest failed");
+      setSuggestSummary(null);
+    } finally {
+      setSuggesting(false);
+      setPlanQueueKey((k) => k + 1);
+      void refresh();
+    }
+  }, [refresh, suggesting]);
 
   /* Capture an uncaptured order (buyer-side checkout completion),
    * then refresh — the flipped COMPLETED row flashes via the usual
@@ -751,7 +791,7 @@ export default function ConsoleClient() {
 
   return (
     <section>
-      <CommandBar onSettled={() => void refresh()} />
+      <CommandBar onSettled={() => void refresh()} pendingRefreshKey={planQueueKey} />
       <AskBar onApply={applyAsk} onClear={clearAsk} />
 
       {(() => {
@@ -831,7 +871,35 @@ export default function ConsoleClient() {
         >
           {syncing ? "Syncing…" : "Sync from PayPal"}
         </button>
+        <button
+          type="button"
+          className="refresh-btn sync-btn"
+          disabled={suggestBlockReason({ suggesting }) !== null}
+          title="Ask the agent for its next actions: draft a pending-approval payment-reminder plan for every overdue open invoice that is not already covered — nothing is sent without approval"
+          onClick={() => void runSuggest()}
+        >
+          {suggesting ? "Suggesting…" : "Suggest next actions"}
+        </button>
       </div>
+
+      {(suggestSummary || suggestError) && (
+        <div
+          className={`console-banner sync-notice${suggestError ? " console-banner-error" : ""}`}
+          role={suggestError ? "alert" : "status"}
+        >
+          {suggestError ? (
+            <>
+              <strong>Suggest failed</strong>
+              <span>{suggestError}</span>
+            </>
+          ) : suggestSummary ? (
+            <>
+              <strong>{suggestSummary.headline}</strong>
+              <span>{suggestSummary.detail}</span>
+            </>
+          ) : null}
+        </div>
+      )}
 
       {(syncSummary || syncError) && (
         <div

@@ -3,4 +3,5 @@ export * from "./invoice-detail";
 export * from "./states";
 export * from "./grid-tools";
 export * from "./sync";
+export * from "./suggestions";
 export * from "./mode";

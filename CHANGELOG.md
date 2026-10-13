@@ -16,6 +16,12 @@ build record behind these summaries.
 
 ### Added
 
+- **Next-action suggestions.** `POST /api/agent/suggest` and the
+  console's Suggest next actions button: the agent scans for
+  overdue open invoices and drafts one pending-approval reminder
+  plan per uncovered invoice (`source: "suggested"`), reporting
+  already-covered invoices as skips with their reasons. Drafting
+  only — sending still requires the ordinary approval gate.
 - **Plan amendment (the plan-review Edit).** `POST /api/agent/edit`
   amends the amount/currency of a plan still pending approval
   (a batch payout step per line), so a reviewer can fix a wrong

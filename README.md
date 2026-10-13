@@ -144,9 +144,22 @@ curl -X POST localhost:3000/api/agent/execute -H 'content-type: application/json
   (this plan's own invoice payment, bound at execution) — never both.
   Nothing executes without the ordinary approve → execute flow: the
   approval gate has no tool-call back door either.
+- **Next-action suggestions (the agent drafts its own follow-ups).**
+  CONCEPT.md §3.1's data flow ends with the agent drafting the *next*
+  action as a new pending plan — `POST /api/agent/suggest` (and the
+  console's **Suggest next actions** button) is that step: it scans
+  for overdue open invoices (the read model's definition, most
+  overdue first) and drafts one `send_reminder` plan per uncovered
+  invoice (`source: "suggested"`, `pending_approval`, its reference
+  pinned to that invoice's number, the step identical to a
+  hand-drafted reminder). An invoice whose reminder was already sent,
+  or that a reminder plan in any status other than failed already
+  targets, is reported under `skipped` with its reason — a rejected
+  plan is not re-drafted, and nothing is ever sent without the
+  ordinary approve → execute flow.
 - **OpenAPI document (the machine-readable API map).** `GET
   /api/openapi` serves an OpenAPI 3.1 document covering every API
-  operation in the app (28 paths, 30 operations): summaries, the
+  operation in the app (29 paths, 31 operations): summaries, the
   approval-gate wording on every draft surface, the shared
   `{ error }` response shape, and the webhook event body. It is
   built from a registry in `src/lib/api/`, and the test suite walks
@@ -579,7 +592,7 @@ are not blocked, the suite also runs on them).
 ```bash
 npm install
 npm run dev        # http://localhost:3000
-npm test           # full test suite (664 tests)
+npm test           # full test suite (678 tests)
 npm run typecheck  # tsc --noEmit
 npm run build      # production build
 ```
@@ -840,7 +853,7 @@ signatures mirror the REST resources one-to-one.
 ## Testing
 
 ```bash
-npm test           # vitest — 664 tests, all green
+npm test           # vitest — 678 tests, all green
 npm run typecheck  # TypeScript strict, clean
 npm run build      # Next.js production build
 npm run verify     # the whole gate below, as one command

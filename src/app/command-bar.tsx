@@ -46,7 +46,14 @@ function apiError(status: number, json: Record<string, unknown>, fallback: strin
   return typeof json.error === "string" ? json.error : `${fallback} (HTTP ${status})`;
 }
 
-export default function CommandBar({ onSettled }: { onSettled: () => void }) {
+export default function CommandBar({
+  onSettled,
+  pendingRefreshKey = 0,
+}: {
+  onSettled: () => void;
+  /** Bump to reload the pending-decision queue (e.g. after the console's Suggest action drafts new plans). */
+  pendingRefreshKey?: number;
+}) {
   const [brief, setBrief] = useState("");
   const [plan, setPlan] = useState<ActionPlan | null>(null);
   const [pending, setPending] = useState<ActionPlan[]>([]);
@@ -87,7 +94,7 @@ export default function CommandBar({ onSettled }: { onSettled: () => void }) {
 
   useEffect(() => {
     void loadPending();
-  }, [loadPending]);
+  }, [loadPending, pendingRefreshKey]);
 
   const draft = useCallback(async () => {
     const validation = validateBrief(brief);

@@ -1,7 +1,7 @@
 /**
  * OpenAPI document — the machine-readable map of LedgerPilot's HTTP API.
  *
- * The app ships 28 API routes (30 operations) but, until this module,
+ * The app ships 29 API routes (31 operations) but, until this module,
  * the only map of them was prose: route-header comments and the
  * README's architecture list. A tool-calling client, a judge's API
  * explorer, or a generated client needs the same information in a
@@ -123,6 +123,20 @@ export const API_OPERATIONS: ApiOperation[] = [
       "400": "Malformed JSON, an invalid amount, a step that carries no amount, or an edit that changes nothing.",
       "404": "Unknown plan.",
       "409": "The plan is not pending approval.",
+    },
+    requestBody: true,
+  },
+  {
+    path: "/api/agent/suggest",
+    method: "post",
+    operationId: "suggestNextActions",
+    tag: "Agent",
+    summary: "Draft next-action reminder plans for overdue invoices",
+    description:
+      "The agent's next-action draft step (CONCEPT.md §3.1 data flow): scans for overdue open invoices — the read model's definition, most overdue first — and drafts one send_reminder plan (source: \"suggested\", pending_approval) per invoice that is not already covered, with the step identical to a hand-drafted reminder and its reference pinned to that invoice's number. An invoice whose reminder was already sent, or that a reminder plan in any status other than failed already targets (a rejected plan is not re-drafted), is reported under skipped instead. This surface only drafts: nothing is sent until a drafted plan is approved and executed through the ordinary gate. An optional referenceDate (yyyy-mm-dd) sets the date the overdue test is applied at; it defaults to today (UTC).",
+    responses: {
+      "200": "Reference date, overdue count, the drafted reminder plans, and the skipped invoices with their reasons.",
+      "400": "Malformed JSON body or an invalid referenceDate.",
     },
     requestBody: true,
   },
