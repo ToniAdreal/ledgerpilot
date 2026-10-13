@@ -91,6 +91,9 @@ describe("route completeness — every runtime acquisition goes through acquireR
     const nonRuntime = [
       "src/app/api/health/route.ts",
       "src/app/api/openapi/route.ts",
+      // The unknown-route catch-all never builds the runtime either:
+      // an unknown path is unknown in every mode (see unknown-route.ts).
+      "src/app/api/[[...slug]]/route.ts",
     ];
     let guarded = 0;
     for (const file of routeFiles()) {

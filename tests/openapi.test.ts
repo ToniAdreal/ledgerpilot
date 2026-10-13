@@ -46,6 +46,10 @@ function diskOperations(): Array<{ path: string; method: string }> {
   const found: Array<{ path: string; method: string }> = [];
   const walk = (dir: string, segments: string[]): void => {
     for (const entry of readdirSync(dir, { withFileTypes: true })) {
+      // The optional catch-all (`[[...slug]]`) is not a documented
+      // operation: it answers the JSON 404 for paths no route
+      // implements, so it is excluded from the operation inventory.
+      if (entry.isDirectory() && entry.name.startsWith("[[...")) continue;
       if (entry.isDirectory()) walk(join(dir, entry.name), [...segments, entry.name]);
       else if (entry.name === "route.ts") {
         const source = readFileSync(join(dir, entry.name), "utf8");

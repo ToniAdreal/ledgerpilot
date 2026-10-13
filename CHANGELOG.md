@@ -16,6 +16,13 @@ build record behind these summaries.
 
 ### Added
 
+- **Unknown API routes (the JSON 404).** Paths under `/api/` that
+  no route implements now answer a JSON 404 in the shared
+  `{ error }` shape (naming the requested path, pointing at
+  `GET /api/openapi`) for every method, via an optional catch-all
+  route delegating to `src/lib/api/unknown-route.ts` — instead of
+  the page-level HTML not-found. The catch-all builds no runtime,
+  so unknown paths answer 404 even on a misconfigured instance.
 - **Structured API errors.** Every runtime-backed API route now
   acquires the runtime through `acquireRuntime`
   (`src/lib/api/errors.ts`): when sandbox mode is selected without

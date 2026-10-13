@@ -478,6 +478,17 @@ curl -X POST localhost:3000/api/agent/execute -H 'content-type: application/json
   `apiOperationResponses`; the only operations without it are the three
   that never build the runtime (`GET /api/health`, `GET /api/openapi`,
   and the tool definitions' `GET /api/agent/tools`).
+- **Unknown API routes (the JSON 404).** A path under `/api/` that no
+  route implements is answered by an optional catch-all route
+  (`src/app/api/[[...slug]]/route.ts`, delegating to
+  `src/lib/api/unknown-route.ts`) with a JSON 404 in the same shared
+  `{ error }` shape — naming the requested path and pointing at
+  `GET /api/openapi` — for every method, instead of the page-level
+  HTML not-found an API consumer cannot parse. The catch-all builds
+  no runtime, so unknown paths answer 404 even on a misconfigured
+  instance whose implemented routes answer 503; concrete routes
+  always take precedence, and the catch-all is deliberately not a
+  documented OpenAPI operation.
 - **Container deployment.** A `Dockerfile` (repo root) packages the same
   hosted demo for any container host: every stage pins Node 22, the
   image installs with `npm ci`, builds with `npm run build`, and starts
@@ -604,7 +615,7 @@ are not blocked, the suite also runs on them).
 ```bash
 npm install
 npm run dev        # http://localhost:3000
-npm test           # full test suite (690 tests)
+npm test           # full test suite (700 tests)
 npm run typecheck  # tsc --noEmit
 npm run build      # production build
 ```
@@ -809,6 +820,9 @@ mock mode a config swap rather than a rewrite.
   sandbox-not-configured case answers the structured 503 above
   instead of an opaque 500; `apiOperationResponses` appends that
   same 503 to every runtime-backed operation in both surfaces.
+  Its unknown-route module (`unknown-route.ts`) backs the
+  `/api/` catch-all route: paths no route implements answer the
+  JSON 404 in the same shared shape, without building a runtime.
 - API routes — `GET /api/health` (readiness; 200 ok/degraded, 503
   misconfigured), `GET /api/openapi` (the OpenAPI 3.1 document), `src/app/api/agent/` (`POST /plan`, `POST /approve`,
   `POST /execute`, `POST /edit` — amend a pending plan's amounts,
@@ -871,7 +885,7 @@ signatures mirror the REST resources one-to-one.
 ## Testing
 
 ```bash
-npm test           # vitest — 690 tests, all green
+npm test           # vitest — 700 tests, all green
 npm run typecheck  # TypeScript strict, clean
 npm run build      # Next.js production build
 npm run verify     # the whole gate below, as one command
