@@ -489,6 +489,22 @@ curl -X POST localhost:3000/api/agent/execute -H 'content-type: application/json
   instance whose implemented routes answer 503; concrete routes
   always take precedence, and the catch-all is deliberately not a
   documented OpenAPI operation.
+- **Method not allowed (the JSON 405).** A documented API path called
+  with a method it does not support (POST to a GET-only route, DELETE
+  on a read model) is answered by the app's one middleware
+  (`src/middleware.ts`, delegating to
+  `src/lib/api/method-not-allowed.ts`) with a JSON 405 in the same
+  shared `{ error }` shape — naming the requested method and path,
+  the methods that do work, and pointing at `GET /api/openapi` —
+  plus an `Allow` header, instead of the framework's empty-body 405.
+  The allowed methods resolve from the OpenAPI operation registry
+  itself, so there is no second path→method table to drift; HEAD on
+  a GET path and OPTIONS pass through (the framework answers those
+  itself), unknown paths pass through to the JSON 404, and the
+  OpenAPI document and `/api-docs` page declare the same shared 405
+  on every operation via `apiOperationResponses`. The middleware
+  builds no runtime, so a wrong-method call gets its 405 even on a
+  misconfigured instance.
 - **Container deployment.** A `Dockerfile` (repo root) packages the same
   hosted demo for any container host: every stage pins Node 22, the
   image installs with `npm ci`, builds with `npm run build`, and starts
@@ -615,7 +631,7 @@ are not blocked, the suite also runs on them).
 ```bash
 npm install
 npm run dev        # http://localhost:3000
-npm test           # full test suite (700 tests)
+npm test           # full test suite (715 tests)
 npm run typecheck  # tsc --noEmit
 npm run build      # production build
 ```
@@ -823,6 +839,12 @@ mock mode a config swap rather than a rewrite.
   Its unknown-route module (`unknown-route.ts`) backs the
   `/api/` catch-all route: paths no route implements answer the
   JSON 404 in the same shared shape, without building a runtime.
+  Its method-not-allowed module (`method-not-allowed.ts`) backs the
+  app's one middleware (`src/middleware.ts`, `/api/*` only): a
+  documented path called with an unsupported method answers the
+  JSON 405 in the same shared shape with an `Allow` header, the
+  allowed methods resolved from this registry; `apiOperationResponses`
+  appends that same 405 to every operation in both surfaces.
 - API routes — `GET /api/health` (readiness; 200 ok/degraded, 503
   misconfigured), `GET /api/openapi` (the OpenAPI 3.1 document), `src/app/api/agent/` (`POST /plan`, `POST /approve`,
   `POST /execute`, `POST /edit` — amend a pending plan's amounts,
@@ -885,7 +907,7 @@ signatures mirror the REST resources one-to-one.
 ## Testing
 
 ```bash
-npm test           # vitest — 700 tests, all green
+npm test           # vitest — 715 tests, all green
 npm run typecheck  # TypeScript strict, clean
 npm run build      # Next.js production build
 npm run verify     # the whole gate below, as one command
@@ -1209,7 +1231,16 @@ excluding the sources or manifests the build needs), and the
 verification script (`npm run verify` — the exact gate command
 string, its step order agreeing with the CI workflow's, no
 install / server / smoke / credential anywhere in it, and every
-script it references existing in `package.json`)
+script it references existing in `package.json`), and the
+method-not-allowed guard (`src/lib/api/method-not-allowed.ts` +
+`src/middleware.ts` — allowed methods resolved from the registry
+for concrete and `{id}`-template paths, the 405 description in
+the shared shape naming method, path, and allowed methods, HEAD /
+OPTIONS / documented-method / unknown-path pass-throughs, the
+`Allow` header on the real response, the middleware delegating
+with an `/api/*`-only matcher and no runtime built, and the built
+OpenAPI document carrying the shared 405 on every operation
+referencing the shared Error schema)
 — fake credentials only, no network.
 
 ### Smoke check (a running instance, end to end)

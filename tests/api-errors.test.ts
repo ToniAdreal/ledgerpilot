@@ -3,6 +3,7 @@ import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import {
   API_OPERATIONS,
+  METHOD_NOT_ALLOWED_RESPONSE,
   NON_RUNTIME_OPERATION_IDS,
   RUNTIME_NOT_CONFIGURED_RESPONSE,
   apiOperationResponses,
@@ -120,15 +121,25 @@ describe("route completeness — every runtime acquisition goes through acquireR
 });
 
 describe("OpenAPI consistency — the shared runtime-backed 503", () => {
-  it("apiOperationResponses appends the 503 to runtime-backed operations only", () => {
+  it("apiOperationResponses appends the shared 405 to every operation and the 503 to runtime-backed operations only", () => {
     for (const op of API_OPERATIONS) {
       const responses = apiOperationResponses(op);
+      // The shared 405 lands on every operation (method support is a
+      // property of the path; even the non-runtime operations answer
+      // a wrong-method call with it).
+      let expectedLength = Object.keys(op.responses).length;
+      if (!("405" in op.responses)) {
+        expect(responses["405"], op.operationId).toBe(METHOD_NOT_ALLOWED_RESPONSE);
+        expectedLength += 1;
+      }
       if (NON_RUNTIME_OPERATION_IDS.has(op.operationId)) {
-        expect(responses, op.operationId).toBe(op.responses);
+        // No runtime-backed 503 is ever added for these three.
+        if (!("503" in op.responses)) expect(responses["503"], op.operationId).toBeUndefined();
       } else if (!("503" in op.responses)) {
         expect(responses["503"], op.operationId).toBe(RUNTIME_NOT_CONFIGURED_RESPONSE);
-        expect(Object.keys(responses).length).toBe(Object.keys(op.responses).length + 1);
+        expectedLength += 1;
       }
+      expect(Object.keys(responses).length, op.operationId).toBe(expectedLength);
     }
   });
 

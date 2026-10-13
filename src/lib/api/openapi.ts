@@ -38,6 +38,15 @@
  *    applies at the route boundary. The response is appended by
  *    `apiOperationResponses` below rather than repeated in each
  *    registry entry, so the registry and the routes cannot drift.
+ *  - **Every operation shares one 405.** A documented path called
+ *    with a method it does not support is answered by middleware
+ *    (`src/lib/api/method-not-allowed.ts`, resolving allowed methods
+ *    from this same registry) with a JSON 405 in the shared error
+ *    shape and an `Allow` header. That response is appended by
+ *    `apiOperationResponses` too, for every operation — method
+ *    support is a property of the path, and the three non-runtime
+ *    operations are not exempt (POST to the health route is a 405,
+ *    not a readiness report).
  */
 
 export type ApiTag = "Agent" | "Console" | "Health" | "Judge Mode" | "PayPal";
@@ -480,17 +489,26 @@ export const NON_RUNTIME_OPERATION_IDS: ReadonlySet<string> = new Set([
 export const RUNTIME_NOT_CONFIGURED_RESPONSE =
   "Sandbox mode is selected but PAYPAL_CLIENT_ID / PAYPAL_CLIENT_SECRET are not set, so the agent runtime cannot be built; the error names the missing variables (see GET /api/health).";
 
+export const METHOD_NOT_ALLOWED_RESPONSE =
+  "The path is documented but does not support this method; the API answers a JSON { error } naming the allowed methods, with an Allow header (middleware resolves the allowed methods from this same registry).";
+
 /**
  * The responses an operation can actually return: its registry
- * responses, plus the shared runtime-backed 503 for every operation
- * that builds the agent runtime. Used by both the OpenAPI builder
- * and the human-readable /api-docs page, so the two surfaces agree.
+ * responses, plus the shared 405 every documented path answers a
+ * wrong-method call with, plus the shared runtime-backed 503 for
+ * every operation that builds the agent runtime. Used by both the
+ * OpenAPI builder and the human-readable /api-docs page, so the
+ * two surfaces agree.
  */
 export function apiOperationResponses(op: ApiOperation): Record<string, string> {
-  if (NON_RUNTIME_OPERATION_IDS.has(op.operationId) || "503" in op.responses) {
-    return op.responses;
+  let responses = op.responses;
+  if (!("405" in responses)) {
+    responses = { ...responses, "405": METHOD_NOT_ALLOWED_RESPONSE };
   }
-  return { ...op.responses, "503": RUNTIME_NOT_CONFIGURED_RESPONSE };
+  if (!NON_RUNTIME_OPERATION_IDS.has(op.operationId) && !("503" in responses)) {
+    responses = { ...responses, "503": RUNTIME_NOT_CONFIGURED_RESPONSE };
+  }
+  return responses;
 }
 
 export const API_TAGS: Array<{ name: ApiTag; description: string }> = [

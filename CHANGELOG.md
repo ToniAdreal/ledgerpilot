@@ -16,6 +16,16 @@ build record behind these summaries.
 
 ### Added
 
+- **Method not allowed (the JSON 405).** A documented API path
+  called with a method it does not support now answers a JSON 405
+  in the shared `{ error }` shape — naming the method, the path,
+  and the allowed methods — with an `Allow` header, via the app's
+  one middleware delegating to `src/lib/api/method-not-allowed.ts`,
+  which resolves allowed methods from the OpenAPI operation
+  registry itself. HEAD on a GET path and OPTIONS pass through to
+  the framework; unknown paths still answer the JSON 404. The
+  OpenAPI document and `/api-docs` declare the same shared 405 on
+  every operation.
 - **Unknown API routes (the JSON 404).** Paths under `/api/` that
   no route implements now answer a JSON 404 in the shared
   `{ error }` shape (naming the requested path, pointing at
