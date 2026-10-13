@@ -81,7 +81,7 @@ describe("Command page (/command — the plan review's own page)", () => {
     expect(review.steps.map((s) => s.callLabel).join(" ")).toContain("/v2/invoicing/invoices");
     expect(review.steps.map((s) => s.callLabel).join(" ")).toContain("/v1/payments/payouts");
     expect(review.steps[1]!.triggerLabel).toMatch(/INVOICING\.INVOICE\.PAID/);
-    expect(review.actions).toEqual({ canApprove: true, canReject: true, canExecute: false });
+    expect(review.actions).toEqual({ canApprove: true, canReject: true, canExecute: false, canEdit: true });
   });
 
   it("a plan drafted for this page executes nothing until approved, then defers the gated payout", async () => {

@@ -143,7 +143,13 @@ function parseCurrency(value: unknown): CurrencyCode {
   return code;
 }
 
-function parseMoney(amount: unknown, currency: unknown): Money {
+/**
+ * Validate an amount + currency into a Money value (amount > 0, hard
+ * cap, USD/EUR/GBP whitelist, two-decimal formatting). Exported so the
+ * plan-amendment module (edit.ts) validates edited amounts through
+ * exactly these rules — the money rules live in one place.
+ */
+export function parseMoney(amount: unknown, currency: unknown): Money {
   return { currency_code: parseCurrency(currency), value: parseAmount(amount) };
 }
 
@@ -197,8 +203,8 @@ function parsePayoutLine(
   return { recipient, amount, note };
 }
 
-/** Per-currency totals for a batch, in first-seen currency order (money is never summed across currencies). */
-function batchTotals(items: PayoutItemInput[]): Money[] {
+/** Per-currency totals for a batch, in first-seen currency order (money is never summed across currencies). Exported for edit.ts's description regeneration. */
+export function batchTotals(items: PayoutItemInput[]): Money[] {
   const byCurrency = new Map<CurrencyCode, number>();
   for (const item of items) {
     byCurrency.set(item.amount.currency_code, (byCurrency.get(item.amount.currency_code) ?? 0) + Number(item.amount.value));
@@ -206,7 +212,8 @@ function batchTotals(items: PayoutItemInput[]): Money[] {
   return [...byCurrency.entries()].map(([currency_code, sum]) => ({ currency_code, value: sum.toFixed(2) }));
 }
 
-function formatMoney(money: Money): string {
+/** "USD 450.00" — the money rendering every step description uses. Exported for edit.ts. */
+export function formatMoney(money: Money): string {
   return `${money.currency_code} ${money.value}`;
 }
 

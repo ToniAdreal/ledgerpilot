@@ -1,7 +1,7 @@
 /**
  * OpenAPI document — the machine-readable map of LedgerPilot's HTTP API.
  *
- * The app ships 27 API routes (29 operations) but, until this module,
+ * The app ships 28 API routes (30 operations) but, until this module,
  * the only map of them was prose: route-header comments and the
  * README's architecture list. A tool-calling client, a judge's API
  * explorer, or a generated client needs the same information in a
@@ -107,6 +107,22 @@ export const API_OPERATIONS: ApiOperation[] = [
       "200": "The execution outcome, including any deferred steps.",
       "400": "Malformed JSON or a missing planId.",
       "409": "The plan is not approved (unapproved, rejected, or already settled).",
+    },
+    requestBody: true,
+  },
+  {
+    path: "/api/agent/edit",
+    method: "post",
+    operationId: "editAgentPlanAmounts",
+    tag: "Agent",
+    summary: "Amend the amounts of a plan pending approval",
+    description:
+      "The plan-review Edit (amounts only): rewrites the amount/currency of a pending plan's money steps — a batch payout step per line — after validating every amount through the drafts module's money rules, regenerates the step descriptions approval will cover, and writes the amendment (old → new) to the audit log. Only a plan in pending_approval can be amended, so approval always covers exactly the steps the reviewer saw; recipients, work descriptions, due dates, and triggers are not editable here. Nothing executes on this surface.",
+    responses: {
+      "200": "The amended plan (still pending_approval).",
+      "400": "Malformed JSON, an invalid amount, a step that carries no amount, or an edit that changes nothing.",
+      "404": "Unknown plan.",
+      "409": "The plan is not pending approval.",
     },
     requestBody: true,
   },

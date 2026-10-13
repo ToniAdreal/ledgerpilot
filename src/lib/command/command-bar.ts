@@ -15,7 +15,8 @@
  * can never offer an action the server would refuse.
  */
 
-import type { ActionPlan, ActionStep, ActionType } from "../types";
+import { stepAmounts, type StepAmount } from "../agent/edit";
+import type { ActionPlan, ActionStep, ActionType, CurrencyCode } from "../types";
 
 /* ------------------------------------------------------------------ */
 /* Example briefs (fictional demo data only)                           */
@@ -68,6 +69,8 @@ export interface PlanActions {
   canApprove: boolean;
   canReject: boolean;
   canExecute: boolean;
+  /** Amend amounts (POST /api/agent/edit) — pending plans only. */
+  canEdit: boolean;
 }
 
 /**
@@ -76,13 +79,17 @@ export interface PlanActions {
  *   (LedgerStore.approvePlan / rejectPlan throw otherwise);
  * - execute is only legal from `approved` (the executor refuses
  *   every other status, including `awaiting_trigger` — gated steps
- *   resume via webhooks / sync, never via a second execute click).
+ *   resume via webhooks / sync, never via a second execute click);
+ * - amending amounts is only legal from `pending_approval`
+ *   (editPlanAmounts refuses every other status, so approval always
+ *   covers exactly the steps the reviewer saw).
  */
 export function availableActions(status: ActionPlan["status"]): PlanActions {
   return {
     canApprove: status === "pending_approval",
     canReject: status === "pending_approval",
     canExecute: status === "approved",
+    canEdit: status === "pending_approval",
   };
 }
 
@@ -113,6 +120,12 @@ export interface PlanReviewStep {
   gated: boolean;
   /** Human trigger label, e.g. "Runs after INVOICING.INVOICE.PAID". Null when not gated. */
   triggerLabel: string | null;
+  /**
+   * The step's editable amounts (empty for reminders, which carry
+   * none). `itemIndex` is null for a step's own amount, or the batch
+   * line index for a payout batch.
+   */
+  editable: StepAmount[];
 }
 
 export interface PlanReview {
@@ -134,7 +147,66 @@ export function toReviewStep(step: ActionStep, index: number): PlanReviewStep {
     callLabel: `${step.paypalCall.method} ${step.paypalCall.path}`,
     gated: Boolean(step.trigger),
     triggerLabel: step.trigger ? `Runs after ${step.trigger.on}` : null,
+    editable: stepAmounts(step),
   };
+}
+
+/* ------------------------------------------------------------------ */
+/* Amount amendment (the plan-review Edit)                             */
+/* ------------------------------------------------------------------ */
+
+/** State key for one editable amount in the review form: "<step>:<line|null>". */
+export function amountDraftKey(stepIndex: number, itemIndex: number | null): string {
+  return `${stepIndex}:${itemIndex === null ? "-" : itemIndex}`;
+}
+
+export interface AmountDraft {
+  amount: string;
+  currency: CurrencyCode;
+}
+
+export interface StepAmountEditWire {
+  stepIndex: number;
+  amount?: string;
+  currency?: CurrencyCode;
+  items?: Array<{ index: number; amount: string; currency: CurrencyCode }>;
+}
+
+/**
+ * Build the POST /api/agent/edit payload from the review form's raw
+ * drafts: only amounts that actually differ from the plan's current
+ * values are included (the server refuses a no-change edit, so the
+ * form does not send one). Returns null when nothing changed.
+ * Amounts are compared after the same normalisation the server
+ * applies (commas stripped, two decimals), so "450" against a current
+ * "450.00" is not a change.
+ */
+export function collectAmountEdits(review: PlanReview, drafts: Record<string, AmountDraft>): StepAmountEditWire[] | null {
+  const edits: StepAmountEditWire[] = [];
+  for (const step of review.steps) {
+    const single: StepAmountEditWire = { stepIndex: step.index };
+    const lines: NonNullable<StepAmountEditWire["items"]> = [];
+    for (const entry of step.editable) {
+      const draft = drafts[amountDraftKey(step.index, entry.itemIndex)];
+      if (!draft) continue;
+      const parsed = Number(draft.amount.replace(/,/g, ""));
+      // An unparseable amount counts as changed so it still reaches
+      // the server, which refuses it with a field-named error,
+      // rather than vanishing silently in the form.
+      const changed =
+        draft.currency !== entry.amount.currency_code || !Number.isFinite(parsed) || parsed.toFixed(2) !== entry.amount.value;
+      if (!changed) continue;
+      if (entry.itemIndex === null) {
+        single.amount = draft.amount;
+        single.currency = draft.currency;
+      } else {
+        lines.push({ index: entry.itemIndex, amount: draft.amount, currency: draft.currency });
+      }
+    }
+    if (lines.length > 0) single.items = lines;
+    if (single.amount !== undefined || single.items !== undefined) edits.push(single);
+  }
+  return edits.length > 0 ? edits : null;
 }
 
 export function buildPlanReview(plan: ActionPlan): PlanReview {

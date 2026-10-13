@@ -16,6 +16,15 @@ build record behind these summaries.
 
 ### Added
 
+- **Plan amendment (the plan-review Edit).** `POST /api/agent/edit`
+  amends the amount/currency of a plan still pending approval
+  (a batch payout step per line), so a reviewer can fix a wrong
+  amount without rejecting and re-drafting. Only pending plans can
+  be amended — approval always covers exactly the reviewed steps —
+  amounts are validated through the resource drafts' money rules,
+  step descriptions are regenerated, and the amendment is written
+  to the audit log. The console plan review renders amount inputs
+  and an Amend amounts action alongside Approve / Reject.
 - **Site navigation.** The root layout now renders a primary nav
   on every page from a single source of truth
   (`src/lib/nav/site-nav.ts`): every addressable surface is

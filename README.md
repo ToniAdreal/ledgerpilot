@@ -93,6 +93,24 @@ curl -X POST localhost:3000/api/agent/execute -H 'content-type: application/json
   plans execute nothing, and re-executing a settled plan is refused (409).
   Trigger-gated steps resume only via a verified webhook or the sync
   reconciler — never via a second execute call.
+- **Plan amendment (the plan-review Edit).** CONCEPT.md §3.1's plan
+  review is "Approve / Edit / Reject" — the Edit is amounts:
+  `POST /api/agent/edit` amends the amount/currency of a pending plan's
+  money steps (a batch payout step per line) so a reviewer who spots a
+  wrong amount no longer rejects and re-drafts from scratch. The rules
+  keep the gate honest: only a plan in `pending_approval` can be
+  amended (an approved plan is immutable through this path — approval
+  always covers exactly the steps the reviewer saw), every amount is
+  validated through the resource drafts' own money rules (positive,
+  ≤ 100,000, USD/EUR/GBP), each amended step's description is
+  regenerated in its builder's exact format, the amendment (old → new
+  per step) is written to the audit log, the plan's brief is never
+  rewritten (it records what was originally asked), and a no-change
+  edit is refused rather than logged as if something happened.
+  Recipients, work descriptions, due dates, and triggers are not
+  editable — changing who gets paid or what for is a new plan. The
+  console's plan review renders the amount inputs and the Amend
+  amounts action alongside Approve / Reject, only while pending.
 - **Resource-shaped plan drafts (the REST API respects the gate too).**
   `POST /api/paypal/invoices`, `POST /api/paypal/orders`, and
   `POST /api/paypal/payouts` are thin, validated wrappers over Invoicing
@@ -128,7 +146,7 @@ curl -X POST localhost:3000/api/agent/execute -H 'content-type: application/json
   approval gate has no tool-call back door either.
 - **OpenAPI document (the machine-readable API map).** `GET
   /api/openapi` serves an OpenAPI 3.1 document covering every API
-  operation in the app (27 paths, 29 operations): summaries, the
+  operation in the app (28 paths, 30 operations): summaries, the
   approval-gate wording on every draft surface, the shared
   `{ error }` response shape, and the webhook event body. It is
   built from a registry in `src/lib/api/`, and the test suite walks
@@ -561,7 +579,7 @@ are not blocked, the suite also runs on them).
 ```bash
 npm install
 npm run dev        # http://localhost:3000
-npm test           # full test suite (654 tests)
+npm test           # full test suite (664 tests)
 npm run typecheck  # tsc --noEmit
 npm run build      # production build
 ```
@@ -674,6 +692,11 @@ mock mode a config swap rather than a rewrite.
   one or more calls into a `source: "tool"` plan — delegating field
   validation to the resource drafts so tool steps are identical to
   draft steps, with both payout-gating forms supported.
+- `src/lib/agent/edit.ts` — plan amendment: `stepAmounts` extraction
+  for every step shape and `editPlanAmounts` — pending-approval-only
+  amount edits validated through the drafts' `parseMoney`, with step
+  descriptions regenerated in the builders' formats and the change
+  written to the audit log (the brief is never rewritten).
 - `src/lib/agent/store.ts` — the ledger: plans, the append-only
   activity/audit log, and webhook event-id idempotency. In-memory by
   default; with `LEDGERPILOT_STORE_FILE` set it is a file-backed
@@ -703,7 +726,9 @@ mock mode a config swap rather than a rewrite.
   on disk) and the active-link resolution the layout's nav renders.
 - `src/lib/command/` — Agent Command bar view-model: brief validation,
   example briefs, the plan-review model (step labels, exact PayPal call,
-  trigger badges), and action-availability rules that mirror the server-side
+  trigger badges, editable amounts per step), the amount-amendment
+  collector (changed amounts only, formatted for `POST /api/agent/edit`),
+  and action-availability rules that mirror the server-side
   approval gate.
 - `src/lib/batch/` — payout batch builder view-model: form-line
   editing guards (1–25 lines), the per-line validation mirror of the
@@ -755,7 +780,8 @@ mock mode a config swap rather than a rewrite.
   the registry by tag for the human-readable `/api-docs` page.
 - API routes — `GET /api/health` (readiness; 200 ok/degraded, 503
   misconfigured), `GET /api/openapi` (the OpenAPI 3.1 document), `src/app/api/agent/` (`POST /plan`, `POST /approve`,
-  `POST /execute`, `GET|POST /tools` — tool definitions + tool-call
+  `POST /execute`, `POST /edit` — amend a pending plan's amounts,
+  `GET|POST /tools` — tool definitions + tool-call
   plan drafting), `src/app/api/paypal/` (`POST /invoices|orders|payouts|reminders` —
   validated wrappers that draft plans, never execute; `POST /webhooks` — 401 on bad
   signature, 200 on processed/duplicate; `GET /sync`; `POST /orders/capture`;
@@ -814,7 +840,7 @@ signatures mirror the REST resources one-to-one.
 ## Testing
 
 ```bash
-npm test           # vitest — 654 tests, all green
+npm test           # vitest — 664 tests, all green
 npm run typecheck  # TypeScript strict, clean
 npm run build      # Next.js production build
 npm run verify     # the whole gate below, as one command
@@ -926,7 +952,11 @@ and read model as the console grid, the console state/export
 view-models reused, no mutating endpoint called, the home page
 linking to it, and its rows projected as the signed ledger of a
 real invoice→payout loop), the
-command-bar gate matrix, Ask-the-grid parsing +
+command-bar gate matrix, plan amendment (amount extraction for
+every step shape, pending-only editing with regenerated descriptions
+and an audit record, the 404/409/400 refusal matrix including a
+no-change edit, and a full loop executed at the amended amounts),
+Ask-the-grid parsing +
 validator negative cases, the full Judge Mode loop (seed idempotency,
 the historical-event guard, double-payment no-op), and the sandbox REST
 adapter against a stub fetch (OAuth caching/expiry, the links-only

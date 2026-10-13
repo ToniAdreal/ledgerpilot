@@ -41,16 +41,16 @@ describe("validateBrief", () => {
 
 describe("availableActions mirrors the server-side approval gate", () => {
   it("pending_approval can be approved or rejected, never executed", () => {
-    expect(availableActions("pending_approval")).toEqual({ canApprove: true, canReject: true, canExecute: false });
+    expect(availableActions("pending_approval")).toEqual({ canApprove: true, canReject: true, canExecute: false, canEdit: true });
   });
 
   it("approved can execute, and can no longer be approved or rejected", () => {
-    expect(availableActions("approved")).toEqual({ canApprove: false, canReject: false, canExecute: true });
+    expect(availableActions("approved")).toEqual({ canApprove: false, canReject: false, canExecute: true, canEdit: false });
   });
 
   it("terminal and in-flight statuses offer no actions", () => {
     for (const status of ["rejected", "executing", "awaiting_trigger", "completed", "failed"] as const) {
-      expect(availableActions(status)).toEqual({ canApprove: false, canReject: false, canExecute: false });
+      expect(availableActions(status)).toEqual({ canApprove: false, canReject: false, canExecute: false, canEdit: false });
     }
   });
 });
@@ -77,7 +77,7 @@ describe("buildPlanReview", () => {
 
   it("an executed plan offers no further actions", () => {
     const review = buildPlanReview(planWith("awaiting_trigger"));
-    expect(review.actions).toEqual({ canApprove: false, canReject: false, canExecute: false });
+    expect(review.actions).toEqual({ canApprove: false, canReject: false, canExecute: false, canEdit: false });
   });
 });
 

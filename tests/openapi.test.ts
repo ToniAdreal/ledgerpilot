@@ -106,7 +106,7 @@ describe("OpenAPI document — completeness against the routes on disk", () => {
       .sort((a, b) => `${a.path} ${a.method}`.localeCompare(`${b.path} ${b.method}`));
     expect(fromDoc).toEqual(diskOperations());
     expect(fromDoc.length).toBeGreaterThanOrEqual(29);
-    expect(Object.keys(doc().paths)).toHaveLength(27);
+    expect(Object.keys(doc().paths)).toHaveLength(28);
   });
 
   it("the registry and the document agree (one registry entry per documented operation)", () => {
