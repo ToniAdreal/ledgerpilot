@@ -534,6 +534,20 @@ curl -X POST localhost:3000/api/agent/execute -H 'content-type: application/json
   applies the same limit to its raw text, and the OpenAPI document
   and `/api-docs` page carry the same shared 413 on every
   body-bearing operation via `apiOperationResponses`.
+- **Content-Type enforcement (the JSON 415).** The same shared
+  reader refuses a declared non-JSON media type before the body is
+  read at all: a request whose `Content-Type` header is present and
+  is not `application/json` (or an `application/*+json` suffix type;
+  parameters such as `charset` are ignored) answers a JSON 415 in
+  the shared `{ error }` shape — naming the required
+  `Content-Type: application/json` — and reaches no parser,
+  validator, runtime, or PayPal call. A request that declares no
+  Content-Type is read as before, so simple clients that send JSON
+  without declaring it keep working; the check governs what a
+  client declares. The suggest route applies the same check to a
+  present body, and the OpenAPI document and `/api-docs` page
+  carry the same shared 415 on every body-bearing operation via
+  `apiOperationResponses`.
 - **API cache control (no-store).** Every response under `/api/`
   carries `Cache-Control: no-store`, configured in
   `next.config.mjs` as a header rule scoped to `/api/:path*` only.
@@ -672,7 +686,7 @@ are not blocked, the suite also runs on them).
 ```bash
 npm install
 npm run dev        # http://localhost:3000
-npm test           # full test suite (750 tests)
+npm test           # full test suite (765 tests)
 npm run typecheck  # tsc --noEmit
 npm run build      # production build
 ```
@@ -955,7 +969,7 @@ signatures mirror the REST resources one-to-one.
 ## Testing
 
 ```bash
-npm test           # vitest — 750 tests, all green
+npm test           # vitest — 765 tests, all green
 npm run typecheck  # TypeScript strict, clean
 npm run build      # Next.js production build
 npm run verify     # the whole gate below, as one command

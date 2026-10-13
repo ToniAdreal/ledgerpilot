@@ -49,6 +49,28 @@
  * no valid request is ever rejected for size (the test suite pins
  * that headroom against a maximum-size payout batch). The suggest
  * route applies the same limit to its raw text before parsing.
+ *
+ * The media type is this module's third case. Every object-body
+ * POST route in this app speaks JSON, but until this check existed
+ * the reader parsed the body whatever its declared `Content-Type`
+ * said — a `text/plain` or form-encoded body carrying JSON text was
+ * accepted, so the API's contract ("send JSON") was unenforced and
+ * a client that mislabelled its body got behaviour no documentation
+ * promised. The reader now answers `415 Unsupported Media Type` in
+ * the same shared `{ error }` shape when a `Content-Type` header is
+ * present and its media type is not a JSON one (`application/json`
+ * or any `application/*+json` suffix type, parameters such as
+ * `charset` ignored). A missing header stays accepted — the
+ * historic behaviour — because simple clients that send JSON
+ * without declaring it should keep working; the check governs what
+ * a client *declares*, and a declaration that is not JSON is the
+ * client error 415 exists for. (A `fetch` string body declares
+ * `text/plain` by platform default — that is a declaration too;
+ * every client this app ships sets `application/json` explicitly.)
+ * The check runs before the body is
+ * read at all, so a mislabelled body reaches no parser, validator,
+ * runtime, or PayPal call. The suggest route applies the same check
+ * to a present (non-empty) body.
  */
 
 import { NextResponse } from "next/server";
@@ -74,6 +96,31 @@ export function payloadTooLargeResponse(): NextResponse {
   return NextResponse.json({ error: JSON_BODY_TOO_LARGE_ERROR }, { status: 413 });
 }
 
+/** The 415 error message, shared by every body-reading surface. */
+export const UNSUPPORTED_MEDIA_TYPE_ERROR =
+  "Unsupported Media Type — JSON request bodies must be sent with Content-Type: application/json";
+
+/**
+ * Pure check: is a declared `Content-Type` header value a media type
+ * this API does not accept for a JSON body? A missing or empty header
+ * is NOT unsupported (historic behaviour: undeclared JSON is read);
+ * parameters (`; charset=utf-8`) are ignored; `application/json` and
+ * any `application/*+json` suffix type are accepted, case-insensitively.
+ */
+export function isUnsupportedJsonContentType(contentType: string | null): boolean {
+  if (contentType === null) return false;
+  const mediaType = contentType.split(";")[0].trim().toLowerCase();
+  if (mediaType === "") return false;
+  if (mediaType === "application/json") return false;
+  if (mediaType.startsWith("application/") && mediaType.endsWith("+json")) return false;
+  return true;
+}
+
+/** The shared 415 response: `{ error }` naming the required media type, nothing else. */
+export function unsupportedMediaTypeResponse(): NextResponse {
+  return NextResponse.json({ error: UNSUPPORTED_MEDIA_TYPE_ERROR }, { status: 415 });
+}
+
 /** Pure check: a parsed JSON value is an object body only if it is a non-null, non-array object. */
 export function isJsonObject(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
@@ -81,8 +128,9 @@ export function isJsonObject(value: unknown): value is Record<string, unknown> {
 
 /**
  * Read a route's JSON object body. On success returns
- * `{ body, response: null }`; on an oversized body returns the
- * shared 413; on malformed JSON or a non-object body returns
+ * `{ body, response: null }`; on a declared non-JSON Content-Type
+ * returns the shared 415 (before the body is read); on an oversized
+ * body returns the shared 413; on malformed JSON or a non-object body returns
  * `{ body: null, response }` with the 400 to send instead,
  * carrying `errorMessage` in the shared `{ error }` shape.
  */
@@ -97,6 +145,9 @@ export async function readJsonObjectBody(
     body: null,
     response: NextResponse.json({ error: errorMessage }, { status: 400 }),
   });
+  if (isUnsupportedJsonContentType(req.headers.get("content-type"))) {
+    return { body: null, response: unsupportedMediaTypeResponse() };
+  }
   let text: string;
   try {
     text = await req.text();

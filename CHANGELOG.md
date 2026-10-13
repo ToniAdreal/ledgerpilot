@@ -16,6 +16,15 @@ build record behind these summaries.
 
 ### Added
 
+- **Content-Type enforcement (the JSON 415).** Every JSON request
+  body whose declared `Content-Type` is present and not a JSON
+  media type (`application/json` or an `application/*+json` suffix
+  type) now answers a JSON 415 in the shared `{ error }` shape —
+  naming the required `Content-Type: application/json` — before
+  the body is read, so a mislabelled body reaches no parser,
+  validator, runtime, or PayPal call. Requests that declare no
+  Content-Type are read as before. The OpenAPI document declares
+  the shared 415 on every body-bearing operation.
 - **API cache control (no-store).** Every response under `/api/`
   now carries `Cache-Control: no-store` (a `next.config.mjs`
   header rule scoped to `/api/:path*` only), so no browser or

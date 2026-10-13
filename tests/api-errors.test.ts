@@ -7,6 +7,7 @@ import {
   NON_RUNTIME_OPERATION_IDS,
   REQUEST_BODY_TOO_LARGE_RESPONSE,
   RUNTIME_NOT_CONFIGURED_RESPONSE,
+  UNSUPPORTED_MEDIA_TYPE_RESPONSE,
   apiOperationResponses,
   buildOpenApiDocument,
   describePayPalNotConfigured,
@@ -141,6 +142,14 @@ describe("OpenAPI consistency — the shared runtime-backed 503", () => {
         expectedLength += 1;
       } else if (!op.requestBody) {
         expect(responses["413"], op.operationId).toBeUndefined();
+      }
+      // The shared 415 lands on body-bearing operations only, like
+      // the 413 (a GET declares no body media type to refuse).
+      if (op.requestBody && !("415" in op.responses)) {
+        expect(responses["415"], op.operationId).toBe(UNSUPPORTED_MEDIA_TYPE_RESPONSE);
+        expectedLength += 1;
+      } else if (!op.requestBody) {
+        expect(responses["415"], op.operationId).toBeUndefined();
       }
       if (NON_RUNTIME_OPERATION_IDS.has(op.operationId)) {
         // No runtime-backed 503 is ever added for these three.

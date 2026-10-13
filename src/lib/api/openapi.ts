@@ -55,6 +55,12 @@
  *    rejected for its size whether or not it is well-formed). That
  *    response is appended by `apiOperationResponses` too, for
  *    body-bearing operations only — a GET has no body to refuse.
+ *  - **Body-bearing operations share one 415.** Every operation
+ *    that takes a JSON request body answers 415 with that same
+ *    error shape when the request declares a non-JSON Content-Type
+ *    (enforced in `src/lib/api/body.ts` before the body is read;
+ *    an undeclared Content-Type is read as before). Appended by
+ *    `apiOperationResponses` for body-bearing operations only.
  */
 
 export type ApiTag = "Agent" | "Console" | "Health" | "Judge Mode" | "PayPal";
@@ -503,6 +509,9 @@ export const METHOD_NOT_ALLOWED_RESPONSE =
 export const REQUEST_BODY_TOO_LARGE_RESPONSE =
   "The JSON request body exceeds the shared 131072-byte (128 KiB) limit; the API answers a JSON { error } naming the limit before parsing, so no validator or PayPal call is reached. Every legitimate body is far smaller — the largest, a maximum-size payout batch draft, is roughly 27 KB.";
 
+export const UNSUPPORTED_MEDIA_TYPE_RESPONSE =
+  "The request declares a Content-Type that is not a JSON media type; the API answers a JSON { error } naming the required Content-Type: application/json before reading the body, so no parser, validator, or PayPal call is reached. Requests that declare no Content-Type are read as before.";
+
 /**
  * The responses an operation can actually return: its registry
  * responses, plus the shared 405 every documented path answers a
@@ -519,6 +528,9 @@ export function apiOperationResponses(op: ApiOperation): Record<string, string> 
   }
   if (op.requestBody && !("413" in responses)) {
     responses = { ...responses, "413": REQUEST_BODY_TOO_LARGE_RESPONSE };
+  }
+  if (op.requestBody && !("415" in responses)) {
+    responses = { ...responses, "415": UNSUPPORTED_MEDIA_TYPE_RESPONSE };
   }
   if (!NON_RUNTIME_OPERATION_IDS.has(op.operationId) && !("503" in responses)) {
     responses = { ...responses, "503": RUNTIME_NOT_CONFIGURED_RESPONSE };

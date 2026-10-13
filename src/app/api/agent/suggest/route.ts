@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { acquireRuntime } from "@/lib/api/errors";
 import { isJsonObject } from "@/lib/api/body";
-import { isOversizedJsonBody, jsonBodyByteLength, payloadTooLargeResponse } from "@/lib/api/body";
+import { isOversizedJsonBody, isUnsupportedJsonContentType, jsonBodyByteLength, payloadTooLargeResponse, unsupportedMediaTypeResponse } from "@/lib/api/body";
 import { resolveReferenceDate, suggestNextActions, SuggestionError } from "@/lib/agent";
 
 export const dynamic = "force-dynamic";
@@ -24,7 +24,9 @@ export const dynamic = "force-dynamic";
  * 200 { referenceDate, overdueCount, drafted, skipped };
  * 400 on a malformed body or an invalid referenceDate;
  * 413 on a body over the shared JSON size limit (src/lib/api/body.ts),
- * checked on the raw text before parsing, like every other route.
+ * checked on the raw text before parsing, like every other route;
+ * 415 on a present body whose declared Content-Type is not a JSON
+ * media type (same module; an absent body declares nothing to refuse).
  */
 export async function POST(req: Request) {
   const acquired = acquireRuntime();
@@ -32,6 +34,7 @@ export async function POST(req: Request) {
   const { client, store } = acquired.runtime;
   let body: Record<string, unknown> = {};
   const text = await req.text();
+  if (text.trim() && isUnsupportedJsonContentType(req.headers.get("content-type"))) return unsupportedMediaTypeResponse();
   if (isOversizedJsonBody(jsonBodyByteLength(text))) return payloadTooLargeResponse();
   if (text.trim()) {
     try {
