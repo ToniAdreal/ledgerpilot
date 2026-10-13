@@ -18,6 +18,15 @@
  * - HSTS carries no `preload` token: preloading is effectively
  *   irreversible and is a decision for a permanent production host,
  *   not for a hackathon demo deployment.
+ *
+ * API cache control: a second header entry applies
+ * `Cache-Control: no-store` to `/api/:path*` only. Every API
+ * response carries live money-shaped state (console read models,
+ * plan state, the readiness report) — a browser or shared cache
+ * serving a stale copy after a webhook flips an invoice to PAID
+ * would contradict the audit trail the product exists to keep.
+ * Pages are deliberately not covered: they are server-rendered
+ * shells whose data comes from the API at runtime.
  */
 
 /** @type {import('next').NextConfig} */
@@ -64,6 +73,10 @@ const nextConfig = {
       {
         source: "/:path*",
         headers: securityHeaders,
+      },
+      {
+        source: "/api/:path*",
+        headers: [{ key: "Cache-Control", value: "no-store" }],
       },
     ];
   },

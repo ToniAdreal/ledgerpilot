@@ -534,6 +534,18 @@ curl -X POST localhost:3000/api/agent/execute -H 'content-type: application/json
   applies the same limit to its raw text, and the OpenAPI document
   and `/api-docs` page carry the same shared 413 on every
   body-bearing operation via `apiOperationResponses`.
+- **API cache control (no-store).** Every response under `/api/`
+  carries `Cache-Control: no-store`, configured in
+  `next.config.mjs` as a header rule scoped to `/api/:path*` only.
+  API responses carry live money-shaped state — console read
+  models, plan state, the KPI summary, the readiness report — and
+  no browser or shared cache may serve a stale copy of them: a
+  cached summary still showing an invoice as outstanding after its
+  payment webhook landed would contradict the audit trail the
+  product exists to keep. Pages are deliberately not covered —
+  they are server-rendered shells whose data comes from the API
+  at runtime — and no cacheable directive (`public`, `s-maxage`,
+  `immutable`) is declared anywhere.
 - **Container deployment.** A `Dockerfile` (repo root) packages the same
   hosted demo for any container host: every stage pins Node 22, the
   image installs with `npm ci`, builds with `npm run build`, and starts
@@ -660,7 +672,7 @@ are not blocked, the suite also runs on them).
 ```bash
 npm install
 npm run dev        # http://localhost:3000
-npm test           # full test suite (745 tests)
+npm test           # full test suite (750 tests)
 npm run typecheck  # tsc --noEmit
 npm run build      # production build
 ```
@@ -943,7 +955,7 @@ signatures mirror the REST resources one-to-one.
 ## Testing
 
 ```bash
-npm test           # vitest — 745 tests, all green
+npm test           # vitest — 750 tests, all green
 npm run typecheck  # TypeScript strict, clean
 npm run build      # Next.js production build
 npm run verify     # the whole gate below, as one command
@@ -1289,7 +1301,12 @@ parsing, exactly-at-limit acceptance, a maximum-size payout batch
 body drafting successfully well under the cap, live 413s on the
 plan / suggest / webhook handlers before any parsing, signature
 work, or drafting, and the built OpenAPI document carrying the
-shared 413 on body-bearing operations only)
+shared 413 on body-bearing operations only), and the API cache
+control (`next.config.mjs` — the config's real `headers()` invoked
+and its API rule asserted to carry exactly
+`Cache-Control: no-store`, the page rule carrying no Cache-Control,
+exactly one Cache-Control declaration in the config, and no
+cacheable directive anywhere)
 — fake credentials only, no network.
 
 ### Smoke check (a running instance, end to end)

@@ -55,6 +55,13 @@ is pre-1.0 hackathon software; there are no maintained release lines.
   strict-origin referrer policy, and a Permissions-Policy disabling
   camera, microphone, and geolocation. The framework's
   `X-Powered-By` header is disabled.
+- **API cache control:** every response under `/api/` carries
+  `Cache-Control: no-store` (configured in `next.config.mjs`,
+  scoped to `/api/:path*` only). API responses carry live
+  money-shaped state — console read models, plan state, KPIs — and
+  no browser or shared cache may serve a stale copy of them; pages
+  are not covered, because they are server-rendered shells whose
+  data comes from the API at runtime.
 
 ## Deployment guidance
 

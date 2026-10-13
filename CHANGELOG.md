@@ -16,6 +16,13 @@ build record behind these summaries.
 
 ### Added
 
+- **API cache control (no-store).** Every response under `/api/`
+  now carries `Cache-Control: no-store` (a `next.config.mjs`
+  header rule scoped to `/api/:path*` only), so no browser or
+  shared cache can serve a stale copy of the live money-shaped
+  state the API returns — console read models, plan state, KPIs,
+  the readiness report. Pages are not covered; no cacheable
+  directive is declared anywhere.
 - **Request body size limit (the JSON 413).** Every JSON request
   body is measured in UTF-8 bytes before parsing and answers a
   JSON 413 in the shared `{ error }` shape — naming the 131072-byte
