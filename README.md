@@ -516,6 +516,19 @@ curl -X POST localhost:3000/api/agent/execute -H 'content-type: application/json
   a URL, canonical, or `metadataBase`: no public host exists before
   the hosted deployment, and none is invented (the same rule the root
   layout and `robots` follow).
+- **Site navigation.** The root layout renders a primary nav (from
+  `src/lib/nav/site-nav.ts`, the single source of truth) on every
+  page, so every addressable surface — Console, Command, Invoices,
+  Checkout, Payouts, Disputes, Reconciliation, Activity, Judge Mode,
+  API docs — is reachable from every other page, not only via the
+  console home's prose links or a page's back-link. The current
+  page's link carries `aria-current="page"` (an invoice detail page
+  keeps the Invoices link current). The test suite walks `src/app`
+  for the page routes on disk and requires the nav list to match
+  them exactly, so a new page cannot ship unnavigable and a removed
+  page cannot leave a dead link; dynamic detail routes are
+  deliberately not primary-nav destinations, and no external URL is
+  listed.
 - **Repository text hygiene.** `.editorconfig` declares the tree's
   text conventions where editors read them (UTF-8, LF line endings,
   a final newline, no trailing whitespace, space indentation — 2 in
@@ -548,7 +561,7 @@ are not blocked, the suite also runs on them).
 ```bash
 npm install
 npm run dev        # http://localhost:3000
-npm test           # full test suite (647 tests)
+npm test           # full test suite (654 tests)
 npm run typecheck  # tsc --noEmit
 npm run build      # production build
 ```
@@ -685,6 +698,9 @@ mock mode a config swap rather than a rewrite.
   the mode view-model (`mode.ts`: health-report wire validation +
   the PayPal mode badge — mock / sandbox / degraded / misconfigured /
   unknown — rendered as the console's mode strip).
+- `src/lib/nav/` — site navigation: the primary nav's link list
+  (single source of truth, pinned by tests against the page routes
+  on disk) and the active-link resolution the layout's nav renders.
 - `src/lib/command/` — Agent Command bar view-model: brief validation,
   example briefs, the plan-review model (step labels, exact PayPal call,
   trigger badges), and action-availability rules that mirror the server-side
@@ -798,7 +814,7 @@ signatures mirror the REST resources one-to-one.
 ## Testing
 
 ```bash
-npm test           # vitest — 647 tests, all green
+npm test           # vitest — 654 tests, all green
 npm run typecheck  # TypeScript strict, clean
 npm run build      # Next.js production build
 npm run verify     # the whole gate below, as one command
@@ -850,7 +866,11 @@ invoice reminders (mock open-invoice rules, executor resolution by
 reference and by most-overdue open invoice, unmatched-reference and
 already-paid failures, the sandbox `/remind` request shape), the
 agent pipeline (brief parsing incl. due-date forms and currencies, the
-approval gate, trigger resume, audit ordering), webhooks + reconciler
+approval gate, trigger resume, audit ordering), site navigation (the
+nav list matching the page routes on disk exactly, dynamic detail
+routes excluded, active-link resolution — root exact, sections by
+prefix — and the layout rendering the nav after the skip link),
+webhooks + reconciler
 (bad-signature rejection, duplicate delivery, webhook/reconciler
 non-interference, resource-correlated trigger resumption), console read
 models (per-currency totals, overdue flags, dispute response deadlines +

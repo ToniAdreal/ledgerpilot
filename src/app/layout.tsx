@@ -1,6 +1,7 @@
 import type { Metadata, Viewport } from "next";
 import type { ReactNode } from "react";
 import "./globals.css";
+import SiteNav from "./site-nav";
 
 // Share/theme metadata for the hosted demo. No `metadataBase` and no
 // canonical/openGraph `url` is declared: no public URL exists before
@@ -42,6 +43,11 @@ export default function RootLayout({ children }: { children: ReactNode }) {
         <a className="skip-link" href="#main-content">
           Skip to main content
         </a>
+        {/* Primary navigation: every addressable surface is reachable
+            from every page (see src/lib/nav/site-nav.ts). It renders
+            after the skip link, so the skip link stays the first
+            focusable element and jumps past the nav as well. */}
+        <SiteNav />
         {children}
       </body>
     </html>

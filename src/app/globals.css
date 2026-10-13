@@ -299,3 +299,44 @@ body { margin: 0; color: #111827; background: #ffffff; }
 .timeline li { border-left: 3px solid #e5e7eb; padding: 0.15rem 0 0.6rem 0.9rem; margin-left: 0.35rem; }
 .timeline li p { margin: 0.3rem 0 0; font-size: 14px; line-height: 1.5; }
 .timeline-meta { font-size: 12px; color: #6b7280; display: flex; flex-wrap: wrap; gap: 0.35rem; align-items: center; }
+
+/* Site navigation (root layout, every page) */
+.site-header {
+  border-bottom: 1px solid #e5e7eb;
+  background: #ffffff;
+}
+.site-nav {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.5rem 1rem;
+  margin: 0 auto;
+  max-width: 1180px;
+  padding: 0.6rem 1rem;
+  font-family: system-ui, sans-serif;
+}
+.site-nav-brand {
+  color: #111827;
+  font-weight: 700;
+  font-size: 15px;
+  text-decoration: none;
+  margin-right: 0.5rem;
+}
+.site-nav-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.25rem 0.5rem;
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+.site-nav-link {
+  color: #374151;
+  font-size: 13.5px;
+  text-decoration: none;
+  padding: 0.3rem 0.55rem;
+  border-radius: 6px;
+}
+.site-nav-link:hover { background: #f3f4f6; }
+.site-nav-link-active { background: #111827; color: #ffffff; }
+.site-nav-link-active:hover { background: #111827; }

@@ -16,6 +16,12 @@ build record behind these summaries.
 
 ### Added
 
+- **Site navigation.** The root layout now renders a primary nav
+  on every page from a single source of truth
+  (`src/lib/nav/site-nav.ts`): every addressable surface is
+  reachable from every other page, the current page's link carries
+  `aria-current="page"`, and the test suite requires the nav list
+  to match the page routes on disk exactly.
 - **PayPal mode indicator.** The console carries a mode strip
   above the KPI strip stating the instance's actual PayPal mode —
   Mock, Sandbox, Sandbox without a webhook id (sync reconciler
