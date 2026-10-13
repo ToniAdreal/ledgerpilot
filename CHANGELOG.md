@@ -16,6 +16,14 @@ build record behind these summaries.
 
 ### Added
 
+- **Request body size limit (the JSON 413).** Every JSON request
+  body is measured in UTF-8 bytes before parsing and answers a
+  JSON 413 in the shared `{ error }` shape — naming the 131072-byte
+  (128 KiB) limit — when it exceeds the cap, so an oversized body
+  reaches no validator, runtime, or PayPal call. The largest
+  legitimate body (a maximum-size payout batch draft, roughly
+  27 KB) sits far under the cap; the OpenAPI document declares the
+  shared 413 on every body-bearing operation.
 - **JSON body validation (the non-object 400).** Every POST route
   whose body is a required JSON object now reads it through one
   shared reader (`src/lib/api/body.ts`): malformed JSON and

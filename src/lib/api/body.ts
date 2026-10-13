@@ -1,5 +1,6 @@
 /**
- * JSON request-body reading — the non-object body case.
+ * JSON request-body reading — the non-object body case, and the
+ * oversized body case.
  *
  * `Request.json()` parses *any* JSON value, not just objects. Every
  * POST route in this app expects an object body, and until this
@@ -28,9 +29,50 @@
  *    text itself and applies the same object check to a present
  *    body. Routes that take no body at all (the Judge Mode seed /
  *    pay / reset actions) never call this module.
+ *
+ * The size limit is the same module's second case. Every legitimate
+ * body in this API is small and bounded by validation caps that
+ * already exist in code (briefs ≤ 500 chars, text fields ≤ 500
+ * chars, payout batches ≤ 25 lines, tool sequences ≤ 4 calls — the
+ * largest legitimate body, a maximum-size payout batch draft, is
+ * roughly 27 KB), but until this limit existed a single request
+ * could force the server to buffer and parse an arbitrarily large
+ * payload before any of that validation ran — on a hosted demo
+ * instance that deliberately ships with no authentication layer,
+ * that is a real denial-of-service surface. The reader therefore
+ * measures the raw body's UTF-8 byte length and answers
+ * `413 Payload Too Large` in the same shared `{ error }` shape —
+ * naming the limit — *before* parsing, so an oversized body is
+ * rejected for its size whether or not it is well-formed JSON, and
+ * never reaches a validator, the runtime, or PayPal. The limit is
+ * 128 KiB: more than four times the largest legitimate body, so
+ * no valid request is ever rejected for size (the test suite pins
+ * that headroom against a maximum-size payout batch). The suggest
+ * route applies the same limit to its raw text before parsing.
  */
 
 import { NextResponse } from "next/server";
+
+/** Maximum accepted size of a JSON request body, in UTF-8 bytes (128 KiB). */
+export const MAX_JSON_BODY_BYTES = 131_072;
+
+/** The 413 error message, shared by every body-reading surface. */
+export const JSON_BODY_TOO_LARGE_ERROR = `Request body is too large — JSON request bodies are limited to ${MAX_JSON_BODY_BYTES} bytes`;
+
+/** UTF-8 byte length of a raw body — the unit the size limit is measured in (not characters). */
+export function jsonBodyByteLength(text: string): number {
+  return new TextEncoder().encode(text).length;
+}
+
+/** Pure check: does a body's UTF-8 byte length exceed the limit? Exactly at the limit is accepted. */
+export function isOversizedJsonBody(byteLength: number): boolean {
+  return byteLength > MAX_JSON_BODY_BYTES;
+}
+
+/** The shared 413 response: `{ error }` naming the limit, nothing else. */
+export function payloadTooLargeResponse(): NextResponse {
+  return NextResponse.json({ error: JSON_BODY_TOO_LARGE_ERROR }, { status: 413 });
+}
 
 /** Pure check: a parsed JSON value is an object body only if it is a non-null, non-array object. */
 export function isJsonObject(value: unknown): value is Record<string, unknown> {
@@ -39,9 +81,10 @@ export function isJsonObject(value: unknown): value is Record<string, unknown> {
 
 /**
  * Read a route's JSON object body. On success returns
- * `{ body, response: null }`; on malformed JSON or a non-object
- * body returns `{ body: null, response }` with the 400 to send
- * instead, carrying `errorMessage` in the shared `{ error }` shape.
+ * `{ body, response: null }`; on an oversized body returns the
+ * shared 413; on malformed JSON or a non-object body returns
+ * `{ body: null, response }` with the 400 to send instead,
+ * carrying `errorMessage` in the shared `{ error }` shape.
  */
 export async function readJsonObjectBody(
   req: Request,
@@ -54,9 +97,18 @@ export async function readJsonObjectBody(
     body: null,
     response: NextResponse.json({ error: errorMessage }, { status: 400 }),
   });
+  let text: string;
+  try {
+    text = await req.text();
+  } catch {
+    return reject();
+  }
+  if (isOversizedJsonBody(jsonBodyByteLength(text))) {
+    return { body: null, response: payloadTooLargeResponse() };
+  }
   let parsed: unknown;
   try {
-    parsed = await req.json();
+    parsed = JSON.parse(text);
   } catch {
     return reject();
   }

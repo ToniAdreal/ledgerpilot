@@ -518,6 +518,22 @@ curl -X POST localhost:3000/api/agent/execute -H 'content-type: application/json
   raw text itself and applies the same object check (`isJsonObject`)
   to a present body; routes that take no body (Judge Mode seed /
   pay / reset) read none.
+- **Request body size limit (the JSON 413).** The same shared reader
+  enforces one size limit on every JSON request body: 131072 bytes
+  (128 KiB), measured in UTF-8 bytes on the raw body *before*
+  parsing, so an oversized body answers a JSON 413 in the shared
+  `{ error }` shape — naming the limit — whether or not it is
+  well-formed, and never reaches a validator, the runtime, or
+  PayPal. Every legitimate body is far smaller (briefs and text
+  fields are capped at 500 characters, payout batches at 25 lines,
+  tool sequences at 4 calls — the largest legitimate body, a
+  maximum-size payout batch draft, is roughly 27 KB, and the test
+  suite pins that headroom), so the limit bounds parse cost on a
+  hosted instance that deliberately ships with no authentication
+  layer without ever rejecting a valid request. The suggest route
+  applies the same limit to its raw text, and the OpenAPI document
+  and `/api-docs` page carry the same shared 413 on every
+  body-bearing operation via `apiOperationResponses`.
 - **Container deployment.** A `Dockerfile` (repo root) packages the same
   hosted demo for any container host: every stage pins Node 22, the
   image installs with `npm ci`, builds with `npm run build`, and starts
@@ -644,7 +660,7 @@ are not blocked, the suite also runs on them).
 ```bash
 npm install
 npm run dev        # http://localhost:3000
-npm test           # full test suite (730 tests)
+npm test           # full test suite (745 tests)
 npm run typecheck  # tsc --noEmit
 npm run build      # production build
 ```
@@ -858,6 +874,13 @@ mock mode a config swap rather than a rewrite.
   JSON 405 in the same shared shape with an `Allow` header, the
   allowed methods resolved from this registry; `apiOperationResponses`
   appends that same 405 to every operation in both surfaces.
+  Its body module (`body.ts`) is the one reader every object-body
+  POST route starts from: the shared JSON size limit (128 KiB,
+  measured in UTF-8 bytes) is enforced there on the raw body before
+  parsing — an oversized body answers the JSON 413 in the same
+  shared shape and reaches no validator — alongside the non-object
+  400; `apiOperationResponses` appends that same 413 to every
+  body-bearing operation in both surfaces.
 - API routes — `GET /api/health` (readiness; 200 ok/degraded, 503
   misconfigured), `GET /api/openapi` (the OpenAPI 3.1 document), `src/app/api/agent/` (`POST /plan`, `POST /approve`,
   `POST /execute`, `POST /edit` — amend a pending plan's amounts,
@@ -920,7 +943,7 @@ signatures mirror the REST resources one-to-one.
 ## Testing
 
 ```bash
-npm test           # vitest — 730 tests, all green
+npm test           # vitest — 745 tests, all green
 npm run typecheck  # TypeScript strict, clean
 npm run build      # Next.js production build
 npm run verify     # the whole gate below, as one command
@@ -1260,7 +1283,13 @@ shape, every object-body POST route routed through the one reader
 with no bare `req.json()` cast left, the suggest route's optional
 body applying the same check, and live handler tests proving
 `null` / array / scalar bodies get the documented 400 while valid
-bodies still draft)
+bodies still draft), and the body size limit (`src/lib/api/body.ts`
+— the 128 KiB cap measured in UTF-8 bytes and enforced before
+parsing, exactly-at-limit acceptance, a maximum-size payout batch
+body drafting successfully well under the cap, live 413s on the
+plan / suggest / webhook handlers before any parsing, signature
+work, or drafting, and the built OpenAPI document carrying the
+shared 413 on body-bearing operations only)
 — fake credentials only, no network.
 
 ### Smoke check (a running instance, end to end)

@@ -47,6 +47,14 @@
  *    support is a property of the path, and the three non-runtime
  *    operations are not exempt (POST to the health route is a 405,
  *    not a readiness report).
+ *  - **Body-bearing operations share one 413.** Every operation
+ *    that takes a JSON request body (`requestBody: true`) answers
+ *    413 with that same error shape when the body exceeds the
+ *    shared size limit (`MAX_JSON_BODY_BYTES`, enforced in
+ *    `src/lib/api/body.ts` before parsing, so an oversized body is
+ *    rejected for its size whether or not it is well-formed). That
+ *    response is appended by `apiOperationResponses` too, for
+ *    body-bearing operations only — a GET has no body to refuse.
  */
 
 export type ApiTag = "Agent" | "Console" | "Health" | "Judge Mode" | "PayPal";
@@ -492,18 +500,25 @@ export const RUNTIME_NOT_CONFIGURED_RESPONSE =
 export const METHOD_NOT_ALLOWED_RESPONSE =
   "The path is documented but does not support this method; the API answers a JSON { error } naming the allowed methods, with an Allow header (middleware resolves the allowed methods from this same registry).";
 
+export const REQUEST_BODY_TOO_LARGE_RESPONSE =
+  "The JSON request body exceeds the shared 131072-byte (128 KiB) limit; the API answers a JSON { error } naming the limit before parsing, so no validator or PayPal call is reached. Every legitimate body is far smaller — the largest, a maximum-size payout batch draft, is roughly 27 KB.";
+
 /**
  * The responses an operation can actually return: its registry
  * responses, plus the shared 405 every documented path answers a
  * wrong-method call with, plus the shared runtime-backed 503 for
- * every operation that builds the agent runtime. Used by both the
- * OpenAPI builder and the human-readable /api-docs page, so the
- * two surfaces agree.
+ * every operation that builds the agent runtime, plus the shared
+ * 413 for every operation that takes a JSON request body. Used by
+ * both the OpenAPI builder and the human-readable /api-docs page,
+ * so the two surfaces agree.
  */
 export function apiOperationResponses(op: ApiOperation): Record<string, string> {
   let responses = op.responses;
   if (!("405" in responses)) {
     responses = { ...responses, "405": METHOD_NOT_ALLOWED_RESPONSE };
+  }
+  if (op.requestBody && !("413" in responses)) {
+    responses = { ...responses, "413": REQUEST_BODY_TOO_LARGE_RESPONSE };
   }
   if (!NON_RUNTIME_OPERATION_IDS.has(op.operationId) && !("503" in responses)) {
     responses = { ...responses, "503": RUNTIME_NOT_CONFIGURED_RESPONSE };
