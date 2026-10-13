@@ -548,6 +548,23 @@ curl -X POST localhost:3000/api/agent/execute -H 'content-type: application/json
   present body, and the OpenAPI document and `/api-docs` page
   carry the same shared 415 on every body-bearing operation via
   `apiOperationResponses`.
+- **Content negotiation (the JSON 406).** Middleware
+  (`src/lib/api/not-acceptable.ts`, run after the method guard)
+  enforces the response side of the media-type contract: every
+  route under `/api/` returns `application/json` only, so a request
+  whose `Accept` header excludes JSON — naming only non-JSON types,
+  or refusing it with `application/json;q=0`, the most specific
+  matching range governing per HTTP semantics — answers a JSON 406
+  in the shared `{ error }` shape, naming the path. A request that
+  sends no `Accept` header, or accepts JSON directly or via a
+  wildcard range with q > 0, is served as before; a `+json` suffix
+  range does not claim plain JSON. Two exemptions are deliberate:
+  OPTIONS (the framework answers it itself) and the PayPal webhook
+  listener, whose sender is a machine peer delivering an event,
+  not a client negotiating a representation — its deliveries are
+  never refused over an `Accept` header. The OpenAPI document and
+  `/api-docs` page carry the same shared 406 on every operation
+  except the webhook listener via `apiOperationResponses`.
 - **API cache control (no-store).** Every response under `/api/`
   carries `Cache-Control: no-store`, configured in
   `next.config.mjs` as a header rule scoped to `/api/:path*` only.
@@ -686,7 +703,7 @@ are not blocked, the suite also runs on them).
 ```bash
 npm install
 npm run dev        # http://localhost:3000
-npm test           # full test suite (765 tests)
+npm test           # full test suite (784 tests)
 npm run typecheck  # tsc --noEmit
 npm run build      # production build
 ```
@@ -969,7 +986,7 @@ signatures mirror the REST resources one-to-one.
 ## Testing
 
 ```bash
-npm test           # vitest — 765 tests, all green
+npm test           # vitest — 784 tests, all green
 npm run typecheck  # TypeScript strict, clean
 npm run build      # Next.js production build
 npm run verify     # the whole gate below, as one command

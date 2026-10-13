@@ -16,6 +16,16 @@ build record behind these summaries.
 
 ### Added
 
+- **Content negotiation (the JSON 406).** Every request whose
+  `Accept` header excludes `application/json` — the only
+  representation the API returns — now answers a JSON 406 in the
+  shared `{ error }` shape (middleware content negotiation, the
+  most specific matching media range governing, `q=0` refusing).
+  Requests with no `Accept` header, or accepting JSON directly or
+  via a wildcard, are served as before; OPTIONS and the PayPal
+  webhook listener (a machine-peer sender that does not negotiate)
+  are exempt. The OpenAPI document declares the shared 406 on
+  every operation except the webhook listener.
 - **Content-Type enforcement (the JSON 415).** Every JSON request
   body whose declared `Content-Type` is present and not a JSON
   media type (`application/json` or an `application/*+json` suffix

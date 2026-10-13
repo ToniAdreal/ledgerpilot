@@ -4,7 +4,9 @@ import { describe, expect, it } from "vitest";
 import {
   API_OPERATIONS,
   METHOD_NOT_ALLOWED_RESPONSE,
+  NON_NEGOTIABLE_OPERATION_IDS,
   NON_RUNTIME_OPERATION_IDS,
+  NOT_ACCEPTABLE_RESPONSE,
   REQUEST_BODY_TOO_LARGE_RESPONSE,
   RUNTIME_NOT_CONFIGURED_RESPONSE,
   UNSUPPORTED_MEDIA_TYPE_RESPONSE,
@@ -133,6 +135,16 @@ describe("OpenAPI consistency — the shared runtime-backed 503", () => {
       if (!("405" in op.responses)) {
         expect(responses["405"], op.operationId).toBe(METHOD_NOT_ALLOWED_RESPONSE);
         expectedLength += 1;
+      }
+      // The shared 406 lands on every operation except the webhook
+      // listener (its machine-peer sender does not negotiate) —
+      // counted here so this suite's no-extra-responses guarantee
+      // covers it too.
+      if (!NON_NEGOTIABLE_OPERATION_IDS.has(op.operationId) && !("406" in op.responses)) {
+        expect(responses["406"], op.operationId).toBe(NOT_ACCEPTABLE_RESPONSE);
+        expectedLength += 1;
+      } else if (NON_NEGOTIABLE_OPERATION_IDS.has(op.operationId)) {
+        expect(responses["406"], op.operationId).toBeUndefined();
       }
       // The shared 413 lands on body-bearing operations only (a GET
       // has no body to refuse) — counted here so this suite's

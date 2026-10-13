@@ -61,6 +61,15 @@
  *    (enforced in `src/lib/api/body.ts` before the body is read;
  *    an undeclared Content-Type is read as before). Appended by
  *    `apiOperationResponses` for body-bearing operations only.
+ *  - **Nearly every operation shares one 406.** A request whose
+ *    `Accept` header excludes `application/json` — the API's one
+ *    representation — is answered 406 with that same error shape by
+ *    middleware (`src/lib/api/not-acceptable.ts`). Appended by
+ *    `apiOperationResponses` for every operation except
+ *    `receivePayPalWebhook`: the webhook listener's sender is
+ *    PayPal, a machine peer delivering an event rather than a
+ *    client negotiating a representation, so its deliveries are
+ *    never refused over an `Accept` header.
  */
 
 export type ApiTag = "Agent" | "Console" | "Health" | "Judge Mode" | "PayPal";
@@ -513,9 +522,25 @@ export const UNSUPPORTED_MEDIA_TYPE_RESPONSE =
   "The request declares a Content-Type that is not a JSON media type; the API answers a JSON { error } naming the required Content-Type: application/json before reading the body, so no parser, validator, or PayPal call is reached. Requests that declare no Content-Type are read as before.";
 
 /**
+ * Operations exempt from the shared 406: the webhook listener's
+ * sender is PayPal, a machine peer delivering an event rather than
+ * a client negotiating a representation, so its deliveries are
+ * never refused over an `Accept` header (the middleware in
+ * `src/lib/api/not-acceptable.ts` holds the path-level exemption).
+ */
+export const NON_NEGOTIABLE_OPERATION_IDS: ReadonlySet<string> = new Set([
+  "receivePayPalWebhook",
+]);
+
+export const NOT_ACCEPTABLE_RESPONSE =
+  "The request's Accept header does not accept application/json, the only representation this API returns; the API answers a JSON { error } naming the path (middleware content negotiation, after the method guard). Requests that send no Accept header, or accept JSON directly or via a wildcard range with q > 0, are served as before.";
+
+/**
  * The responses an operation can actually return: its registry
  * responses, plus the shared 405 every documented path answers a
- * wrong-method call with, plus the shared runtime-backed 503 for
+ * wrong-method call with, plus the shared 406 every operation
+ * except the webhook listener answers an Accept header that
+ * excludes JSON with, plus the shared runtime-backed 503 for
  * every operation that builds the agent runtime, plus the shared
  * 413 for every operation that takes a JSON request body. Used by
  * both the OpenAPI builder and the human-readable /api-docs page,
@@ -525,6 +550,9 @@ export function apiOperationResponses(op: ApiOperation): Record<string, string> 
   let responses = op.responses;
   if (!("405" in responses)) {
     responses = { ...responses, "405": METHOD_NOT_ALLOWED_RESPONSE };
+  }
+  if (!NON_NEGOTIABLE_OPERATION_IDS.has(op.operationId) && !("406" in responses)) {
+    responses = { ...responses, "406": NOT_ACCEPTABLE_RESPONSE };
   }
   if (op.requestBody && !("413" in responses)) {
     responses = { ...responses, "413": REQUEST_BODY_TOO_LARGE_RESPONSE };
