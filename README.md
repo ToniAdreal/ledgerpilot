@@ -466,6 +466,18 @@ curl -X POST localhost:3000/api/agent/execute -H 'content-type: application/json
   `PAYPAL_CLIENT_SECRET`) instead of an opaque 500. Warnings only (e.g.
   sandbox without a webhook id — the sync reconciler remains the fallback)
   stay 200 `degraded`; mock mode is always `ok`.
+- **Structured API errors.** The deployment-readiness case above no longer
+  ends in an opaque framework 500 anywhere else: every runtime-backed API
+  route acquires its runtime through `acquireRuntime`
+  (`src/lib/api/errors.ts`), which translates the sandbox-not-configured
+  failure into a structured 503 in the API's one shared error shape
+  (`{ error }`, naming the missing variables and the mock-mode
+  alternative — never a credential value). Any other failure is rethrown
+  untouched, not dressed up. The OpenAPI document and the `/api-docs`
+  page carry the same shared 503 on every runtime-backed operation via
+  `apiOperationResponses`; the only operations without it are the three
+  that never build the runtime (`GET /api/health`, `GET /api/openapi`,
+  and the tool definitions' `GET /api/agent/tools`).
 - **Container deployment.** A `Dockerfile` (repo root) packages the same
   hosted demo for any container host: every stage pins Node 22, the
   image installs with `npm ci`, builds with `npm run build`, and starts
@@ -592,7 +604,7 @@ are not blocked, the suite also runs on them).
 ```bash
 npm install
 npm run dev        # http://localhost:3000
-npm test           # full test suite (678 tests)
+npm test           # full test suite (690 tests)
 npm run typecheck  # tsc --noEmit
 npm run build      # production build
 ```
@@ -790,7 +802,13 @@ mock mode a config swap rather than a rewrite.
   `security: []` throughout (no auth layer exists to declare);
   completeness against the route files is test-enforced. The same
   module's documentation sections (`buildApiDocsSections`) group
-  the registry by tag for the human-readable `/api-docs` page.
+  the registry by tag for the human-readable `/api-docs` page, and
+  its error translation (`errors.ts`: `acquireRuntime` +
+  `paypalNotConfiguredResponse`) is the one place every
+  runtime-backed route acquires the runtime, so the
+  sandbox-not-configured case answers the structured 503 above
+  instead of an opaque 500; `apiOperationResponses` appends that
+  same 503 to every runtime-backed operation in both surfaces.
 - API routes — `GET /api/health` (readiness; 200 ok/degraded, 503
   misconfigured), `GET /api/openapi` (the OpenAPI 3.1 document), `src/app/api/agent/` (`POST /plan`, `POST /approve`,
   `POST /execute`, `POST /edit` — amend a pending plan's amounts,
@@ -853,7 +871,7 @@ signatures mirror the REST resources one-to-one.
 ## Testing
 
 ```bash
-npm test           # vitest — 678 tests, all green
+npm test           # vitest — 690 tests, all green
 npm run typecheck  # TypeScript strict, clean
 npm run build      # Next.js production build
 npm run verify     # the whole gate below, as one command

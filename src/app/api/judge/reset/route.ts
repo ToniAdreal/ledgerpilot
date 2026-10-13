@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { getAgentRuntime } from "@/lib/agent";
+import { acquireRuntime } from "@/lib/api/errors";
 import { JudgeModeError, resetJudgeDemo } from "@/lib/judge";
 
 export const dynamic = "force-dynamic";
@@ -12,7 +12,9 @@ export const dynamic = "force-dynamic";
  * mode, where the resources live at PayPal and cannot be cleared.
  */
 export async function POST() {
-  const { store, client } = getAgentRuntime();
+  const acquired = acquireRuntime();
+  if (acquired.response) return acquired.response;
+  const { store, client } = acquired.runtime;
   try {
     const result = await resetJudgeDemo(client, store);
     return NextResponse.json({ cleared: result.cleared, state: result.state });

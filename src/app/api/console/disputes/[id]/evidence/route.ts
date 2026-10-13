@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { getAgentRuntime } from "../../../../../../lib/agent/runtime";
+import { acquireRuntime } from "@/lib/api/errors";
 import { DisputeEvidenceError, getDisputeEvidenceSummary } from "../../../../../../lib/disputes";
 
 export const dynamic = "force-dynamic";
@@ -13,7 +13,9 @@ export const dynamic = "force-dynamic";
  */
 export async function GET(_request: Request, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
-  const { client } = getAgentRuntime();
+  const acquired = acquireRuntime();
+  if (acquired.response) return acquired.response;
+  const { client } = acquired.runtime;
   const referenceDate = new Date().toISOString().slice(0, 10);
   try {
     const summary = await getDisputeEvidenceSummary(client, id, referenceDate);

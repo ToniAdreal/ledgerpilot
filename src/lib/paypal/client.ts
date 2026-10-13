@@ -72,7 +72,7 @@ export class PayPalError extends Error {
 }
 
 export class PayPalNotConfiguredError extends Error {
-  constructor(missing: string[]) {
+  constructor(readonly missing: string[]) {
     super(
       `PayPal sandbox mode requires: ${missing.join(", ")}. ` +
         `Set them (see .env.example) or use PAYPAL_MODE=mock.`,

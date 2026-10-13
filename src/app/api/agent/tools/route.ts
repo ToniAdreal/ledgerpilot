@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
-import { ToolCallError, getAgentRuntime, listAgentTools, toolCallsToPlan } from "@/lib/agent";
+import { acquireRuntime } from "@/lib/api/errors";
+import { ToolCallError, listAgentTools, toolCallsToPlan } from "@/lib/agent";
 
 export const dynamic = "force-dynamic";
 
@@ -24,7 +25,9 @@ export async function GET() {
  * → 201 { plan }; 400 on malformed JSON or any validation failure.
  */
 export async function POST(req: Request) {
-  const { store } = getAgentRuntime();
+  const acquired = acquireRuntime();
+  if (acquired.response) return acquired.response;
+  const { store } = acquired.runtime;
   let body: Record<string, unknown>;
   try {
     body = (await req.json()) as Record<string, unknown>;

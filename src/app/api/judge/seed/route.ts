@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { getAgentRuntime } from "@/lib/agent";
+import { acquireRuntime } from "@/lib/api/errors";
 import { seedJudgeScenario } from "@/lib/judge";
 
 export const dynamic = "force-dynamic";
@@ -10,7 +10,9 @@ export const dynamic = "force-dynamic";
  * returns `alreadySeeded: true` with the existing seed record.
  */
 export async function POST() {
-  const { store, client } = getAgentRuntime();
+  const acquired = acquireRuntime();
+  if (acquired.response) return acquired.response;
+  const { store, client } = acquired.runtime;
   const result = await seedJudgeScenario(client, store);
   return NextResponse.json({
     alreadySeeded: result.alreadySeeded,

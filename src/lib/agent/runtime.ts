@@ -11,7 +11,7 @@ import { getPayPalClient, type PayPalClient } from "../paypal";
 import { getDefaultLlmAdapter, type LlmBriefExtractor } from "./llm";
 import { ledgerStoreFromEnv, LedgerStore } from "./store";
 
-interface AgentRuntime {
+export interface AgentRuntime {
   client: PayPalClient;
   store: LedgerStore;
   /** Optional LLM fallback for brief parsing; null unless LLM_API_KEY is set. */

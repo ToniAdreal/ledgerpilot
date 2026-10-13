@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { getAgentRuntime } from "@/lib/agent";
+import { acquireRuntime } from "@/lib/api/errors";
 import { InvoicePaymentError, recordInvoicePayment } from "@/lib/invoice";
 import { PayPalError } from "@/lib/paypal";
 
@@ -20,7 +20,9 @@ export const dynamic = "force-dynamic";
  * action — it needs no plan approval (see src/lib/invoice).
  */
 export async function POST(req: Request) {
-  const { store, client } = getAgentRuntime();
+  const acquired = acquireRuntime();
+  if (acquired.response) return acquired.response;
+  const { store, client } = acquired.runtime;
   let body: { invoiceId?: string; amount?: string; currency_code?: string };
   try {
     body = (await req.json()) as typeof body;

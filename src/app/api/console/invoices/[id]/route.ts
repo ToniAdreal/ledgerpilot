@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { getAgentRuntime } from "../../../../../lib/agent/runtime";
+import { acquireRuntime } from "@/lib/api/errors";
 import { buildInvoiceDetail } from "../../../../../lib/console";
 
 export const dynamic = "force-dynamic";
@@ -11,7 +11,9 @@ export const dynamic = "force-dynamic";
  */
 export async function GET(_request: Request, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
-  const { client, store } = getAgentRuntime();
+  const acquired = acquireRuntime();
+  if (acquired.response) return acquired.response;
+  const { client, store } = acquired.runtime;
   const invoice = (await client.listInvoices()).find((i) => i.id === id);
   if (!invoice) {
     return NextResponse.json({ error: `Unknown invoice: ${id}` }, { status: 404 });

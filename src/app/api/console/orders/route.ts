@@ -1,12 +1,14 @@
 import { NextResponse } from "next/server";
-import { getAgentRuntime } from "../../../../lib/agent/runtime";
+import { acquireRuntime } from "@/lib/api/errors";
 import { buildOrderRows } from "../../../../lib/console";
 
 export const dynamic = "force-dynamic";
 
 /** GET /api/console/orders — order / checkout rows for the console grid. */
 export async function GET() {
-  const { client } = getAgentRuntime();
+  const acquired = acquireRuntime();
+  if (acquired.response) return acquired.response;
+  const { client } = acquired.runtime;
   const orders = await client.listOrders();
   return NextResponse.json({ orders: buildOrderRows(orders) });
 }

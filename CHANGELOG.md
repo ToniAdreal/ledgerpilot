@@ -16,6 +16,14 @@ build record behind these summaries.
 
 ### Added
 
+- **Structured API errors.** Every runtime-backed API route now
+  acquires the runtime through `acquireRuntime`
+  (`src/lib/api/errors.ts`): when sandbox mode is selected without
+  credentials, the route answers a structured 503 in the shared
+  `{ error }` shape (naming the missing variables) instead of an
+  opaque framework 500; any other failure is rethrown untouched.
+  The OpenAPI document and `/api-docs` carry the same shared 503
+  on every runtime-backed operation.
 - **Next-action suggestions.** `POST /api/agent/suggest` and the
   console's Suggest next actions button: the agent scans for
   overdue open invoices and drafts one pending-approval reminder

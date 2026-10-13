@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
-import { PlanEditError, editPlanAmounts, getAgentRuntime } from "@/lib/agent";
+import { acquireRuntime } from "@/lib/api/errors";
+import { PlanEditError, editPlanAmounts } from "@/lib/agent";
 
 /**
  * POST /api/agent/edit — amend the amounts of a plan still pending
@@ -17,7 +18,9 @@ import { PlanEditError, editPlanAmounts, getAgentRuntime } from "@/lib/agent";
  * on this surface.
  */
 export async function POST(req: Request) {
-  const { store } = getAgentRuntime();
+  const acquired = acquireRuntime();
+  if (acquired.response) return acquired.response;
+  const { store } = acquired.runtime;
   let body: { planId?: string; edits?: unknown };
   try {
     body = (await req.json()) as { planId?: string; edits?: unknown };

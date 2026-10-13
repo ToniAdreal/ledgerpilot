@@ -3,8 +3,10 @@
  *
  * Why this exists: the hosted demo is the judges' primary path, and a
  * hosted instance can be *up* while being unable to do any PayPal work
- * (e.g. `PAYPAL_MODE=sandbox` deployed without credentials — every
- * PayPal-backed route then throws `PayPalNotConfiguredError`). This
+ * (e.g. `PAYPAL_MODE=sandbox` deployed without credentials — runtime
+ * construction then throws `PayPalNotConfiguredError`, which the API
+ * routes translate into a structured 503; see `src/lib/api/errors.ts`).
+ * This
  * report lets the operator (and the hosting platform's health check)
  * distinguish "app alive, mock mode, zero setup" from "app alive but
  * misconfigured" without opening the console and guessing.
@@ -119,7 +121,7 @@ export function buildHealthReport(
         : {
             name: "sandbox_credentials",
             status: "fail",
-            detail: `Missing ${missingCredentials.join(", ")} — PayPal routes throw PayPalNotConfiguredError until they are set.`,
+            detail: `Missing ${missingCredentials.join(", ")} — runtime-backed PayPal routes answer 503 until they are set.`,
           },
     );
     checks.push(

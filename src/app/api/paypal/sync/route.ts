@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
-import { getAgentRuntime, syncFromPayPal } from "@/lib/agent";
+import { acquireRuntime } from "@/lib/api/errors";
+import { syncFromPayPal } from "@/lib/agent";
 
 /**
  * GET /api/paypal/sync — polling reconciler (webhook fallback).
@@ -7,7 +8,9 @@ import { getAgentRuntime, syncFromPayPal } from "@/lib/agent";
  * resumes trigger-gated plans. Safe to call repeatedly (idempotent).
  */
 export async function GET() {
-  const { store, client } = getAgentRuntime();
+  const acquired = acquireRuntime();
+  if (acquired.response) return acquired.response;
+  const { store, client } = acquired.runtime;
   const result = await syncFromPayPal(store, client);
   return NextResponse.json({
     checked: result.checked,

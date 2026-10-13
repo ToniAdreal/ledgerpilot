@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
-import { DraftValidationError, draftReminderPlan, getAgentRuntime } from "@/lib/agent";
+import { acquireRuntime } from "@/lib/api/errors";
+import { DraftValidationError, draftReminderPlan } from "@/lib/agent";
 
 export const dynamic = "force-dynamic";
 
@@ -16,7 +17,9 @@ export const dynamic = "force-dynamic";
  * to target the recipient's most-overdue open invoice at execution.
  */
 export async function POST(req: Request) {
-  const { store } = getAgentRuntime();
+  const acquired = acquireRuntime();
+  if (acquired.response) return acquired.response;
+  const { store } = acquired.runtime;
   let body: Record<string, unknown>;
   try {
     body = (await req.json()) as Record<string, unknown>;

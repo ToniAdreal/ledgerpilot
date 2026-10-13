@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { getAgentRuntime } from "@/lib/agent";
+import { acquireRuntime } from "@/lib/api/errors";
 import { JudgeModeError, simulateJudgeInvoicePayment } from "@/lib/judge";
 
 export const dynamic = "force-dynamic";
@@ -13,7 +13,9 @@ export const dynamic = "force-dynamic";
  * the scenario is not seeded or the spine plan has not been executed.
  */
 export async function POST() {
-  const { store, client } = getAgentRuntime();
+  const acquired = acquireRuntime();
+  if (acquired.response) return acquired.response;
+  const { store, client } = acquired.runtime;
   try {
     const result = await simulateJudgeInvoicePayment(client, store);
     return NextResponse.json({

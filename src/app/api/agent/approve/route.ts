@@ -1,9 +1,11 @@
 import { NextResponse } from "next/server";
-import { getAgentRuntime } from "@/lib/agent";
+import { acquireRuntime } from "@/lib/api/errors";
 
 /** POST /api/agent/approve — the approval gate. Body: { planId, decision: "approve" | "reject" }. */
 export async function POST(req: Request) {
-  const { store } = getAgentRuntime();
+  const acquired = acquireRuntime();
+  if (acquired.response) return acquired.response;
+  const { store } = acquired.runtime;
   let body: { planId?: string; decision?: string };
   try {
     body = (await req.json()) as { planId?: string; decision?: string };

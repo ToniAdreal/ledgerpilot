@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
-import { BriefParseError, getAgentRuntime, parseBriefWithFallback } from "@/lib/agent";
+import { acquireRuntime } from "@/lib/api/errors";
+import { BriefParseError, parseBriefWithFallback } from "@/lib/agent";
 
 /**
  * POST /api/agent/plan — NL brief → typed action plan (nothing executes).
@@ -7,7 +8,9 @@ import { BriefParseError, getAgentRuntime, parseBriefWithFallback } from "@/lib/
  * LLM_API_KEY is configured) is a validated fallback — see lib/agent/llm.ts.
  */
 export async function POST(req: Request) {
-  const { store, llm } = getAgentRuntime();
+  const acquired = acquireRuntime();
+  if (acquired.response) return acquired.response;
+  const { store, llm } = acquired.runtime;
   let body: { brief?: string };
   try {
     body = (await req.json()) as { brief?: string };
@@ -28,6 +31,8 @@ export async function POST(req: Request) {
 
 /** GET /api/agent/plan — list plans (console read model, v1). */
 export async function GET() {
-  const { store } = getAgentRuntime();
+  const acquired = acquireRuntime();
+  if (acquired.response) return acquired.response;
+  const { store } = acquired.runtime;
   return NextResponse.json({ plans: store.listPlans(), activity: store.listActivity() });
 }

@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
-import { getAgentRuntime, resolveReferenceDate, suggestNextActions, SuggestionError } from "@/lib/agent";
+import { acquireRuntime } from "@/lib/api/errors";
+import { resolveReferenceDate, suggestNextActions, SuggestionError } from "@/lib/agent";
 
 export const dynamic = "force-dynamic";
 
@@ -22,7 +23,9 @@ export const dynamic = "force-dynamic";
  * 400 on a malformed body or an invalid referenceDate.
  */
 export async function POST(req: Request) {
-  const { client, store } = getAgentRuntime();
+  const acquired = acquireRuntime();
+  if (acquired.response) return acquired.response;
+  const { client, store } = acquired.runtime;
   let body: Record<string, unknown> = {};
   const text = await req.text();
   if (text.trim()) {

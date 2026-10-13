@@ -30,6 +30,14 @@
  *  - **Errors share one shape.** Every error response in the app is
  *    `{ error: string }`; the document models it once as the `Error`
  *    component schema and references it from every non-2xx response.
+ *  - **Runtime-backed operations share one 503.** Every operation
+ *    except the three that never build the agent runtime
+ *    (`getHealth`, `getOpenApiDocument`, `listAgentTools`) answers
+ *    503 with that same error shape when sandbox mode is selected
+ *    without credentials — the translation `src/lib/api/errors.ts`
+ *    applies at the route boundary. The response is appended by
+ *    `apiOperationResponses` below rather than repeated in each
+ *    registry entry, so the registry and the routes cannot drift.
  */
 
 export type ApiTag = "Agent" | "Console" | "Health" | "Judge Mode" | "PayPal";
@@ -456,6 +464,35 @@ export const API_OPERATIONS: ApiOperation[] = [
   },
 ];
 
+/**
+ * Operations that never build the agent runtime, and therefore can
+ * never answer the runtime-backed 503: the health report is env-only
+ * by design (it diagnoses exactly this failure), the OpenAPI document
+ * is built from this registry, and the tool definitions' GET is a
+ * static list. Every other registered operation is runtime-backed.
+ */
+export const NON_RUNTIME_OPERATION_IDS: ReadonlySet<string> = new Set([
+  "getHealth",
+  "getOpenApiDocument",
+  "listAgentTools",
+]);
+
+export const RUNTIME_NOT_CONFIGURED_RESPONSE =
+  "Sandbox mode is selected but PAYPAL_CLIENT_ID / PAYPAL_CLIENT_SECRET are not set, so the agent runtime cannot be built; the error names the missing variables (see GET /api/health).";
+
+/**
+ * The responses an operation can actually return: its registry
+ * responses, plus the shared runtime-backed 503 for every operation
+ * that builds the agent runtime. Used by both the OpenAPI builder
+ * and the human-readable /api-docs page, so the two surfaces agree.
+ */
+export function apiOperationResponses(op: ApiOperation): Record<string, string> {
+  if (NON_RUNTIME_OPERATION_IDS.has(op.operationId) || "503" in op.responses) {
+    return op.responses;
+  }
+  return { ...op.responses, "503": RUNTIME_NOT_CONFIGURED_RESPONSE };
+}
+
 export const API_TAGS: Array<{ name: ApiTag; description: string }> = [
   { name: "Agent", description: "Brief → plan → approval → execution, and the tool-call-shaped action layer." },
   { name: "Console", description: "Read models feeding the operations console grids and detail pages." },
@@ -466,7 +503,7 @@ export const API_TAGS: Array<{ name: ApiTag; description: string }> = [
 
 function operationObject(op: ApiOperation): Record<string, unknown> {
   const responses: Record<string, unknown> = {};
-  for (const [code, description] of Object.entries(op.responses)) {
+  for (const [code, description] of Object.entries(apiOperationResponses(op))) {
     const isError = !code.startsWith("2");
     responses[code] = {
       description,

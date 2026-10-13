@@ -1,9 +1,12 @@
 import { NextResponse } from "next/server";
-import { executePlan, getAgentRuntime } from "@/lib/agent";
+import { acquireRuntime } from "@/lib/api/errors";
+import { executePlan } from "@/lib/agent";
 
 /** POST /api/agent/execute — runs an approved plan. Body: { planId }. Unapproved plans are refused. */
 export async function POST(req: Request) {
-  const { store, client } = getAgentRuntime();
+  const acquired = acquireRuntime();
+  if (acquired.response) return acquired.response;
+  const { store, client } = acquired.runtime;
   let body: { planId?: string };
   try {
     body = (await req.json()) as { planId?: string };

@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { getAgentRuntime } from "@/lib/agent";
+import { acquireRuntime } from "@/lib/api/errors";
 import { CheckoutError, captureCheckoutOrder } from "@/lib/checkout";
 import { PayPalError } from "@/lib/paypal";
 
@@ -16,7 +16,9 @@ export const dynamic = "force-dynamic";
  * PayPal's own status.
  */
 export async function POST(req: Request) {
-  const { store, client } = getAgentRuntime();
+  const acquired = acquireRuntime();
+  if (acquired.response) return acquired.response;
+  const { store, client } = acquired.runtime;
   let body: { orderId?: string };
   try {
     body = (await req.json()) as { orderId?: string };

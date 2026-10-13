@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import { buildApiDocsSections } from "@/lib/api";
+import { apiOperationResponses, buildApiDocsSections } from "@/lib/api";
 
 // Page-specific metadata for the API documentation page (the
 // human-readable rendering of the OpenAPI registry in src/lib/api/).
@@ -64,7 +64,7 @@ export default function ApiDocsPage() {
                 </p>
               ) : null}
               <ul style={{ margin: "0.25rem 0" }}>
-                {Object.entries(op.responses).map(([code, description]) => (
+                {Object.entries(apiOperationResponses(op)).map(([code, description]) => (
                   <li key={code}>
                     <code>{code}</code> — {description}
                   </li>

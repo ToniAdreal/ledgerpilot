@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
-import { getAgentRuntime, handleWebhookEvent } from "@/lib/agent";
+import { acquireRuntime } from "@/lib/api/errors";
+import { handleWebhookEvent } from "@/lib/agent";
 import type { WebhookEvent } from "@/lib/types";
 
 /**
@@ -9,7 +10,9 @@ import type { WebhookEvent } from "@/lib/types";
  * (acknowledging a duplicate stops PayPal's retry loop).
  */
 export async function POST(req: Request) {
-  const { store, client } = getAgentRuntime();
+  const acquired = acquireRuntime();
+  if (acquired.response) return acquired.response;
+  const { store, client } = acquired.runtime;
   let event: WebhookEvent;
   try {
     event = (await req.json()) as WebhookEvent;
