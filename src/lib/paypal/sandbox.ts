@@ -50,9 +50,29 @@ import { PayPalError, PayPalNotConfiguredError, type PayPalClient } from "./clie
  *   reconstructed with the receiver email as the display name.
  * - Transaction Search requires a date window (max 31 days); the
  *   adapter queries the trailing 30 days from `now`.
+ *
+ * Request timeout: every PayPal call this adapter makes — the OAuth
+ * token fetch included — is bounded by a per-request timeout
+ * (`SANDBOX_REQUEST_TIMEOUT_MS`, 10 seconds by default, the same
+ * bound the LLM adapter enforces on its outbound calls). Until this
+ * bound existed, a PayPal endpoint that accepted the connection and
+ * never answered would hang the calling route — an invoice send, a
+ * payout, a webhook verification — indefinitely, with the eventual
+ * failure surfacing only as the host's own opaque timeout. A call
+ * that exceeds the bound is aborted and translated into a
+ * `PayPalError` with status 504 and name `REQUEST_TIMEOUT`, naming
+ * the timeout and the request (method + path, never a credential),
+ * so callers and the audit log see the same error shape as any other
+ * PayPal failure. Fetch failures that are not the timeout (a refused
+ * connection, a DNS failure) are rethrown untouched — this bound
+ * translates the one failure it causes, it does not dress network
+ * errors up as PayPal responses.
  */
 
 export type FetchFn = (url: string, init?: RequestInit) => Promise<Response>;
+
+/** Per-request timeout for every outbound PayPal call, in milliseconds. */
+export const SANDBOX_REQUEST_TIMEOUT_MS = 10_000;
 
 export interface SandboxConfig {
   clientId?: string;
@@ -63,6 +83,8 @@ export interface SandboxConfig {
   fetchFn?: FetchFn;
   /** Injectable clock in epoch ms (tests / token expiry). Defaults to Date.now. */
   now?: () => number;
+  /** Per-request timeout in ms. Defaults to SANDBOX_REQUEST_TIMEOUT_MS; non-positive or non-finite values fall back to the default. */
+  timeoutMs?: number;
 }
 
 /* ------------------------------------------------------------------ */
@@ -214,6 +236,7 @@ export class SandboxPayPalClient implements PayPalClient {
   private readonly webhookId?: string;
   private readonly fetchFn: FetchFn;
   private readonly now: () => number;
+  private readonly timeoutMs: number;
 
   private tokenCache: { token: string; expiresAt: number } | null = null;
   /** Orders v2 has no list endpoint — see the header note. */
@@ -236,23 +259,53 @@ export class SandboxPayPalClient implements PayPalClient {
     this.baseUrl = (config.baseUrl ?? "https://api-m.sandbox.paypal.com").replace(/\/$/, "");
     this.fetchFn = config.fetchFn ?? ((url, init) => fetch(url, init));
     this.now = config.now ?? Date.now;
+    this.timeoutMs =
+      config.timeoutMs !== undefined && Number.isFinite(config.timeoutMs) && config.timeoutMs > 0
+        ? config.timeoutMs
+        : SANDBOX_REQUEST_TIMEOUT_MS;
   }
 
   /* ---------------- transport ---------------- */
+
+  /**
+   * One outbound PayPal call, bounded by the per-request timeout.
+   * The abort signal is passed to the fetch layer; a rejection
+   * caused by our own timer is translated into a 504 PayPalError
+   * naming the request label (method + path — never a credential),
+   * and any other rejection is rethrown untouched.
+   */
+  private async fetchWithTimeout(url: string, init: RequestInit, label: string): Promise<Response> {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), this.timeoutMs);
+    try {
+      return await this.fetchFn(url, { ...init, signal: controller.signal });
+    } catch (err) {
+      if (controller.signal.aborted) {
+        throw new PayPalError(
+          `PayPal request timed out after ${this.timeoutMs} ms: ${label}`,
+          504,
+          "REQUEST_TIMEOUT",
+        );
+      }
+      throw err;
+    } finally {
+      clearTimeout(timer);
+    }
+  }
 
   private async getAccessToken(): Promise<string> {
     if (this.tokenCache && this.tokenCache.expiresAt > this.now() + 30_000) {
       return this.tokenCache.token;
     }
     const basic = Buffer.from(`${this.clientId}:${this.clientSecret}`).toString("base64");
-    const res = await this.fetchFn(`${this.baseUrl}/v1/oauth2/token`, {
+    const res = await this.fetchWithTimeout(`${this.baseUrl}/v1/oauth2/token`, {
       method: "POST",
       headers: {
         Authorization: `Basic ${basic}`,
         "Content-Type": "application/x-www-form-urlencoded",
       },
       body: "grant_type=client_credentials",
-    });
+    }, "POST /v1/oauth2/token");
     const body = await this.readBody(res);
     if (!res.ok) throw this.toError(res.status, body, "OAuth token request failed");
     const token = asString(asRaw(body).access_token);
@@ -281,14 +334,14 @@ export class SandboxPayPalClient implements PayPalClient {
 
   private async request<T>(path: string, init: { method: string; body?: unknown }): Promise<T> {
     const token = await this.getAccessToken();
-    const res = await this.fetchFn(`${this.baseUrl}${path}`, {
+    const res = await this.fetchWithTimeout(`${this.baseUrl}${path}`, {
       method: init.method,
       headers: {
         Authorization: `Bearer ${token}`,
         "Content-Type": "application/json",
       },
       ...(init.body !== undefined ? { body: JSON.stringify(init.body) } : {}),
-    });
+    }, `${init.method} ${path.split("?")[0]}`);
     const body = await this.readBody(res);
     if (!res.ok) throw this.toError(res.status, body, `PayPal ${init.method} ${path} failed`);
     return body as T;

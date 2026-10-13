@@ -724,7 +724,7 @@ are not blocked, the suite also runs on them).
 ```bash
 npm install
 npm run dev        # http://localhost:3000
-npm test           # full test suite (801 tests)
+npm test           # full test suite (809 tests)
 npm run typecheck  # tsc --noEmit
 npm run build      # production build
 ```
@@ -820,7 +820,13 @@ mock mode a config swap rather than a rewrite.
 - `src/lib/paypal/sandbox.ts` — sandbox adapter: live REST wiring behind
   the same contract (OAuth + token cache, all resource mappings, PayPal
   error translation), with an injectable fetch/clock so it is fully unit
-  tested offline with fake credentials.
+  tested offline with fake credentials. Every outbound call — the OAuth
+  token fetch included — is bounded by a per-request timeout
+  (`SANDBOX_REQUEST_TIMEOUT_MS`, 10 seconds by default, the same bound
+  the LLM adapter enforces): a PayPal endpoint that never answers is
+  aborted and translated into a `PayPalError` with status 504 and name
+  `REQUEST_TIMEOUT`, while non-timeout fetch failures are rethrown
+  untouched.
 - `src/lib/agent/parser.ts` — deterministic NL brief → typed action plan
   parser (no LLM, no keys; relative due dates resolved against an injectable
   reference date).
@@ -1013,7 +1019,7 @@ signatures mirror the REST resources one-to-one.
 ## Testing
 
 ```bash
-npm test           # vitest — 801 tests, all green
+npm test           # vitest — 809 tests, all green
 npm run typecheck  # TypeScript strict, clean
 npm run build      # Next.js production build
 npm run verify     # the whole gate below, as one command
@@ -1135,7 +1141,12 @@ the historical-event guard, double-payment no-op), and the sandbox REST
 adapter against a stub fetch (OAuth caching/expiry, the links-only
 create-invoice flow, order capture + list-by-id, payout mapping, the
 nested Transaction Search shape, webhook verification SUCCESS/FAILURE,
-and PayPal error translation), and the optional LLM adapter (config
+and PayPal error translation), the sandbox transport timeout (an
+AbortSignal on every outbound call, a hanging API call and a hanging
+OAuth token fetch each translated into a 504 `REQUEST_TIMEOUT`
+`PayPalError` naming method + path only, a slow-but-inside-the-bound
+call succeeding, non-timeout fetch failures rethrown untouched, and
+the non-positive-timeout fallback to the default bound), and the optional LLM adapter (config
 gating, deterministic-first non-consultation, validator negative cases,
 fallback error honesty, and a full approval-gated loop from an
 LLM-sourced plan), and the resource plan drafts behind

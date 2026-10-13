@@ -16,6 +16,14 @@ build record behind these summaries.
 
 ### Added
 
+- **Sandbox request timeout.** Every outbound PayPal call the
+  sandbox adapter makes — the OAuth token fetch included — is now
+  bounded by a per-request timeout (10 seconds by default, the
+  same bound the LLM adapter enforces). A PayPal endpoint that
+  never answers is aborted and translated into a `PayPalError`
+  with status 504 and name `REQUEST_TIMEOUT`, naming the timeout
+  and the request (method + path, never a credential); fetch
+  failures that are not the timeout are rethrown untouched.
 - **Rate limit (the JSON 429).** A client POSTing past 120
   requests per 60-second fixed window (per client key — first
   `x-forwarded-for` entry, else `x-real-ip`, else a shared
