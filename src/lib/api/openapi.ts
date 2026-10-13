@@ -77,6 +77,15 @@
  *    middleware after the method and negotiation guards. Reads
  *    are never counted, so no GET operation carries it. Appended
  *    by `apiOperationResponses` for POST operations only.
+ *  - **Every response shares one header.** Every response —
+ *    success and error alike, guard refusals included — carries
+ *    an `X-Request-Id` header (`src/lib/api/request-id.ts`,
+ *    resolved by middleware before any guard runs): the client's
+ *    own id when it sent a valid one (1–128 characters of ASCII
+ *    letters, digits, `.`, `_`, `-`), a generated `req-<uuid>`
+ *    otherwise. Invalid values are never echoed. Declared on
+ *    every response of every operation by `operationObject`
+ *    below, so the document and the middleware cannot drift.
  */
 
 export type ApiTag = "Agent" | "Console" | "Health" | "Judge Mode" | "PayPal";
@@ -545,6 +554,9 @@ export const NOT_ACCEPTABLE_RESPONSE =
 export const TOO_MANY_REQUESTS_RESPONSE =
   "The client has exceeded 120 POST requests per 60 seconds (per-client fixed window); the API answers a JSON { error } naming the limit with a Retry-After header (middleware rate limit, after the method and negotiation guards). Reads are never counted. PayPal retries webhook deliveries answered with an error status, and verified events are processed exactly once, so a refused delivery is delayed, not dropped.";
 
+export const REQUEST_ID_RESPONSE_HEADER_DESCRIPTION =
+  "The request id this response is answered under: the client's own X-Request-Id when it sent a valid one (1–128 characters of ASCII letters, digits, '.', '_', '-'), a generated req-<uuid> otherwise. Present on every response, guard refusals included; a correlation handle, not an identity.";
+
 /**
  * The responses an operation can actually return: its registry
  * responses, plus the shared 405 every documented path answers a
@@ -595,6 +607,12 @@ function operationObject(op: ApiOperation): Record<string, unknown> {
     const isError = !code.startsWith("2");
     responses[code] = {
       description,
+      headers: {
+        "X-Request-Id": {
+          description: REQUEST_ID_RESPONSE_HEADER_DESCRIPTION,
+          schema: { type: "string" },
+        },
+      },
       content: {
         "application/json": {
           schema: isError

@@ -16,6 +16,16 @@ build record behind these summaries.
 
 ### Added
 
+- **Request id (the `X-Request-Id` header).** Every response
+  under `/api/` — routed responses and middleware guard refusals
+  (405 / 406 / 429) alike — now carries an `X-Request-Id` header,
+  resolved by the middleware before any guard runs. A valid
+  client-supplied id (1–128 characters of ASCII letters, digits,
+  `.`, `_`, `-`) is echoed verbatim; a missing or invalid value
+  is never echoed and is replaced with a generated `req-<uuid>`.
+  The id is a correlation handle, not an identity. The OpenAPI
+  document declares the header on every response of every
+  operation.
 - **Sandbox request timeout.** Every outbound PayPal call the
   sandbox adapter makes — the OAuth token fetch included — is now
   bounded by a per-request timeout (10 seconds by default, the

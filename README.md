@@ -586,6 +586,21 @@ curl -X POST localhost:3000/api/agent/execute -H 'content-type: application/json
   dropped). State is per-process in-memory. The OpenAPI document
   and `/api-docs` page carry the same shared 429 on every POST
   operation via `apiOperationResponses`.
+- **Request id (the `X-Request-Id` header).** Every response
+  under `/api/` — routed responses and middleware guard refusals
+  (405 / 406 / 429) alike — carries an `X-Request-Id` header
+  (`src/lib/api/request-id.ts`, resolved by the middleware
+  before any guard runs), so any exchange an operator or a judge
+  needs to report can be named by one id. A client that sends a
+  valid `X-Request-Id` (1–128 characters of ASCII letters,
+  digits, `.`, `_`, `-`) gets that exact value echoed back, so
+  its own trace id survives the round trip; a missing or invalid
+  value is never echoed (reflecting arbitrary header text would
+  be a header-injection / log-forging surface) and is replaced
+  with a generated `req-<uuid>`. The id is a correlation
+  handle, not an identity — no decision in the app is made from
+  it. The OpenAPI document declares the header on every
+  response of every operation.
 - **API cache control (no-store).** Every response under `/api/`
   carries `Cache-Control: no-store`, configured in
   `next.config.mjs` as a header rule scoped to `/api/:path*` only.
@@ -724,7 +739,7 @@ are not blocked, the suite also runs on them).
 ```bash
 npm install
 npm run dev        # http://localhost:3000
-npm test           # full test suite (809 tests)
+npm test           # full test suite (822 tests)
 npm run typecheck  # tsc --noEmit
 npm run build      # production build
 ```
@@ -950,6 +965,12 @@ mock mode a config swap rather than a rewrite.
   shared shape with a `Retry-After` header, and reads are never
   counted; `apiOperationResponses` appends that same 429 to every
   POST operation in both surfaces.
+  Its request-id module (`request-id.ts`) backs the middleware's
+  correlation header: the id is resolved before any guard runs
+  (a valid inbound `X-Request-Id` echoed, a generated `req-<uuid>`
+  otherwise — invalid values are never reflected), stamped onto
+  guard refusals and the pass-through response alike, and declared
+  as a response header on every operation in the built document.
   Its body module (`body.ts`) is the one reader every object-body
   POST route starts from: the shared JSON size limit (128 KiB,
   measured in UTF-8 bytes) is enforced there on the raw body before
@@ -1019,7 +1040,7 @@ signatures mirror the REST resources one-to-one.
 ## Testing
 
 ```bash
-npm test           # vitest — 809 tests, all green
+npm test           # vitest — 822 tests, all green
 npm run typecheck  # TypeScript strict, clean
 npm run build      # Next.js production build
 npm run verify     # the whole gate below, as one command
@@ -1364,7 +1385,16 @@ Retry-After inside the window, per-key windows, reads never
 counted and never consuming allowance, the client-key fallbacks,
 the middleware running the rate guard third with no runtime
 built, and the built OpenAPI document carrying the shared 429
-on POST operations only referencing the shared Error schema), and the JSON body reader
+on POST operations only referencing the shared Error schema), and the request id
+(`src/lib/api/request-id.ts` + `src/middleware.ts` — the echo
+whitelist accepting uuids / slugs / dotted ids up to 128 chars
+and rejecting whitespace, separators, controls, and non-ASCII,
+valid ids echoed verbatim with the generator never called,
+missing / invalid values replaced by a generated `req-<uuid>`,
+stamping replacing any id already present, the middleware
+resolving the id before the guards with no runtime built, and
+the built OpenAPI document declaring the `X-Request-Id` header
+on every response of every operation), and the JSON body reader
 (`src/lib/api/body.ts` — the pure object check, malformed and
 non-object bodies answering the route's own 400 in the shared
 shape, every object-body POST route routed through the one reader

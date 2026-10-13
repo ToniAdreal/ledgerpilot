@@ -55,6 +55,14 @@ is pre-1.0 hackathon software; there are no maintained release lines.
   strict-origin referrer policy, and a Permissions-Policy disabling
   camera, microphone, and geolocation. The framework's
   `X-Powered-By` header is disabled.
+- **Request correlation:** every response under `/api/` carries an
+  `X-Request-Id` header — the client's own id echoed only when it
+  matches a strict whitelist shape (1–128 characters of ASCII
+  letters, digits, `.`, `_`, `-`), a generated `req-<uuid>`
+  otherwise, so arbitrary header text is never reflected into a
+  response or a log. The id is a correlation handle for operator
+  reports, not an identity or authentication control, and no
+  decision in the app is made from it.
 - **API cache control:** every response under `/api/` carries
   `Cache-Control: no-store` (configured in `next.config.mjs`,
   scoped to `/api/:path*` only). API responses carry live
