@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { acquireRuntime } from "@/lib/api/errors";
+import { readJsonObjectBody } from "@/lib/api/body";
 import { InvoicePaymentError, recordInvoicePayment } from "@/lib/invoice";
 import { PayPalError } from "@/lib/paypal";
 
@@ -23,22 +24,17 @@ export async function POST(req: Request) {
   const acquired = acquireRuntime();
   if (acquired.response) return acquired.response;
   const { store, client } = acquired.runtime;
-  let body: { invoiceId?: string; amount?: string; currency_code?: string };
-  try {
-    body = (await req.json()) as typeof body;
-  } catch {
-    return NextResponse.json(
-      { error: "Request body must be JSON with an 'invoiceId' string" },
-      { status: 400 },
-    );
-  }
-  if (!body.invoiceId) {
+  const parsed = await readJsonObjectBody(req, "Request body must be JSON with an 'invoiceId' string");
+  if (parsed.response) return parsed.response;
+  const { body } = parsed;
+  const invoiceId = body.invoiceId;
+  if (typeof invoiceId !== "string" || !invoiceId) {
     return NextResponse.json({ error: "Missing 'invoiceId'" }, { status: 400 });
   }
   try {
-    const result = await recordInvoicePayment(client, store, body.invoiceId, {
-      amount: body.amount,
-      currency_code: body.currency_code,
+    const result = await recordInvoicePayment(client, store, invoiceId, {
+      amount: body.amount === undefined ? undefined : String(body.amount),
+      currency_code: body.currency_code === undefined ? undefined : String(body.currency_code),
     });
     return NextResponse.json({
       alreadyPaid: result.alreadyPaid,

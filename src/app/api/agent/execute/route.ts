@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { acquireRuntime } from "@/lib/api/errors";
+import { readJsonObjectBody } from "@/lib/api/body";
 import { executePlan } from "@/lib/agent";
 
 /** POST /api/agent/execute — runs an approved plan. Body: { planId }. Unapproved plans are refused. */
@@ -7,13 +8,10 @@ export async function POST(req: Request) {
   const acquired = acquireRuntime();
   if (acquired.response) return acquired.response;
   const { store, client } = acquired.runtime;
-  let body: { planId?: string };
-  try {
-    body = (await req.json()) as { planId?: string };
-  } catch {
-    return NextResponse.json({ error: "Request body must be JSON" }, { status: 400 });
-  }
-  if (!body.planId) {
+  const parsed = await readJsonObjectBody(req, "Request body must be JSON");
+  if (parsed.response) return parsed.response;
+  const { body } = parsed;
+  if (typeof body.planId !== "string" || !body.planId) {
     return NextResponse.json({ error: "Missing 'planId'" }, { status: 400 });
   }
   try {

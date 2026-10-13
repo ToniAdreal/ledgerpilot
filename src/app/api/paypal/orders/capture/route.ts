@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { acquireRuntime } from "@/lib/api/errors";
+import { readJsonObjectBody } from "@/lib/api/body";
 import { CheckoutError, captureCheckoutOrder } from "@/lib/checkout";
 import { PayPalError } from "@/lib/paypal";
 
@@ -19,17 +20,14 @@ export async function POST(req: Request) {
   const acquired = acquireRuntime();
   if (acquired.response) return acquired.response;
   const { store, client } = acquired.runtime;
-  let body: { orderId?: string };
-  try {
-    body = (await req.json()) as { orderId?: string };
-  } catch {
-    return NextResponse.json({ error: "Request body must be JSON with an 'orderId' string" }, { status: 400 });
-  }
-  if (!body.orderId) {
+  const parsed = await readJsonObjectBody(req, "Request body must be JSON with an 'orderId' string");
+  if (parsed.response) return parsed.response;
+  const orderId = parsed.body.orderId;
+  if (typeof orderId !== "string" || !orderId) {
     return NextResponse.json({ error: "Missing 'orderId'" }, { status: 400 });
   }
   try {
-    const result = await captureCheckoutOrder(client, store, body.orderId);
+    const result = await captureCheckoutOrder(client, store, orderId);
     return NextResponse.json({
       alreadyCaptured: result.alreadyCaptured,
       order: result.order,

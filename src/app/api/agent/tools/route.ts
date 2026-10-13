@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { acquireRuntime } from "@/lib/api/errors";
+import { readJsonObjectBody } from "@/lib/api/body";
 import { ToolCallError, listAgentTools, toolCallsToPlan } from "@/lib/agent";
 
 export const dynamic = "force-dynamic";
@@ -28,15 +29,12 @@ export async function POST(req: Request) {
   const acquired = acquireRuntime();
   if (acquired.response) return acquired.response;
   const { store } = acquired.runtime;
-  let body: Record<string, unknown>;
+  const parsed = await readJsonObjectBody(req, "Request body must be JSON: { name, arguments } or { calls: [...] }");
+  if (parsed.response) return parsed.response;
+  const { body } = parsed;
   try {
-    body = (await req.json()) as Record<string, unknown>;
-  } catch {
-    return NextResponse.json({ error: "Request body must be JSON: { name, arguments } or { calls: [...] }" }, { status: 400 });
-  }
-  try {
-    const calls = Array.isArray(body?.calls) ? body.calls : [body];
-    const brief = typeof body?.brief === "string" && body.brief.trim() ? body.brief : undefined;
+    const calls = Array.isArray(body.calls) ? body.calls : [body];
+    const brief = typeof body.brief === "string" && body.brief.trim() ? body.brief : undefined;
     const plan = store.addPlan(toolCallsToPlan(calls, brief ? { brief } : {}));
     return NextResponse.json({ plan }, { status: 201 });
   } catch (err) {

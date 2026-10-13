@@ -505,6 +505,19 @@ curl -X POST localhost:3000/api/agent/execute -H 'content-type: application/json
   on every operation via `apiOperationResponses`. The middleware
   builds no runtime, so a wrong-method call gets its 405 even on a
   misconfigured instance.
+- **JSON body validation (the non-object 400).** Every POST route
+  whose body is a required JSON object reads it through one shared
+  reader (`readJsonObjectBody`, `src/lib/api/body.ts`): malformed
+  JSON and well-formed *non-object* JSON (`null`, an array, a
+  scalar) alike answer the route's documented 400 in the shared
+  `{ error }` shape, instead of slipping through a cast and crashing
+  a field dereference into an opaque 500. Field types are checked
+  after the shape (a numeric `brief` is the plan route's 400
+  "Missing 'brief'", never a parser crash). The one exception is
+  `POST /api/agent/suggest`, whose body is optional — it reads the
+  raw text itself and applies the same object check (`isJsonObject`)
+  to a present body; routes that take no body (Judge Mode seed /
+  pay / reset) read none.
 - **Container deployment.** A `Dockerfile` (repo root) packages the same
   hosted demo for any container host: every stage pins Node 22, the
   image installs with `npm ci`, builds with `npm run build`, and starts
@@ -631,7 +644,7 @@ are not blocked, the suite also runs on them).
 ```bash
 npm install
 npm run dev        # http://localhost:3000
-npm test           # full test suite (715 tests)
+npm test           # full test suite (730 tests)
 npm run typecheck  # tsc --noEmit
 npm run build      # production build
 ```
@@ -907,7 +920,7 @@ signatures mirror the REST resources one-to-one.
 ## Testing
 
 ```bash
-npm test           # vitest — 715 tests, all green
+npm test           # vitest — 730 tests, all green
 npm run typecheck  # TypeScript strict, clean
 npm run build      # Next.js production build
 npm run verify     # the whole gate below, as one command
@@ -1240,7 +1253,14 @@ OPTIONS / documented-method / unknown-path pass-throughs, the
 `Allow` header on the real response, the middleware delegating
 with an `/api/*`-only matcher and no runtime built, and the built
 OpenAPI document carrying the shared 405 on every operation
-referencing the shared Error schema)
+referencing the shared Error schema), and the JSON body reader
+(`src/lib/api/body.ts` — the pure object check, malformed and
+non-object bodies answering the route's own 400 in the shared
+shape, every object-body POST route routed through the one reader
+with no bare `req.json()` cast left, the suggest route's optional
+body applying the same check, and live handler tests proving
+`null` / array / scalar bodies get the documented 400 while valid
+bodies still draft)
 — fake credentials only, no network.
 
 ### Smoke check (a running instance, end to end)

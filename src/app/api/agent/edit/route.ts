@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { acquireRuntime } from "@/lib/api/errors";
+import { readJsonObjectBody } from "@/lib/api/body";
 import { PlanEditError, editPlanAmounts } from "@/lib/agent";
 
 /**
@@ -21,12 +22,9 @@ export async function POST(req: Request) {
   const acquired = acquireRuntime();
   if (acquired.response) return acquired.response;
   const { store } = acquired.runtime;
-  let body: { planId?: string; edits?: unknown };
-  try {
-    body = (await req.json()) as { planId?: string; edits?: unknown };
-  } catch {
-    return NextResponse.json({ error: "Request body must be JSON" }, { status: 400 });
-  }
+  const parsed = await readJsonObjectBody(req, "Request body must be JSON");
+  if (parsed.response) return parsed.response;
+  const { body } = parsed;
   if (!body.planId || typeof body.planId !== "string") {
     return NextResponse.json({ error: "Body must be { planId, edits: [...] }" }, { status: 400 });
   }

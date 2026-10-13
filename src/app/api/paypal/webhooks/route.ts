@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { acquireRuntime } from "@/lib/api/errors";
+import { readJsonObjectBody } from "@/lib/api/body";
 import { handleWebhookEvent } from "@/lib/agent";
 import type { WebhookEvent } from "@/lib/types";
 
@@ -13,12 +14,9 @@ export async function POST(req: Request) {
   const acquired = acquireRuntime();
   if (acquired.response) return acquired.response;
   const { store, client } = acquired.runtime;
-  let event: WebhookEvent;
-  try {
-    event = (await req.json()) as WebhookEvent;
-  } catch {
-    return NextResponse.json({ error: "Request body must be a JSON webhook event" }, { status: 400 });
-  }
+  const parsed = await readJsonObjectBody(req, "Request body must be a JSON webhook event");
+  if (parsed.response) return parsed.response;
+  const event = parsed.body as unknown as WebhookEvent;
   if (!event?.id || !event?.event_type) {
     return NextResponse.json({ error: "Webhook event requires 'id' and 'event_type'" }, { status: 400 });
   }

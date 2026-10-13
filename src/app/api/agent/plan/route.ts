@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { acquireRuntime } from "@/lib/api/errors";
+import { readJsonObjectBody } from "@/lib/api/body";
 import { BriefParseError, parseBriefWithFallback } from "@/lib/agent";
 
 /**
@@ -11,13 +12,10 @@ export async function POST(req: Request) {
   const acquired = acquireRuntime();
   if (acquired.response) return acquired.response;
   const { store, llm } = acquired.runtime;
-  let body: { brief?: string };
-  try {
-    body = (await req.json()) as { brief?: string };
-  } catch {
-    return NextResponse.json({ error: "Request body must be JSON with a 'brief' string" }, { status: 400 });
-  }
-  if (!body.brief) {
+  const parsed = await readJsonObjectBody(req, "Request body must be JSON with a 'brief' string");
+  if (parsed.response) return parsed.response;
+  const { body } = parsed;
+  if (typeof body.brief !== "string" || !body.brief) {
     return NextResponse.json({ error: "Missing 'brief'" }, { status: 400 });
   }
   try {

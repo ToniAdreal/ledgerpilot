@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { acquireRuntime } from "@/lib/api/errors";
+import { isJsonObject } from "@/lib/api/body";
 import { resolveReferenceDate, suggestNextActions, SuggestionError } from "@/lib/agent";
 
 export const dynamic = "force-dynamic";
@@ -31,10 +32,10 @@ export async function POST(req: Request) {
   if (text.trim()) {
     try {
       const parsed: unknown = JSON.parse(text);
-      if (typeof parsed !== "object" || parsed === null || Array.isArray(parsed)) {
+      if (!isJsonObject(parsed)) {
         return NextResponse.json({ error: "Request body must be a JSON object" }, { status: 400 });
       }
-      body = parsed as Record<string, unknown>;
+      body = parsed;
     } catch {
       return NextResponse.json({ error: "Request body must be JSON" }, { status: 400 });
     }

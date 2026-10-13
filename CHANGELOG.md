@@ -16,6 +16,15 @@ build record behind these summaries.
 
 ### Added
 
+- **JSON body validation (the non-object 400).** Every POST route
+  whose body is a required JSON object now reads it through one
+  shared reader (`src/lib/api/body.ts`): malformed JSON and
+  well-formed non-object JSON (`null`, arrays, scalars) answer the
+  route's documented 400 in the shared `{ error }` shape instead
+  of slipping through a cast and crashing into an opaque 500, and
+  field types are checked after the shape. The suggest route's
+  optional body applies the same object check; routes that take
+  no body read none.
 - **Method not allowed (the JSON 405).** A documented API path
   called with a method it does not support now answers a JSON 405
   in the shared `{ error }` shape — naming the method, the path,
