@@ -129,15 +129,28 @@ describe("sandbox request timeout", () => {
     await expect(client.listDisputes()).resolves.toEqual([]);
   });
 
-  it("rethrows a non-timeout fetch failure untouched, never dressed as a PayPal error", async () => {
+  it("never reports a non-timeout fetch failure as a timeout (the connection-failure translation owns it)", async () => {
+    // This suite originally pinned non-timeout fetch failures as
+    // rethrown untouched. That scoping was superseded by the
+    // connection-failure chunk: the raw transport error escaped
+    // every route layer that translates only `PayPalError` as an
+    // opaque HTML 500 (see src/lib/paypal/sandbox.ts header). The
+    // division this suite still pins: a connection failure is
+    // translated by that chunk as 502 CONNECTION_FAILED — it is
+    // never dressed up as this bound's 504 REQUEST_TIMEOUT. The
+    // full behaviour is pinned in sandbox-connection-failure.test.ts.
     const networkError = new TypeError("fetch failed: connection refused");
     const fetchFn: FetchFn = async () => {
       throw networkError;
     };
     const client = makeClient(fetchFn, 1_000);
     const err = await client.listDisputes().catch((e: unknown) => e);
-    expect(err).toBe(networkError);
-    expect(err).not.toBeInstanceOf(PayPalError);
+    expect(err).toBeInstanceOf(PayPalError);
+    const paypalErr = err as PayPalError;
+    expect(paypalErr.status).toBe(502);
+    expect(paypalErr.name_).toBe("CONNECTION_FAILED");
+    expect(paypalErr.name_).not.toBe("REQUEST_TIMEOUT");
+    expect(err).not.toBe(networkError);
   });
 
   it("falls back to the default bound for a non-positive timeout value", async () => {

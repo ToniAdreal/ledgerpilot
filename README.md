@@ -756,7 +756,7 @@ are not blocked, the suite also runs on them).
 ```bash
 npm install
 npm run dev        # http://localhost:3000
-npm test           # full test suite (870 tests)
+npm test           # full test suite (878 tests)
 npm run typecheck  # tsc --noEmit
 npm run build      # production build
 ```
@@ -857,8 +857,14 @@ mock mode a config swap rather than a rewrite.
   (`SANDBOX_REQUEST_TIMEOUT_MS`, 10 seconds by default, the same bound
   the LLM adapter enforces): a PayPal endpoint that never answers is
   aborted and translated into a `PayPalError` with status 504 and name
-  `REQUEST_TIMEOUT`, while non-timeout fetch failures are rethrown
-  untouched. The timeout spans the response body as well as the wait
+  `REQUEST_TIMEOUT`. A call that gets no response at all — a refused
+  connection, a DNS failure, a reset mid-body — is likewise translated,
+  into a `PayPalError` with status 502 and name `CONNECTION_FAILED`
+  naming the request (method + path) only, never the transport error's
+  own text; without that translation the raw fetch error escaped every
+  route layer that translates only `PayPalError` as an opaque HTML 500.
+  An error that is already a `PayPalError` (the response-size refusal
+  below) keeps its own shape ahead of both translations. The timeout spans the response body as well as the wait
   for the headers: the timer stays armed while the body is read, so
   an endpoint that answers promptly and then drips — or never
   finishes — its body is aborted by the same bound. Every response body — the OAuth token response included —
@@ -1079,7 +1085,7 @@ signatures mirror the REST resources one-to-one.
 ## Testing
 
 ```bash
-npm test           # vitest — 870 tests, all green
+npm test           # vitest — 878 tests, all green
 npm run typecheck  # TypeScript strict, clean
 npm run build      # Next.js production build
 npm run verify     # the whole gate below, as one command
@@ -1209,8 +1215,17 @@ and PayPal error translation), the sandbox transport timeout (an
 AbortSignal on every outbound call, a hanging API call and a hanging
 OAuth token fetch each translated into a 504 `REQUEST_TIMEOUT`
 `PayPalError` naming method + path only, a slow-but-inside-the-bound
-call succeeding, non-timeout fetch failures rethrown untouched, and
-the non-positive-timeout fallback to the default bound), the outbound
+call succeeding, and
+the non-positive-timeout fallback to the default bound), the sandbox
+connection failure (a refused token fetch translated before any API
+call is attempted, refused API reads and mutating calls and a
+mid-body reset each translated into a 502 `CONNECTION_FAILED`
+`PayPalError` naming method + path only with the transport error's
+own text never carried, an oversized body keeping its
+`RESPONSE_TOO_LARGE` shape ahead of the translation, a hanging call
+staying the 504 `REQUEST_TIMEOUT`, and the failure surfacing in the
+webhook handler as verification-unavailable, never a signature
+rejection), the outbound
 response-size bounds (both adapters measuring the body in UTF-8 bytes
 before parsing — an oversized sandbox response refused as a 502
 `RESPONSE_TOO_LARGE` naming the limit only, token and error responses

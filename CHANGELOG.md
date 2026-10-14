@@ -16,6 +16,16 @@ build record behind these summaries.
 
 ### Added
 
+- **Sandbox connection failure (`CONNECTION_FAILED`).** A PayPal
+  call that gets no response at all — a refused connection, a DNS
+  failure, a reset mid-body — is now translated at the sandbox
+  adapter's transport choke point into a `PayPalError` of status
+  502 and name `CONNECTION_FAILED` naming the request (method +
+  path) only, never the transport error's own text. Without it,
+  the raw fetch error escaped every route layer that translates
+  only `PayPalError` as an opaque HTML 500. Errors that are
+  already `PayPalError`s (e.g. `RESPONSE_TOO_LARGE`) keep their
+  shape, and a timeout stays the 504 `REQUEST_TIMEOUT`.
 - **Sandbox request idempotency (`PayPal-Request-Id`).** Every
   mutating (POST) call the sandbox adapter makes now carries a
   unique `PayPal-Request-Id` header, so a retry of the same call

@@ -63,10 +63,9 @@ import { PayPalError, PayPalNotConfiguredError, type PayPalClient } from "./clie
  * `PayPalError` with status 504 and name `REQUEST_TIMEOUT`, naming
  * the timeout and the request (method + path, never a credential),
  * so callers and the audit log see the same error shape as any other
- * PayPal failure. Fetch failures that are not the timeout (a refused
- * connection, a DNS failure) are rethrown untouched — this bound
- * translates the one failure it causes, it does not dress network
- * errors up as PayPal responses.
+ * PayPal failure. This bound translates the one failure it causes;
+ * the remaining transport failure — no response at all — is
+ * translated separately, below.
  *
  * The bound spans the whole call, not just the response headers:
  * the timer stays armed while the response body is being read
@@ -76,6 +75,36 @@ import { PayPalError, PayPalNotConfiguredError, type PayPalClient } from "./clie
  * timer spanned the body, that slow-drip case hung the calling
  * route with the headers already in hand, outside the bound the
  * timeout claimed to set.
+ *
+ * Connection failure: the timeout covers a call that never answers
+ * in time; this case covers a call that gets no response at all —
+ * a refused connection, a DNS failure, a reset mid-body. Until
+ * this translation existed, that failure escaped `fetchAndRead`
+ * as the transport's raw error (a `TypeError` from fetch), and
+ * every layer above the adapter that translates failures speaks
+ * `PayPalError`: the direct routes (capture, record-payment, …)
+ * catch domain errors + `PayPalError` and rethrow anything else,
+ * and the console read routes carry no translation at all — so
+ * "PayPal is unreachable" surfaced as the framework's opaque HTML
+ * 500, the one sandbox failure mode with no structured shape,
+ * while the webhook handler already treated any adapter throw as
+ * verification-unavailable. A non-timeout transport rejection —
+ * from the fetch or from the body read alike — is now translated
+ * at the same choke point into a `PayPalError` with status 502
+ * and name `CONNECTION_FAILED`, naming the request (method + path)
+ * only: the transport error's own text is never carried, because
+ * it can embed the full request URL. It is not dressed up as a
+ * PayPal response — the name and message say no response was
+ * received. Two failures keep their own shape ahead of it: an
+ * error that is already a `PayPalError` (the response-size refusal
+ * above all) passes through untouched, and a rejection caused by
+ * this adapter's own timer is the timeout's 504, never a 502. This
+ * supersedes the timeout chunk's original scoping, under which
+ * non-timeout fetch failures were rethrown untouched (pinned by a
+ * test at the time); the route-layer consequence above is why the
+ * scoping changed, and the timeout suite's pin now asserts the
+ * division instead — a connection failure is never a
+ * `REQUEST_TIMEOUT`.
  *
  * Response size: the timeout bounds how long a call may take; this
  * bound limits how much it may return. Every response body this
@@ -326,12 +355,17 @@ export class SandboxPayPalClient implements PayPalClient {
    * the timer spans the response body as well as the wait for the
    * headers: it is armed before the fetch starts and cleared only
    * after `readBody` has consumed the body, so a slow-dripping body
-   * is aborted by the same bound. A rejection caused by our own
-   * timer — from the fetch or from the body read alike — is
-   * translated into a 504 PayPalError naming the request label
-   * (method + path — never a credential); any other rejection,
-   * including the response-size refusal `readBody` raises, is
-   * rethrown untouched.
+   * is aborted by the same bound. Rejections are translated in a
+   * fixed precedence: an error that is already a `PayPalError`
+   * (the response-size refusal `readBody` raises) passes through
+   * untouched; a rejection caused by our own timer — from the
+   * fetch or from the body read alike — becomes the 504
+   * `REQUEST_TIMEOUT`; any remaining transport rejection (no
+   * response was received: refused connection, DNS failure, reset
+   * mid-body) becomes the 502 `CONNECTION_FAILED`. Both name the
+   * request label only (method + path — never a credential, never
+   * the transport error's own text). See the header's timeout and
+   * connection-failure notes.
    */
   private async fetchAndRead(
     url: string,
@@ -345,6 +379,7 @@ export class SandboxPayPalClient implements PayPalClient {
       const body = await this.readBody(res);
       return { res, body };
     } catch (err) {
+      if (err instanceof PayPalError) throw err;
       if (controller.signal.aborted) {
         throw new PayPalError(
           `PayPal request timed out after ${this.timeoutMs} ms: ${label}`,
@@ -352,7 +387,11 @@ export class SandboxPayPalClient implements PayPalClient {
           "REQUEST_TIMEOUT",
         );
       }
-      throw err;
+      throw new PayPalError(
+        `PayPal request failed before a response was received: ${label}`,
+        502,
+        "CONNECTION_FAILED",
+      );
     } finally {
       clearTimeout(timer);
     }
