@@ -16,6 +16,18 @@ build record behind these summaries.
 
 ### Added
 
+- **LLM invalid success envelope (fixed message).** A 200 response
+  from the optional LLM endpoint whose first choice entry is not
+  an object (`choices: [null]`, from a proxy or a non-conforming
+  OpenAI-compatible endpoint) is now refused as an
+  `LlmExtractionError` ("LLM choice must be an object") with a
+  fixed message carrying no part of the response body. Previously
+  that one shape was dereferenced directly and escaped
+  `extract()` as a raw `TypeError`, breaking the adapter's
+  one-error-shape contract for direct callers;
+  `parseBriefWithFallback` still rethrows the deterministic
+  parser's original error either way, and every neighbouring
+  envelope shape keeps its exact previous refusal.
 - **Sandbox invalid success response (`INVALID_RESPONSE`).** A
   PayPal success body that is not valid JSON, or that parses to a
   scalar / array / null instead of an object, is now refused at

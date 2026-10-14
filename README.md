@@ -756,7 +756,7 @@ are not blocked, the suite also runs on them).
 ```bash
 npm install
 npm run dev        # http://localhost:3000
-npm test           # full test suite (894 tests)
+npm test           # full test suite (912 tests)
 npm run typecheck  # tsc --noEmit
 npm run build      # production build
 ```
@@ -904,7 +904,12 @@ mock mode a config swap rather than a rewrite.
   before a complete response was received"), never the transport
   error's own text, mirroring the sandbox adapter's `CONNECTION_FAILED`
   discipline; an HTTP error status keeps its shape ahead of the
-  translation, and a timer-caused abort stays the timeout.
+  translation, and a timer-caused abort stays the timeout. A 200
+  response whose first choice entry is not an object
+  (`choices: [null]`, from a proxy or a non-conforming compatible
+  endpoint) is refused as an `LlmExtractionError`
+  ("LLM choice must be an object") — never a raw `TypeError` —
+  with a fixed message carrying no part of the response body.
 - `src/lib/agent/tools.ts` — the agent tool definitions: the four
   typed actions as MCP / Agent Toolkit-shaped tools (name, description,
   closed JSON input schemas), the tool-call envelope validator
@@ -1092,7 +1097,10 @@ signatures mirror the REST resources one-to-one.
   `RESPONSE_TOO_LARGE` bound. Its per-request timeout likewise
   spans the response body, not just the wait for the headers, and a
   call that gets no complete response surfaces as a fixed failure
-  message — never the transport error's own text.
+  message — never the transport error's own text. A malformed
+  success envelope (a non-object choice entry, e.g.
+  `choices: [null]`) is refused as an `LlmExtractionError`
+  ("LLM choice must be an object"), never a raw `TypeError`.
   LLM-sourced plans are marked
   `source: "llm"` and pass through the same approval gate. The app is fully
   functional with the LLM unset; no feature, including Judge Mode, requires
@@ -1104,7 +1112,7 @@ signatures mirror the REST resources one-to-one.
 ## Testing
 
 ```bash
-npm test           # vitest — 894 tests, all green
+npm test           # vitest — 912 tests, all green
 npm run typecheck  # TypeScript strict, clean
 npm run build      # Next.js production build
 npm run verify     # the whole gate below, as one command
@@ -1275,7 +1283,7 @@ into the fixed `LlmExtractionError` message with the transport
 error's own text and the fake key appearing in no message, an HTTP
 error status and a timer-caused timeout each keeping their shape
 ahead of the translation, and the failure still falling back to the
-deterministic parser's error through `parseBriefWithFallback`), and the optional LLM adapter (config
+deterministic parser's error through `parseBriefWithFallback`), the LLM invalid success envelope (a null choice entry and string / number / boolean / array choice entries each refused as the fixed `LlmExtractionError` "LLM choice must be an object" — never a raw `TypeError`, with the body marker and the fake key in no message — the message-shape, no-text-content, response-shape, and no-choices refusals each keeping their exact previous message, the failure still falling back to the deterministic parser's error through `parseBriefWithFallback`, and a valid envelope still extracting), and the optional LLM adapter (config
 gating, deterministic-first non-consultation, validator negative cases,
 fallback error honesty, and a full approval-gated loop from an
 LLM-sourced plan), and the resource plan drafts behind

@@ -26,6 +26,18 @@
  *    mid-body) surfaces as a fixed `LlmExtractionError` message —
  *    never the raw fetch error's own text, mirroring the sandbox
  *    adapter's `CONNECTION_FAILED` discipline.
+ *  - **Malformed success envelope.** A 200 response whose JSON body
+ *    is an object but whose first choice entry is not an object
+ *    (`choices: [null]`, from a proxy or a non-conforming
+ *    OpenAI-compatible endpoint) is refused as an
+ *    `LlmExtractionError` ("LLM choice must be an object"), like
+ *    every other envelope malformation. Until this check existed,
+ *    the choice entry was dereferenced directly, so that one shape
+ *    escaped as a raw `TypeError` — breaking this adapter's
+ *    one-error-shape contract for direct `extract()` callers
+ *    (`parseBriefWithFallback` catches every failure either way, so
+ *    its fallback honesty was never affected). The refusal message
+ *    is a fixed string: no part of the response body is carried.
  *
  * The HTTP layer is injectable (fetch + config), so the adapter is fully
  * unit-tested offline against a stub with a fake key — no network, no
@@ -353,7 +365,12 @@ export class OpenAiCompatibleLlmAdapter implements LlmBriefExtractor {
     const body = asRecord(parsedBody, "LLM response");
     const choices = body.choices;
     if (!Array.isArray(choices) || choices.length === 0) fail("LLM response has no choices");
-    const message = asRecord((choices[0] as Record<string, unknown>).message, "LLM choice message");
+    // The choice entry itself is validated before it is dereferenced:
+    // a null (or otherwise non-object) entry must surface as an
+    // LlmExtractionError, never a raw TypeError — see the header's
+    // malformed-success-envelope note.
+    const choice = asRecord(choices[0], "LLM choice");
+    const message = asRecord(choice.message, "LLM choice message");
     if (typeof message.content !== "string") fail("LLM choice has no text content");
     const jsonText = message.content.replace(/```(?:json)?/g, "").trim();
     let parsed: unknown;
