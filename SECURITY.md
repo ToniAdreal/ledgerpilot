@@ -76,8 +76,9 @@ is pre-1.0 hackathon software; there are no maintained release lines.
 - The hosted demo is intended to run in the default **mock mode**
   with no credentials at all.
 - Judge Mode's seed / simulate-payment / reset endpoints are demo
-  controls for that disposable mock instance. The reset refuses to
-  run in sandbox mode. Do not expose a sandbox-mode instance publicly
+  controls for that disposable mock instance. The seed and the reset
+  refuse to run in sandbox mode (before touching anything). Do not
+  expose a sandbox-mode instance publicly
   without putting your own access controls in front of it — sandbox
   credentials operate a real (test-money) PayPal account.
 - If you fork this project, use credentials from **your own** PayPal

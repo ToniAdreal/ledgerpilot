@@ -32,6 +32,18 @@
  * Seeding is idempotent: a second call returns `alreadySeeded: true`
  * and changes nothing.
  *
+ * Seeding is mock-only, for the same honesty reason as reset (below):
+ * the seeded history only exists in the mock — the captured order is
+ * captured without a buyer, and the dispute is a flagged sample. In
+ * sandbox mode the same calls would create real sandbox resources at
+ * PayPal for fictional recipients (invoices to Ana / Marco / Sam
+ * Rivera, a payout to Marco), and the order capture — which PayPal
+ * only honours after a buyer approves the order — would fail mid-seed,
+ * stranding the already-sent invoices with no seed record written, so
+ * a retry would duplicate them. `seedJudgeScenario` therefore refuses
+ * with `JudgeModeError` before touching anything in sandbox mode —
+ * the guard runs ahead of even the already-seeded answer.
+ *
  * Reset (`resetJudgeDemo`): seeding is one-way by design, but a hosted
  * demo serves many judges in sequence — after one judge closes the
  * loop, the next arrives to a completed plan and an already-seeded
@@ -245,6 +257,18 @@ export async function seedJudgeScenario(
   store: LedgerStore,
   options: { now?: Date } = {},
 ): Promise<JudgeSeedResult> {
+  // Mock mode only, before anything is read or written (see the
+  // module header): in sandbox mode seeding would create the fictional
+  // history at PayPal and strand it half-written when the order
+  // capture is refused. Reset refuses in sandbox for the mirror-image
+  // reason; the seed guard runs ahead of the idempotency check too,
+  // so an already-seeded store handed to a sandbox client still
+  // refuses rather than reporting sandbox-side state as the seed's.
+  if (client.mode !== "mock") {
+    throw new JudgeModeError(
+      "Judge Mode seeding is available in mock mode only — in sandbox mode the seeded history would be created at PayPal for fictional recipients (invoices to Ana, Marco, and Sam Rivera and a payout to Marco), the captured order and the flagged sample dispute only exist in the mock, and a capture PayPal refuses would strand the sent invoices with no seed record. Restart with PAYPAL_MODE=mock to load the demo scenario.",
+    );
+  }
   const existing = findSeedRecord(store);
   if (existing) {
     return { alreadySeeded: true, seed: existing, state: await getJudgeState(store, client) };

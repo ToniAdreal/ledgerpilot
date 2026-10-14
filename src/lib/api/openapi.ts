@@ -350,8 +350,11 @@ export const API_OPERATIONS: ApiOperation[] = [
     tag: "Judge Mode",
     summary: "Seed the Judge Mode demo scenario",
     description:
-      "Loads the fictional demo history and leaves the demo-spine plan in pending_approval so the approval gate is experienced for real. Idempotent: seeding an already-seeded instance changes nothing and returns alreadySeeded: true. Demo control for a disposable mock-mode instance.",
-    responses: { "200": "Seed result and the live judge state." },
+      "Loads the fictional demo history and leaves the demo-spine plan in pending_approval so the approval gate is experienced for real. Idempotent: seeding an already-seeded instance changes nothing and returns alreadySeeded: true. Mock mode only — in sandbox mode the history would be created at PayPal for fictional recipients, so the seed refuses, before touching anything. Demo control for a disposable mock-mode instance.",
+    responses: {
+      "200": "Seed result and the live judge state.",
+      "409": "Seed refused (sandbox mode — seeding is mock-mode only).",
+    },
   },
   {
     path: "/api/judge/pay",

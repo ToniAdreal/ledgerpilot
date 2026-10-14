@@ -41,7 +41,8 @@ describe("SECURITY.md", () => {
 
   it("warns that Judge Mode demo controls belong on a disposable mock instance", () => {
     expect(security).toContain("Judge Mode");
-    expect(security.toLowerCase()).toContain("reset refuses to");
+    expect(security.toLowerCase()).toContain("seed and the reset");
+    expect(security.toLowerCase()).toContain("refuse to run in sandbox mode");
     expect(security.toLowerCase()).toContain("access controls");
   });
 

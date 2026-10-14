@@ -16,6 +16,16 @@ build record behind these summaries.
 
 ### Added
 
+- **Judge Mode seed guard (mock mode only).** Seeding the Judge
+  Mode scenario now refuses in sandbox mode, before touching
+  anything — parity with the demo reset, which already refused.
+  In sandbox mode the seeded history would be created at PayPal
+  for fictional recipients (invoices to Ana, Marco, and Sam
+  Rivera and a payout to Marco), the captured order and the
+  flagged sample dispute only exist in the mock, and a capture
+  PayPal refuses would strand the sent invoices with no seed
+  record. `POST /api/judge/seed` maps the refusal to a 409, and
+  the OpenAPI document declares that 409 on the operation.
 - **Request id (the `X-Request-Id` header).** Every response
   under `/api/` — routed responses and middleware guard refusals
   (405 / 406 / 429) alike — now carries an `X-Request-Id` header,

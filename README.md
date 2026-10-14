@@ -440,7 +440,11 @@ curl -X POST localhost:3000/api/agent/execute -H 'content-type: application/json
   restored — so the next judge (or the next video take) can seed and run
   the scenario from the top. Reset is mock-mode only and refuses in
   sandbox mode: sandbox resources live at PayPal and cannot be cleared
-  from here. Id sequences never rewind across a reset, so no invoice,
+  from here. Seeding is mock-mode only too, and refuses in sandbox
+  mode before touching anything: in sandbox the fictional history
+  would be created at PayPal for invented recipients, and the captured
+  order and the flagged sample dispute only exist in the mock.
+  Id sequences never rewind across a reset, so no invoice,
   plan, or event id is ever reused.
 - **PayPal mode indicator.** The console's mode strip (above the KPI
   strip) states the instance's *actual* PayPal mode on screen — Mock,
@@ -739,7 +743,7 @@ are not blocked, the suite also runs on them).
 ```bash
 npm install
 npm run dev        # http://localhost:3000
-npm test           # full test suite (822 tests)
+npm test           # full test suite (828 tests)
 npm run typecheck  # tsc --noEmit
 npm run build      # production build
 ```
@@ -1040,7 +1044,7 @@ signatures mirror the REST resources one-to-one.
 ## Testing
 
 ```bash
-npm test           # vitest — 822 tests, all green
+npm test           # vitest — 828 tests, all green
 npm run typecheck  # TypeScript strict, clean
 npm run build      # Next.js production build
 npm run verify     # the whole gate below, as one command
@@ -1229,7 +1233,11 @@ the sample dispute restored exactly once — and not restored for a
 `sampleDispute: false` client — a completed loop resetting to a clean
 slate and closing a second time under a new plan id, sandbox-mode and
 no-reset-adapter refusals that touch nothing, and emptied file-backed
-snapshots reopening fresh), and the deployment descriptor
+snapshots reopening fresh), and the Judge Mode seed's mock-only
+guard (a sandbox-mode refusal that runs before any adapter call or
+store change — ahead of even the already-seeded answer — with mock
+seeding and its idempotency untouched, the seed route's 409 mapping,
+and the OpenAPI document's matching 409 on the operation), and the deployment descriptor
 (`render.yaml` — one free-tier Node service building and starting with
 the package's own scripts, the health check probing the real
 `/api/health` route, mock mode as the credential-free default, every

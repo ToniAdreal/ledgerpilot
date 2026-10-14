@@ -161,6 +161,7 @@ export default function JudgeClient() {
             className="command-btn command-btn-primary"
             disabled={busy !== null}
             onClick={() => void seed()}
+            title="Mock mode only: load the fictional history and the pending-approval spine plan (refused in sandbox mode, where the history would be created at PayPal)"
           >
             {busy === "seed" ? "Loading…" : state.seeded ? "Scenario already loaded" : "Load Judge Mode scenario"}
           </button>
