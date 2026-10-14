@@ -37,12 +37,17 @@ export class LlmExtractionError extends Error {
   }
 }
 
+/** Maximum response body, in UTF-8 bytes, for an LLM call. */
+export const LLM_MAX_RESPONSE_BYTES = 262_144;
+
 export interface LlmConfig {
   apiKey: string;
   baseUrl: string;
   model: string;
   /** Per-request timeout in ms (default 10s). */
   timeoutMs?: number;
+  /** Maximum response body in bytes. Defaults to LLM_MAX_RESPONSE_BYTES; non-positive or non-finite values fall back to the default. */
+  maxResponseBytes?: number;
 }
 
 type FetchLike = (url: string, init: Record<string, unknown>) => Promise<{
@@ -298,7 +303,28 @@ export class OpenAiCompatibleLlmAdapter implements LlmBriefExtractor {
       clearTimeout(timer);
     }
     if (!res.ok) throw new LlmExtractionError(`LLM request returned HTTP ${res.status}`);
-    const body = asRecord(await res.json(), "LLM response");
+    // The response body is measured before it is parsed: the timeout
+    // bounds how long the call may take, this bound limits how much
+    // it may return, so an endpoint answering with an arbitrarily
+    // large body is refused for its size (naming the limit only,
+    // never any of the body) instead of being buffered and parsed.
+    const maxResponseBytes =
+      this.config.maxResponseBytes !== undefined &&
+      Number.isFinite(this.config.maxResponseBytes) &&
+      this.config.maxResponseBytes > 0
+        ? this.config.maxResponseBytes
+        : LLM_MAX_RESPONSE_BYTES;
+    const rawText = await res.text();
+    if (new TextEncoder().encode(rawText).byteLength > maxResponseBytes) {
+      throw new LlmExtractionError(`LLM response exceeded the ${maxResponseBytes}-byte limit`);
+    }
+    let parsedBody: unknown;
+    try {
+      parsedBody = JSON.parse(rawText);
+    } catch {
+      throw new LlmExtractionError("LLM response is not valid JSON");
+    }
+    const body = asRecord(parsedBody, "LLM response");
     const choices = body.choices;
     if (!Array.isArray(choices) || choices.length === 0) fail("LLM response has no choices");
     const message = asRecord((choices[0] as Record<string, unknown>).message, "LLM choice message");

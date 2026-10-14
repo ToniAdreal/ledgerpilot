@@ -67,12 +67,27 @@ import { PayPalError, PayPalNotConfiguredError, type PayPalClient } from "./clie
  * connection, a DNS failure) are rethrown untouched — this bound
  * translates the one failure it causes, it does not dress network
  * errors up as PayPal responses.
+ *
+ * Response size: the timeout bounds how long a call may take; this
+ * bound limits how much it may return. Every response body this
+ * adapter reads — the OAuth token response included — is measured
+ * in UTF-8 bytes before it is parsed, and a body over
+ * `SANDBOX_MAX_RESPONSE_BYTES` (4 MiB by default) is refused with a
+ * `PayPalError` of status 502 and name `RESPONSE_TOO_LARGE` naming
+ * the limit only (never any of the body). Until this bound existed,
+ * a PayPal endpoint — or anything impersonating one — could answer
+ * with an arbitrarily large body that the adapter would buffer and
+ * parse in full. The bound applies to error responses too: an
+ * oversized error body is refused for its size rather than mapped.
  */
 
 export type FetchFn = (url: string, init?: RequestInit) => Promise<Response>;
 
 /** Per-request timeout for every outbound PayPal call, in milliseconds. */
 export const SANDBOX_REQUEST_TIMEOUT_MS = 10_000;
+
+/** Maximum response body, in UTF-8 bytes, for every outbound PayPal call. */
+export const SANDBOX_MAX_RESPONSE_BYTES = 4_194_304;
 
 export interface SandboxConfig {
   clientId?: string;
@@ -85,6 +100,8 @@ export interface SandboxConfig {
   now?: () => number;
   /** Per-request timeout in ms. Defaults to SANDBOX_REQUEST_TIMEOUT_MS; non-positive or non-finite values fall back to the default. */
   timeoutMs?: number;
+  /** Maximum response body in bytes. Defaults to SANDBOX_MAX_RESPONSE_BYTES; non-positive or non-finite values fall back to the default. */
+  maxResponseBytes?: number;
 }
 
 /* ------------------------------------------------------------------ */
@@ -237,6 +254,7 @@ export class SandboxPayPalClient implements PayPalClient {
   private readonly fetchFn: FetchFn;
   private readonly now: () => number;
   private readonly timeoutMs: number;
+  private readonly maxResponseBytes: number;
 
   private tokenCache: { token: string; expiresAt: number } | null = null;
   /** Orders v2 has no list endpoint — see the header note. */
@@ -263,6 +281,12 @@ export class SandboxPayPalClient implements PayPalClient {
       config.timeoutMs !== undefined && Number.isFinite(config.timeoutMs) && config.timeoutMs > 0
         ? config.timeoutMs
         : SANDBOX_REQUEST_TIMEOUT_MS;
+    this.maxResponseBytes =
+      config.maxResponseBytes !== undefined &&
+      Number.isFinite(config.maxResponseBytes) &&
+      config.maxResponseBytes > 0
+        ? config.maxResponseBytes
+        : SANDBOX_MAX_RESPONSE_BYTES;
   }
 
   /* ---------------- transport ---------------- */
@@ -317,6 +341,13 @@ export class SandboxPayPalClient implements PayPalClient {
 
   private async readBody(res: Response): Promise<unknown> {
     const text = await res.text();
+    if (new TextEncoder().encode(text).byteLength > this.maxResponseBytes) {
+      throw new PayPalError(
+        `PayPal response exceeded the ${this.maxResponseBytes}-byte limit`,
+        502,
+        "RESPONSE_TOO_LARGE",
+      );
+    }
     if (!text) return {};
     try {
       return JSON.parse(text) as unknown;

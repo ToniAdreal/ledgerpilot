@@ -16,6 +16,16 @@ build record behind these summaries.
 
 ### Added
 
+- **Outbound response-size bounds.** The sandbox timeout bounds how
+  long an outbound call may take; these bound how much it may
+  return. The sandbox adapter measures every response body — the
+  OAuth token response and error responses included — in UTF-8
+  bytes before parsing, and refuses a body over
+  `SANDBOX_MAX_RESPONSE_BYTES` (4 MiB) with a `PayPalError` of
+  status 502 and name `RESPONSE_TOO_LARGE` naming the limit only.
+  The optional LLM adapter does the same at
+  `LLM_MAX_RESPONSE_BYTES` (256 KiB), refusing before parsing and
+  still falling back to the deterministic parser's error.
 - **Webhook verification unavailable (the structured 502).**
   Signature verification in sandbox mode is itself a PayPal API
   call, and that call can fail; a throw from the adapter is now

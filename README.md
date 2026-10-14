@@ -756,7 +756,7 @@ are not blocked, the suite also runs on them).
 ```bash
 npm install
 npm run dev        # http://localhost:3000
-npm test           # full test suite (842 tests)
+npm test           # full test suite (855 tests)
 npm run typecheck  # tsc --noEmit
 npm run build      # production build
 ```
@@ -858,7 +858,11 @@ mock mode a config swap rather than a rewrite.
   the LLM adapter enforces): a PayPal endpoint that never answers is
   aborted and translated into a `PayPalError` with status 504 and name
   `REQUEST_TIMEOUT`, while non-timeout fetch failures are rethrown
-  untouched.
+  untouched. Every response body — the OAuth token response included —
+  is likewise measured in UTF-8 bytes before it is parsed, and a body
+  over `SANDBOX_MAX_RESPONSE_BYTES` (4 MiB by default) is refused with
+  a `PayPalError` of status 502 and name `RESPONSE_TOO_LARGE` naming
+  the limit only, error responses included.
 - `src/lib/agent/parser.ts` — deterministic NL brief → typed action plan
   parser (no LLM, no keys; relative due dates resolved against an injectable
   reference date).
@@ -1048,7 +1052,11 @@ signatures mirror the REST resources one-to-one.
   validated field-by-field in code (step-type and currency whitelists,
   positive amounts under a hard cap, real ISO due dates) and converted into
   a plan by deterministic code — an invalid or failed LLM response falls
-  back to the parser's original error. LLM-sourced plans are marked
+  back to the parser's original error. Its response body is measured in
+  UTF-8 bytes before it is parsed, and a body over
+  `LLM_MAX_RESPONSE_BYTES` (256 KiB by default) is refused for its size
+  — the response-side counterpart of the sandbox adapter's
+  `RESPONSE_TOO_LARGE` bound. LLM-sourced plans are marked
   `source: "llm"` and pass through the same approval gate. The app is fully
   functional with the LLM unset; no feature, including Judge Mode, requires
   it.
@@ -1059,7 +1067,7 @@ signatures mirror the REST resources one-to-one.
 ## Testing
 
 ```bash
-npm test           # vitest — 842 tests, all green
+npm test           # vitest — 855 tests, all green
 npm run typecheck  # TypeScript strict, clean
 npm run build      # Next.js production build
 npm run verify     # the whole gate below, as one command
@@ -1190,7 +1198,14 @@ AbortSignal on every outbound call, a hanging API call and a hanging
 OAuth token fetch each translated into a 504 `REQUEST_TIMEOUT`
 `PayPalError` naming method + path only, a slow-but-inside-the-bound
 call succeeding, non-timeout fetch failures rethrown untouched, and
-the non-positive-timeout fallback to the default bound), and the optional LLM adapter (config
+the non-positive-timeout fallback to the default bound), the outbound
+response-size bounds (both adapters measuring the body in UTF-8 bytes
+before parsing — an oversized sandbox response refused as a 502
+`RESPONSE_TOO_LARGE` naming the limit only, token and error responses
+included, at-limit accepted and one-byte-over refused, the
+non-positive-limit fallback to each default, an oversized LLM
+response refused before parsing and still falling back to the
+deterministic parser's error through `parseBriefWithFallback`), and the optional LLM adapter (config
 gating, deterministic-first non-consultation, validator negative cases,
 fallback error honesty, and a full approval-gated loop from an
 LLM-sourced plan), and the resource plan drafts behind

@@ -30,11 +30,15 @@ import { MockPayPalClient } from "@/lib/paypal/mock";
 const NOW = new Date("2026-10-10T00:00:00Z"); // Saturday, per judge-mode reference date
 
 function stubFetchReturning(content: string, status = 200) {
+  // Real Response semantics: text() is the raw body — the JSON
+  // envelope — and json() is that same body parsed. (The adapter now
+  // reads text() to measure the body before parsing it.)
+  const envelope = { choices: [{ message: { content } }] };
   return vi.fn(async () => ({
     ok: status >= 200 && status < 300,
     status,
-    json: async () => ({ choices: [{ message: { content } }] }),
-    text: async () => content,
+    json: async () => envelope,
+    text: async () => JSON.stringify(envelope),
   }));
 }
 
