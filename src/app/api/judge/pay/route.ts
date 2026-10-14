@@ -9,8 +9,11 @@ export const dynamic = "force-dynamic";
  *
  * Mock-mode record-payment for the full outstanding amount, followed by
  * the sync reconciler, which processes the INVOICING.INVOICE.PAID event
- * exactly once and resumes the trigger-gated payout. Refuses (409) when
- * the scenario is not seeded or the spine plan has not been executed.
+ * exactly once and resumes the trigger-gated payout. Mock mode only:
+ * in sandbox mode it refuses (409) before touching anything — the
+ * spine invoice only exists in the mock (see lib/judge/judge-mode.ts).
+ * Also refuses (409) when the scenario is not seeded or the spine
+ * plan has not been executed.
  */
 export async function POST() {
   const acquired = acquireRuntime();

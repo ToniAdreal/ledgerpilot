@@ -16,6 +16,14 @@ build record behind these summaries.
 
 ### Added
 
+- **Judge Mode payment guard (mock mode only).** Simulating the
+  spine invoice's payment now refuses in sandbox mode, before
+  touching anything — completing the mock-only parity of the three
+  Judge Mode demo controls (seed, payment simulation, reset). The
+  spine invoice only exists in the mock, and a simulated
+  record-payment is not how a sandbox invoice is paid.
+  `POST /api/judge/pay` maps the refusal to a 409, and the OpenAPI
+  document declares that 409 on the operation.
 - **Judge Mode seed guard (mock mode only).** Seeding the Judge
   Mode scenario now refuses in sandbox mode, before touching
   anything — parity with the demo reset, which already refused.

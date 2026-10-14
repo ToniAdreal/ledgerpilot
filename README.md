@@ -444,6 +444,12 @@ curl -X POST localhost:3000/api/agent/execute -H 'content-type: application/json
   mode before touching anything: in sandbox the fictional history
   would be created at PayPal for invented recipients, and the captured
   order and the flagged sample dispute only exist in the mock.
+  Payment simulation is mock-mode only too, and refuses in sandbox
+  mode before touching anything: the spine invoice it pays only
+  exists in the mock, and a simulated record-payment is not how a
+  sandbox invoice is paid (a buyer pays on PayPal's hosted page, or
+  the seller records a real payment through the general
+  record-payment route).
   Id sequences never rewind across a reset, so no invoice,
   plan, or event id is ever reused.
 - **PayPal mode indicator.** The console's mode strip (above the KPI
@@ -743,7 +749,7 @@ are not blocked, the suite also runs on them).
 ```bash
 npm install
 npm run dev        # http://localhost:3000
-npm test           # full test suite (828 tests)
+npm test           # full test suite (834 tests)
 npm run typecheck  # tsc --noEmit
 npm run build      # production build
 ```
@@ -1044,7 +1050,7 @@ signatures mirror the REST resources one-to-one.
 ## Testing
 
 ```bash
-npm test           # vitest — 828 tests, all green
+npm test           # vitest — 834 tests, all green
 npm run typecheck  # TypeScript strict, clean
 npm run build      # Next.js production build
 npm run verify     # the whole gate below, as one command
@@ -1237,7 +1243,12 @@ snapshots reopening fresh), and the Judge Mode seed's mock-only
 guard (a sandbox-mode refusal that runs before any adapter call or
 store change — ahead of even the already-seeded answer — with mock
 seeding and its idempotency untouched, the seed route's 409 mapping,
-and the OpenAPI document's matching 409 on the operation), and the deployment descriptor
+and the OpenAPI document's matching 409 on the operation), and the
+Judge Mode payment simulation's mock-only guard (a sandbox-mode
+refusal that runs before any adapter call or store change — ahead
+of even the seeded/executed checks — with the mock payment leg and
+its already-paid no-op untouched, the pay route's 409 mapping, and
+the OpenAPI document's matching 409 on the operation), and the deployment descriptor
 (`render.yaml` — one free-tier Node service building and starting with
 the package's own scripts, the health check probing the real
 `/api/health` route, mock mode as the credential-free default, every

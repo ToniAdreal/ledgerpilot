@@ -363,10 +363,10 @@ export const API_OPERATIONS: ApiOperation[] = [
     tag: "Judge Mode",
     summary: "Simulate payment of the spine invoice",
     description:
-      "The documented local-run payment leg: a mock-mode record-payment for the spine invoice's full outstanding amount, after which the sync reconciler processes the resulting INVOICING.INVOICE.PAID event — the same code path a webhook delivery takes. Demo control for a disposable mock-mode instance.",
+      "The documented local-run payment leg: a mock-mode record-payment for the spine invoice's full outstanding amount, after which the sync reconciler processes the resulting INVOICING.INVOICE.PAID event — the same code path a webhook delivery takes. Mock mode only — in sandbox mode the spine invoice only exists in the mock, so the payment simulation refuses, before touching anything. Demo control for a disposable mock-mode instance.",
     responses: {
       "200": "The payment outcome (or an alreadyPaid no-op).",
-      "409": "Not seeded yet, or the spine plan has not been executed.",
+      "409": "Payment refused (sandbox mode — payment simulation is mock-mode only), not seeded yet, or the spine plan has not been executed.",
     },
   },
   {

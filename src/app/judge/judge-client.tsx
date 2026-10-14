@@ -4,7 +4,8 @@
  * Judge Mode client — loads the scenario state from GET /api/judge,
  * seeds via POST /api/judge/seed, closes the payment leg via
  * POST /api/judge/pay, and resets the demo instance via
- * POST /api/judge/reset (mock mode only). Approving/executing the
+ * POST /api/judge/reset (all three demo controls are mock mode only).
+ * Approving/executing the
  * spine plan deliberately happens in the Operations Console's Agent
  * Command bar — the judge experiences the real approval gate, not a
  * Judge-Mode shortcut.
@@ -173,7 +174,7 @@ export default function JudgeClient() {
             className="command-btn"
             disabled={busy !== null || !canPay}
             onClick={() => void pay()}
-            title={canPay ? "Record-payment for the spine invoice, then sync" : "Available once the spine plan has been executed and its invoice is still unpaid"}
+            title={canPay ? "Mock mode only: record-payment for the spine invoice, then sync (refused in sandbox mode, where the spine invoice does not exist)" : "Available once the spine plan has been executed and its invoice is still unpaid"}
           >
             {busy === "pay" ? "Recording payment…" : "Simulate invoice payment"}
           </button>

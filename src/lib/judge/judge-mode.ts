@@ -32,6 +32,22 @@
  * Seeding is idempotent: a second call returns `alreadySeeded: true`
  * and changes nothing.
  *
+ * The payment leg is mock-only too, for the same reason: the spine
+ * invoice it pays only exists in the mock (it is created by executing
+ * the seeded spine plan, and seeding itself is mock-only), so in
+ * sandbox mode there is no legitimate spine invoice to pay — a
+ * seeded store handed to a sandbox client (the cross-mode handoff
+ * the seed guard already refuses) would otherwise have its mock
+ * invoice id sent to PayPal as a record-payment, failing as an
+ * opaque adapter error instead of the honest demo refusal, and a
+ * simulated buyer payment is in any case not how a sandbox invoice
+ * gets paid (a buyer pays on PayPal's hosted page and the webhook /
+ * sync path reconciles it, or the seller records a real payment
+ * through the general record-payment route). `simulateJudgeInvoicePayment`
+ * therefore refuses with `JudgeModeError` before touching anything
+ * in sandbox mode — the guard runs ahead of the seeded/executed
+ * checks, exactly like the seed guard.
+ *
  * Seeding is mock-only, for the same honesty reason as reset (below):
  * the seeded history only exists in the mock — the captured order is
  * captured without a buyer, and the dispute is a flagged sample. In
@@ -361,6 +377,17 @@ export async function simulateJudgeInvoicePayment(
   client: PayPalClient,
   store: LedgerStore,
 ): Promise<JudgePaymentResult> {
+  // Mock mode only, before anything is read or written (see the
+  // module header): the spine invoice only exists in the mock, and a
+  // simulated payment is not how a sandbox invoice gets paid. The
+  // guard runs ahead of the seeded/executed checks too, so a seeded
+  // store handed to a sandbox client still refuses rather than
+  // sending a mock invoice id to PayPal.
+  if (client.mode !== "mock") {
+    throw new JudgeModeError(
+      "Judge Mode payment simulation is available in mock mode only — in sandbox mode the spine invoice only exists in the mock, a simulated record-payment is not how a sandbox invoice is paid (a buyer pays on PayPal's hosted page, or the seller records a real payment through the general record-payment route), and sending a mock invoice id to PayPal would fail as an opaque adapter error. Restart with PAYPAL_MODE=mock to simulate the spine payment.",
+    );
+  }
   const state = await getJudgeState(store, client);
   if (!state.seeded || !state.spinePlan) {
     throw new JudgeModeError("Judge Mode is not seeded yet — load the scenario first.");
