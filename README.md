@@ -756,7 +756,7 @@ are not blocked, the suite also runs on them).
 ```bash
 npm install
 npm run dev        # http://localhost:3000
-npm test           # full test suite (855 tests)
+npm test           # full test suite (862 tests)
 npm run typecheck  # tsc --noEmit
 npm run build      # production build
 ```
@@ -858,7 +858,10 @@ mock mode a config swap rather than a rewrite.
   the LLM adapter enforces): a PayPal endpoint that never answers is
   aborted and translated into a `PayPalError` with status 504 and name
   `REQUEST_TIMEOUT`, while non-timeout fetch failures are rethrown
-  untouched. Every response body — the OAuth token response included —
+  untouched. The timeout spans the response body as well as the wait
+  for the headers: the timer stays armed while the body is read, so
+  an endpoint that answers promptly and then drips — or never
+  finishes — its body is aborted by the same bound. Every response body — the OAuth token response included —
   is likewise measured in UTF-8 bytes before it is parsed, and a body
   over `SANDBOX_MAX_RESPONSE_BYTES` (4 MiB by default) is refused with
   a `PayPalError` of status 502 and name `RESPONSE_TOO_LARGE` naming
@@ -1056,7 +1059,9 @@ signatures mirror the REST resources one-to-one.
   UTF-8 bytes before it is parsed, and a body over
   `LLM_MAX_RESPONSE_BYTES` (256 KiB by default) is refused for its size
   — the response-side counterpart of the sandbox adapter's
-  `RESPONSE_TOO_LARGE` bound. LLM-sourced plans are marked
+  `RESPONSE_TOO_LARGE` bound. Its per-request timeout likewise
+  spans the response body, not just the wait for the headers.
+  LLM-sourced plans are marked
   `source: "llm"` and pass through the same approval gate. The app is fully
   functional with the LLM unset; no feature, including Judge Mode, requires
   it.
@@ -1067,7 +1072,7 @@ signatures mirror the REST resources one-to-one.
 ## Testing
 
 ```bash
-npm test           # vitest — 855 tests, all green
+npm test           # vitest — 862 tests, all green
 npm run typecheck  # TypeScript strict, clean
 npm run build      # Next.js production build
 npm run verify     # the whole gate below, as one command
@@ -1205,7 +1210,13 @@ before parsing — an oversized sandbox response refused as a 502
 included, at-limit accepted and one-byte-over refused, the
 non-positive-limit fallback to each default, an oversized LLM
 response refused before parsing and still falling back to the
-deterministic parser's error through `parseBriefWithFallback`), and the optional LLM adapter (config
+deterministic parser's error through `parseBriefWithFallback`), the
+outbound body-read timeout (both adapters' timers spanning the
+response body — a hanging sandbox API body and a hanging OAuth
+token body each translated into the same 504 `REQUEST_TIMEOUT`, a
+hanging LLM body surfacing as an `LlmExtractionError` timeout and
+still falling back to the parser's error, slow bodies inside the
+bound succeeding on both adapters), and the optional LLM adapter (config
 gating, deterministic-first non-consultation, validator negative cases,
 fallback error honesty, and a full approval-gated loop from an
 LLM-sourced plan), and the resource plan drafts behind

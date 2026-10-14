@@ -16,6 +16,14 @@ build record behind these summaries.
 
 ### Added
 
+- **Outbound body-read timeout.** Both outbound adapters'
+  per-request timers now span the response body, not just the
+  wait for the headers: an endpoint that answers promptly and
+  then never finishes its body is aborted by the same bound —
+  on the sandbox adapter as the same 504 `REQUEST_TIMEOUT`
+  (the OAuth token body included), and on the optional LLM
+  adapter as an `LlmExtractionError` timeout that still falls
+  back to the deterministic parser's error.
 - **Outbound response-size bounds.** The sandbox timeout bounds how
   long an outbound call may take; these bound how much it may
   return. The sandbox adapter measures every response body — the

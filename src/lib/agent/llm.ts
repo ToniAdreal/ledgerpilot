@@ -44,7 +44,7 @@ export interface LlmConfig {
   apiKey: string;
   baseUrl: string;
   model: string;
-  /** Per-request timeout in ms (default 10s). */
+  /** Per-request timeout in ms (default 10s; spans the response body as well as the wait for headers). */
   timeoutMs?: number;
   /** Maximum response body in bytes. Defaults to LLM_MAX_RESPONSE_BYTES; non-positive or non-finite values fall back to the default. */
   maxResponseBytes?: number;
@@ -278,8 +278,10 @@ export class OpenAiCompatibleLlmAdapter implements LlmBriefExtractor {
 
   async extract(brief: string): Promise<LlmExtraction> {
     const controller = new AbortController();
-    const timer = setTimeout(() => controller.abort(), this.config.timeoutMs ?? 10_000);
+    const timeoutMs = this.config.timeoutMs ?? 10_000;
+    const timer = setTimeout(() => controller.abort(), timeoutMs);
     let res: Awaited<ReturnType<FetchLike>>;
+    let rawText: string;
     try {
       res = await this.fetchFn(`${this.config.baseUrl}/chat/completions`, {
         method: "POST",
@@ -297,12 +299,22 @@ export class OpenAiCompatibleLlmAdapter implements LlmBriefExtractor {
         }),
         signal: controller.signal,
       });
+      if (!res.ok) throw new LlmExtractionError(`LLM request returned HTTP ${res.status}`);
+      // The per-request timeout spans the response body, not just
+      // the wait for the headers: the timer stays armed while the
+      // body is read, so an endpoint that answers promptly and then
+      // drips — or never finishes — its body is aborted by the same
+      // bound instead of hanging the caller with the headers in hand.
+      rawText = await res.text();
     } catch (err) {
+      if (err instanceof LlmExtractionError) throw err;
+      if (controller.signal.aborted) {
+        throw new LlmExtractionError(`LLM request timed out after ${timeoutMs} ms`);
+      }
       throw new LlmExtractionError(`LLM request failed: ${err instanceof Error ? err.message : String(err)}`);
     } finally {
       clearTimeout(timer);
     }
-    if (!res.ok) throw new LlmExtractionError(`LLM request returned HTTP ${res.status}`);
     // The response body is measured before it is parsed: the timeout
     // bounds how long the call may take, this bound limits how much
     // it may return, so an endpoint answering with an arbitrarily
@@ -314,7 +326,6 @@ export class OpenAiCompatibleLlmAdapter implements LlmBriefExtractor {
       this.config.maxResponseBytes > 0
         ? this.config.maxResponseBytes
         : LLM_MAX_RESPONSE_BYTES;
-    const rawText = await res.text();
     if (new TextEncoder().encode(rawText).byteLength > maxResponseBytes) {
       throw new LlmExtractionError(`LLM response exceeded the ${maxResponseBytes}-byte limit`);
     }

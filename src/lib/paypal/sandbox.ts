@@ -68,6 +68,15 @@ import { PayPalError, PayPalNotConfiguredError, type PayPalClient } from "./clie
  * translates the one failure it causes, it does not dress network
  * errors up as PayPal responses.
  *
+ * The bound spans the whole call, not just the response headers:
+ * the timer stays armed while the response body is being read
+ * (`fetchAndRead` below), so an endpoint that answers its headers
+ * promptly and then drips — or never finishes — its body is aborted
+ * and translated exactly like a call that never answered. Until the
+ * timer spanned the body, that slow-drip case hung the calling
+ * route with the headers already in hand, outside the bound the
+ * timeout claimed to set.
+ *
  * Response size: the timeout bounds how long a call may take; this
  * bound limits how much it may return. Every response body this
  * adapter reads — the OAuth token response included — is measured
@@ -292,17 +301,28 @@ export class SandboxPayPalClient implements PayPalClient {
   /* ---------------- transport ---------------- */
 
   /**
-   * One outbound PayPal call, bounded by the per-request timeout.
-   * The abort signal is passed to the fetch layer; a rejection
-   * caused by our own timer is translated into a 504 PayPalError
-   * naming the request label (method + path — never a credential),
-   * and any other rejection is rethrown untouched.
+   * One outbound PayPal call, bounded by the per-request timeout —
+   * the timer spans the response body as well as the wait for the
+   * headers: it is armed before the fetch starts and cleared only
+   * after `readBody` has consumed the body, so a slow-dripping body
+   * is aborted by the same bound. A rejection caused by our own
+   * timer — from the fetch or from the body read alike — is
+   * translated into a 504 PayPalError naming the request label
+   * (method + path — never a credential); any other rejection,
+   * including the response-size refusal `readBody` raises, is
+   * rethrown untouched.
    */
-  private async fetchWithTimeout(url: string, init: RequestInit, label: string): Promise<Response> {
+  private async fetchAndRead(
+    url: string,
+    init: RequestInit,
+    label: string,
+  ): Promise<{ res: Response; body: unknown }> {
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), this.timeoutMs);
     try {
-      return await this.fetchFn(url, { ...init, signal: controller.signal });
+      const res = await this.fetchFn(url, { ...init, signal: controller.signal });
+      const body = await this.readBody(res);
+      return { res, body };
     } catch (err) {
       if (controller.signal.aborted) {
         throw new PayPalError(
@@ -322,7 +342,7 @@ export class SandboxPayPalClient implements PayPalClient {
       return this.tokenCache.token;
     }
     const basic = Buffer.from(`${this.clientId}:${this.clientSecret}`).toString("base64");
-    const res = await this.fetchWithTimeout(`${this.baseUrl}/v1/oauth2/token`, {
+    const { res, body } = await this.fetchAndRead(`${this.baseUrl}/v1/oauth2/token`, {
       method: "POST",
       headers: {
         Authorization: `Basic ${basic}`,
@@ -330,7 +350,6 @@ export class SandboxPayPalClient implements PayPalClient {
       },
       body: "grant_type=client_credentials",
     }, "POST /v1/oauth2/token");
-    const body = await this.readBody(res);
     if (!res.ok) throw this.toError(res.status, body, "OAuth token request failed");
     const token = asString(asRaw(body).access_token);
     if (!token) throw new PayPalError("PayPal OAuth response carried no access_token", res.status, "INVALID_RESPONSE");
@@ -365,7 +384,7 @@ export class SandboxPayPalClient implements PayPalClient {
 
   private async request<T>(path: string, init: { method: string; body?: unknown }): Promise<T> {
     const token = await this.getAccessToken();
-    const res = await this.fetchWithTimeout(`${this.baseUrl}${path}`, {
+    const { res, body } = await this.fetchAndRead(`${this.baseUrl}${path}`, {
       method: init.method,
       headers: {
         Authorization: `Bearer ${token}`,
@@ -373,7 +392,6 @@ export class SandboxPayPalClient implements PayPalClient {
       },
       ...(init.body !== undefined ? { body: JSON.stringify(init.body) } : {}),
     }, `${init.method} ${path.split("?")[0]}`);
-    const body = await this.readBody(res);
     if (!res.ok) throw this.toError(res.status, body, `PayPal ${init.method} ${path} failed`);
     return body as T;
   }
