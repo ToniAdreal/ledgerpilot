@@ -16,6 +16,16 @@ build record behind these summaries.
 
 ### Added
 
+- **Webhook verification unavailable (the structured 502).**
+  Signature verification in sandbox mode is itself a PayPal API
+  call, and that call can fail; a throw from the adapter is now
+  caught by the webhook handler and reported as a distinct
+  `verification_unavailable` outcome — the event is left
+  unprocessed (a redelivery after recovery processes normally),
+  it is never recorded as a signature rejection, and
+  `POST /api/paypal/webhooks` answers a structured 502 in the
+  shared `{ error }` shape so PayPal redelivers the event. The
+  OpenAPI document declares the 502 on the webhook operation.
 - **Judge Mode payment guard (mock mode only).** Simulating the
   spine invoice's payment now refuses in sandbox mode, before
   touching anything — completing the mock-only parity of the three

@@ -203,7 +203,14 @@ curl -X POST localhost:3000/api/agent/execute -H 'content-type: application/json
   event signature through the PayPal adapter before trusting the payload
   (unverified events are rejected, audited, and never marked processed),
   deduplicates by event id (a redelivery is acknowledged as a duplicate and
-  never causes a second PayPal call), and resumes gated plan steps.
+  never causes a second PayPal call), and resumes gated plan steps. A
+  verification that cannot be completed at all — in sandbox mode
+  verification is itself a PayPal API call, and that call can fail — is
+  reported as verification unavailable, a distinct outcome from a failed
+  signature: the event is left unprocessed (never recorded as a
+  rejection), the audit log names the outage, and the route answers a
+  structured 502 so PayPal redelivers the event once verification
+  recovers instead of the delivery being dropped.
   Resumption is resource-correlated: a gated step is bound at execution
   time to the invoice its own plan created, so one invoice's payment can
   never release another plan's payout — a mismatched event is audit-logged
@@ -749,7 +756,7 @@ are not blocked, the suite also runs on them).
 ```bash
 npm install
 npm run dev        # http://localhost:3000
-npm test           # full test suite (834 tests)
+npm test           # full test suite (842 tests)
 npm run typecheck  # tsc --noEmit
 npm run build      # production build
 ```
@@ -882,7 +889,9 @@ mock mode a config swap rather than a rewrite.
   PayPal calls; trigger-gated steps are deferred and resumed by
   `resumeTriggeredSteps` when the matching event arrives.
 - `src/lib/agent/webhooks.ts` — webhook handling: signature verification
-  through the adapter, event-id idempotency, audit logging, trigger resume.
+  through the adapter, event-id idempotency, audit logging, trigger resume,
+  and the verification-unavailable outcome (a throwing verification call
+  leaves the event unprocessed and is never recorded as a rejection).
 - `src/lib/agent/reconciler.ts` — polling fallback (`syncFromPayPal`).
 - `src/lib/console/` — console read models: pure projections (invoice rows
   with overdue flags, order rows with capture state, payout rows flattened
@@ -994,7 +1003,7 @@ mock mode a config swap rather than a rewrite.
   `GET|POST /tools` — tool definitions + tool-call
   plan drafting), `src/app/api/paypal/` (`POST /invoices|orders|payouts|reminders` —
   validated wrappers that draft plans, never execute; `POST /webhooks` — 401 on bad
-  signature, 200 on processed/duplicate; `GET /sync`; `POST /orders/capture`;
+  signature, 502 when verification itself is unavailable, 200 on processed/duplicate; `GET /sync`; `POST /orders/capture`;
   `POST /invoices/record-payment`),
   `src/app/api/console/` (`GET /invoices|orders|payouts|activity|disputes|transactions|summary`,
   plus `GET /invoices/[id]` for the detail projection and
@@ -1050,7 +1059,7 @@ signatures mirror the REST resources one-to-one.
 ## Testing
 
 ```bash
-npm test           # vitest — 834 tests, all green
+npm test           # vitest — 842 tests, all green
 npm run typecheck  # TypeScript strict, clean
 npm run build      # Next.js production build
 npm run verify     # the whole gate below, as one command
@@ -1108,7 +1117,11 @@ routes excluded, active-link resolution — root exact, sections by
 prefix — and the layout rendering the nav after the skip link),
 webhooks + reconciler
 (bad-signature rejection, duplicate delivery, webhook/reconciler
-non-interference, resource-correlated trigger resumption), console read
+non-interference, resource-correlated trigger resumption, verification
+unavailable — a throwing verification call is caught, the event stays
+unprocessed and is never recorded as a rejection, a redelivery after
+recovery closes the loop exactly once, and the route's 502 + the
+OpenAPI 502 declaration), console read
 models (per-currency totals, overdue flags, dispute response deadlines +
 sample flags, signed reconciliation ledger), dispute-evidence summaries (reason labels, exact-id transaction matching, buyer+amount invoice matching, overdue/due-soon urgency, delivery proof always a gap, unknown-id 404), console states (loading /
 error / empty / filtered-empty precedence, overlay HTML escaping, banner

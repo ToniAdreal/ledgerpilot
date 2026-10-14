@@ -483,11 +483,12 @@ export const API_OPERATIONS: ApiOperation[] = [
     tag: "PayPal",
     summary: "PayPal webhook listener",
     description:
-      "Receives PayPal webhook events. The signature is verified through the adapter before the payload is trusted; verified events are processed exactly once by event id (a redelivery is acknowledged as a duplicate, which stops PayPal's retry loop) and resume any trigger-gated plan bound to the event's resource.",
+      "Receives PayPal webhook events. The signature is verified through the adapter before the payload is trusted; verified events are processed exactly once by event id (a redelivery is acknowledged as a duplicate, which stops PayPal's retry loop) and resume any trigger-gated plan bound to the event's resource. A verification that cannot be completed at all (in sandbox mode verification is itself a PayPal API call, and that call can fail) is a distinct outcome from a failed signature: the event is left unprocessed and answered 502, so PayPal redelivers it instead of the delivery being dropped.",
     responses: {
       "200": "Event processed, or acknowledged as a duplicate.",
       "400": "Malformed JSON, or an event without id and event_type.",
       "401": "Signature verification failed; the event was not trusted or processed.",
+      "502": "Signature verification could not be completed (the adapter's verification call failed); the event was not processed, was not recorded as a signature rejection, and a redelivery will be retried.",
     },
     requestBody: true,
     webhookEventBody: true,
