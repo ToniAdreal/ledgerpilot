@@ -16,6 +16,13 @@ build record behind these summaries.
 
 ### Added
 
+- **Sandbox request idempotency (`PayPal-Request-Id`).** Every
+  mutating (POST) call the sandbox adapter makes now carries a
+  unique `PayPal-Request-Id` header, so a retry of the same call
+  is deduplicated by PayPal instead of creating a second
+  resource or moving money twice. Each logical call mints a new
+  id; reads, the OAuth token fetch, and webhook-signature
+  verification carry none.
 - **Outbound body-read timeout.** Both outbound adapters'
   per-request timers now span the response body, not just the
   wait for the headers: an endpoint that answers promptly and

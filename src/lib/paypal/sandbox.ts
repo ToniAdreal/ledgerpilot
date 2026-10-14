@@ -88,6 +88,25 @@ import { PayPalError, PayPalNotConfiguredError, type PayPalClient } from "./clie
  * with an arbitrarily large body that the adapter would buffer and
  * parse in full. The bound applies to error responses too: an
  * oversized error body is refused for its size rather than mapped.
+ *
+ * Request idempotency: every mutating (POST) API call this adapter
+ * makes carries a unique `PayPal-Request-Id` header
+ * (`nextRequestId` below: the adapter's name, the injected clock,
+ * and a per-client sequence, so ids never repeat within a client —
+ * and a fixed test clock still yields distinct ids via the
+ * sequence). PayPal deduplicates a retry that carries the same id
+ * instead of processing it twice, so a caller retrying a call
+ * whose outcome it never saw — the timeout case above is exactly
+ * that shape — cannot create a second invoice, capture an order
+ * twice, or pay a payout twice by re-sending. Each logical call
+ * gets a NEW id: deduplication is a property of a retry of the
+ * same call, never of two distinct calls that happen to carry the
+ * same payload, and the suite pins that two identical payouts get
+ * different ids. Reads (GET) carry no id — they mutate nothing —
+ * and neither do the two POSTs that are not resource mutations:
+ * the OAuth token fetch (a credential exchange, made outside
+ * `request`) and webhook-signature verification (a query about a
+ * delivered event, which creates and commits nothing).
  */
 
 export type FetchFn = (url: string, init?: RequestInit) => Promise<Response>;
@@ -265,6 +284,8 @@ export class SandboxPayPalClient implements PayPalClient {
   private readonly timeoutMs: number;
   private readonly maxResponseBytes: number;
 
+  private requestSeq = 0;
+
   private tokenCache: { token: string; expiresAt: number } | null = null;
   /** Orders v2 has no list endpoint — see the header note. */
   private readonly knownOrderIds: string[] = [];
@@ -382,13 +403,34 @@ export class SandboxPayPalClient implements PayPalClient {
     return new PayPalError(message, status, name);
   }
 
-  private async request<T>(path: string, init: { method: string; body?: unknown }): Promise<T> {
+  /**
+   * The `PayPal-Request-Id` for one logical mutating call: the
+   * adapter's name, the (injectable) clock, and a per-client
+   * sequence that increments on every id minted, so two ids from
+   * one client never repeat — even at a fixed clock. See the
+   * header's idempotency note for why each call gets a new id.
+   */
+  private nextRequestId(): string {
+    this.requestSeq += 1;
+    return `ledgerpilot-req-${this.now()}-${this.requestSeq}`;
+  }
+
+  private async request<T>(
+    path: string,
+    init: { method: string; body?: unknown },
+    options: { requestId?: boolean } = {},
+  ): Promise<T> {
     const token = await this.getAccessToken();
+    // Mutating calls carry an idempotency id by default; reads
+    // never do, and a caller whose POST is not a resource
+    // mutation (webhook-signature verification) opts out.
+    const withRequestId = options.requestId ?? init.method.toUpperCase() === "POST";
     const { res, body } = await this.fetchAndRead(`${this.baseUrl}${path}`, {
       method: init.method,
       headers: {
         Authorization: `Bearer ${token}`,
         "Content-Type": "application/json",
+        ...(withRequestId ? { "PayPal-Request-Id": this.nextRequestId() } : {}),
       },
       ...(init.body !== undefined ? { body: JSON.stringify(init.body) } : {}),
     }, `${init.method} ${path.split("?")[0]}`);
@@ -685,7 +727,10 @@ export class SandboxPayPalClient implements PayPalClient {
         webhook_id: this.webhookId,
         webhook_event: event,
       },
-    });
+      // Verification is a query about a delivered event — it
+      // creates and commits nothing, so it carries no
+      // idempotency id (see the header note).
+    }, { requestId: false });
     return asString(asRaw(raw).verification_status) === "SUCCESS";
   }
 }

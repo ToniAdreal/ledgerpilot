@@ -756,7 +756,7 @@ are not blocked, the suite also runs on them).
 ```bash
 npm install
 npm run dev        # http://localhost:3000
-npm test           # full test suite (862 tests)
+npm test           # full test suite (870 tests)
 npm run typecheck  # tsc --noEmit
 npm run build      # production build
 ```
@@ -865,7 +865,14 @@ mock mode a config swap rather than a rewrite.
   is likewise measured in UTF-8 bytes before it is parsed, and a body
   over `SANDBOX_MAX_RESPONSE_BYTES` (4 MiB by default) is refused with
   a `PayPalError` of status 502 and name `RESPONSE_TOO_LARGE` naming
-  the limit only, error responses included.
+  the limit only, error responses included. Every mutating (POST)
+  call also carries a unique `PayPal-Request-Id` header — PayPal's
+  idempotency key: a retry of the same call is deduplicated by
+  PayPal instead of creating a second resource or moving money
+  twice, each logical call mints a new id (a per-client sequence
+  keeps ids distinct even at a fixed clock), and reads, the OAuth
+  token fetch, and webhook-signature verification — a query, not
+  a mutation — carry none.
 - `src/lib/agent/parser.ts` — deterministic NL brief → typed action plan
   parser (no LLM, no keys; relative due dates resolved against an injectable
   reference date).
@@ -1072,7 +1079,7 @@ signatures mirror the REST resources one-to-one.
 ## Testing
 
 ```bash
-npm test           # vitest — 862 tests, all green
+npm test           # vitest — 870 tests, all green
 npm run typecheck  # TypeScript strict, clean
 npm run build      # Next.js production build
 npm run verify     # the whole gate below, as one command
@@ -1216,7 +1223,12 @@ response body — a hanging sandbox API body and a hanging OAuth
 token body each translated into the same 504 `REQUEST_TIMEOUT`, a
 hanging LLM body surfacing as an `LlmExtractionError` timeout and
 still falling back to the parser's error, slow bodies inside the
-bound succeeding on both adapters), and the optional LLM adapter (config
+bound succeeding on both adapters), the sandbox request
+idempotency (a unique `PayPal-Request-Id` on every mutating sandbox
+call — create / send / remind / record-payment / order create +
+capture / payout — distinct ids for two identical payouts at a
+fixed clock, no id on reads, the OAuth token fetch, or webhook
+verification, and no credential in any id), and the optional LLM adapter (config
 gating, deterministic-first non-consultation, validator negative cases,
 fallback error honesty, and a full approval-gated loop from an
 LLM-sourced plan), and the resource plan drafts behind
