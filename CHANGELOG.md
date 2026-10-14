@@ -16,6 +16,17 @@ build record behind these summaries.
 
 ### Added
 
+- **Sandbox invalid success response (`INVALID_RESPONSE`).** A
+  PayPal success body that is not valid JSON, or that parses to a
+  scalar / array / null instead of an object, is now refused at
+  the sandbox adapter's body-read point with a `PayPalError` of
+  status 502 and name `INVALID_RESPONSE` naming the request
+  (method + path) only, never any of the body. Previously an
+  unparseable success body silently mapped to an empty-ish
+  resource, indistinguishable from "PayPal has nothing". Error
+  responses keep their exact previous mapping, JSON or not, and
+  the empty success bodies PayPal legitimately returns
+  (send-invoice 202, remind 204) are unaffected.
 - **LLM connection failure (fixed message).** A call to the optional
   LLM endpoint that gets no complete response — a refused
   connection, a DNS failure, a reset before or during the body —

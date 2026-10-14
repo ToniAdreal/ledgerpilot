@@ -118,6 +118,27 @@ import { PayPalError, PayPalNotConfiguredError, type PayPalClient } from "./clie
  * parse in full. The bound applies to error responses too: an
  * oversized error body is refused for its size rather than mapped.
  *
+ * Invalid success response: every PayPal success body is JSON, and
+ * every endpoint this adapter calls answers with a JSON object.
+ * Until this check existed, `readBody` mapped any unparseable body
+ * to `{ message: text }` — the right leniency for an ERROR body (a
+ * proxy or WAF page still reaches `toError` as its message text) —
+ * but on a success status it silently turned a 200 HTML page into
+ * an empty-ish resource: a dispute or invoice list came back as an
+ * empty list, a fetched resource as a record with empty fields,
+ * and the failure was indistinguishable from "PayPal has nothing".
+ * A success body that is not valid JSON, or that parses to a
+ * scalar / array / null instead of an object, is now refused at
+ * the same read point with a `PayPalError` of status 502 and name
+ * `INVALID_RESPONSE` — the name the adapter already used for a
+ * token response with no `access_token` and a create-invoice
+ * response with no id — naming the request (method + path) only,
+ * never any of the body. Error responses keep their exact previous
+ * mapping, JSON or not, and the empty success bodies PayPal
+ * legitimately returns (send-invoice 202, remind 204) are
+ * unaffected: an empty body still reads as an empty object before
+ * the JSON check applies.
+ *
  * Request idempotency: every mutating (POST) API call this adapter
  * makes carries a unique `PayPal-Request-Id` header
  * (`nextRequestId` below: the adapter's name, the injected clock,
@@ -357,7 +378,8 @@ export class SandboxPayPalClient implements PayPalClient {
    * after `readBody` has consumed the body, so a slow-dripping body
    * is aborted by the same bound. Rejections are translated in a
    * fixed precedence: an error that is already a `PayPalError`
-   * (the response-size refusal `readBody` raises) passes through
+   * (the response-size and invalid-success refusals `readBody`
+   * raises) passes through
    * untouched; a rejection caused by our own timer — from the
    * fetch or from the body read alike — becomes the 504
    * `REQUEST_TIMEOUT`; any remaining transport rejection (no
@@ -376,7 +398,7 @@ export class SandboxPayPalClient implements PayPalClient {
     const timer = setTimeout(() => controller.abort(), this.timeoutMs);
     try {
       const res = await this.fetchFn(url, { ...init, signal: controller.signal });
-      const body = await this.readBody(res);
+      const body = await this.readBody(res, label);
       return { res, body };
     } catch (err) {
       if (err instanceof PayPalError) throw err;
@@ -418,7 +440,7 @@ export class SandboxPayPalClient implements PayPalClient {
     return token;
   }
 
-  private async readBody(res: Response): Promise<unknown> {
+  private async readBody(res: Response, label: string): Promise<unknown> {
     const text = await res.text();
     if (new TextEncoder().encode(text).byteLength > this.maxResponseBytes) {
       throw new PayPalError(
@@ -428,11 +450,32 @@ export class SandboxPayPalClient implements PayPalClient {
       );
     }
     if (!text) return {};
+    let parsed: unknown;
     try {
-      return JSON.parse(text) as unknown;
+      parsed = JSON.parse(text) as unknown;
     } catch {
-      return { message: text };
+      // Error responses keep the lenient mapping: a non-JSON error
+      // body (a proxy/WAF page, say) still reaches `toError` as its
+      // message text. A SUCCESS body that is not JSON at all is a
+      // different case — see the invalid-success-response note.
+      if (!res.ok) return { message: text };
+      throw new PayPalError(
+        `PayPal response was not valid JSON: ${label}`,
+        502,
+        "INVALID_RESPONSE",
+      );
     }
+    if (
+      res.ok &&
+      (typeof parsed !== "object" || parsed === null || Array.isArray(parsed))
+    ) {
+      throw new PayPalError(
+        `PayPal response was not a JSON object: ${label}`,
+        502,
+        "INVALID_RESPONSE",
+      );
+    }
+    return parsed;
   }
 
   private toError(status: number, body: unknown, fallbackMessage: string): PayPalError {

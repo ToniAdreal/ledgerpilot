@@ -756,7 +756,7 @@ are not blocked, the suite also runs on them).
 ```bash
 npm install
 npm run dev        # http://localhost:3000
-npm test           # full test suite (885 tests)
+npm test           # full test suite (894 tests)
 npm run typecheck  # tsc --noEmit
 npm run build      # production build
 ```
@@ -871,7 +871,18 @@ mock mode a config swap rather than a rewrite.
   is likewise measured in UTF-8 bytes before it is parsed, and a body
   over `SANDBOX_MAX_RESPONSE_BYTES` (4 MiB by default) is refused with
   a `PayPalError` of status 502 and name `RESPONSE_TOO_LARGE` naming
-  the limit only, error responses included. Every mutating (POST)
+  the limit only, error responses included. A success body that is
+  not valid JSON, or that parses to a scalar / array / null instead
+  of an object, is likewise refused at the same read point, with a
+  `PayPalError` of status 502 and name `INVALID_RESPONSE` naming the
+  request (method + path) only, never any of the body — every PayPal
+  success body is JSON and every endpoint this adapter calls answers
+  with a JSON object, so anything else (a proxy or WAF HTML page
+  returned with a 200, say) previously mapped to an empty-ish
+  resource that was indistinguishable from "PayPal has nothing".
+  Error responses keep their exact previous mapping, JSON or not,
+  and the empty success bodies PayPal legitimately returns
+  (send-invoice 202, remind 204) are unaffected. Every mutating (POST)
   call also carries a unique `PayPal-Request-Id` header — PayPal's
   idempotency key: a retry of the same call is deduplicated by
   PayPal instead of creating a second resource or moving money
@@ -1093,7 +1104,7 @@ signatures mirror the REST resources one-to-one.
 ## Testing
 
 ```bash
-npm test           # vitest — 885 tests, all green
+npm test           # vitest — 894 tests, all green
 npm run typecheck  # TypeScript strict, clean
 npm run build      # Next.js production build
 npm run verify     # the whole gate below, as one command
@@ -1233,7 +1244,14 @@ own text never carried, an oversized body keeping its
 `RESPONSE_TOO_LARGE` shape ahead of the translation, a hanging call
 staying the 504 `REQUEST_TIMEOUT`, and the failure surfacing in the
 webhook handler as verification-unavailable, never a signature
-rejection), the outbound
+rejection), the sandbox invalid success response (a non-JSON
+success body on an API read and on the OAuth token fetch, JSON
+scalar / null / array success bodies, and a non-JSON verification
+response each refused as a 502 `INVALID_RESPONSE` `PayPalError`
+naming method + path only with the body never carried, a non-JSON
+error body keeping its lenient text mapping, a structured JSON
+error body and a JSON scalar error body keeping their previous
+shapes, and the empty 202 / 204 success bodies unaffected), the outbound
 response-size bounds (both adapters measuring the body in UTF-8 bytes
 before parsing — an oversized sandbox response refused as a 502
 `RESPONSE_TOO_LARGE` naming the limit only, token and error responses
