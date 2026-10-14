@@ -16,6 +16,16 @@ build record behind these summaries.
 
 ### Added
 
+- **LLM connection failure (fixed message).** A call to the optional
+  LLM endpoint that gets no complete response — a refused
+  connection, a DNS failure, a reset before or during the body —
+  now surfaces as a fixed `LlmExtractionError` message, never the
+  transport error's own text (which the adapter previously embedded
+  verbatim). This mirrors the sandbox adapter's `CONNECTION_FAILED`
+  discipline; an HTTP error status keeps its shape ahead of the
+  translation, a timer-caused abort stays the timeout, and
+  `parseBriefWithFallback` still rethrows the deterministic
+  parser's original error.
 - **Sandbox connection failure (`CONNECTION_FAILED`).** A PayPal
   call that gets no response at all — a refused connection, a DNS
   failure, a reset mid-body — is now translated at the sandbox

@@ -756,7 +756,7 @@ are not blocked, the suite also runs on them).
 ```bash
 npm install
 npm run dev        # http://localhost:3000
-npm test           # full test suite (878 tests)
+npm test           # full test suite (885 tests)
 npm run typecheck  # tsc --noEmit
 npm run build      # production build
 ```
@@ -887,7 +887,13 @@ mock mode a config swap rather than a rewrite.
   with an injectable fetch, the strict extraction validator, the
   deterministic extraction→plan conversion, and `parseBriefWithFallback`
   (deterministic-first; LLM only on a parser miss; failures rethrow the
-  parser's error).
+  parser's error). A call that gets no complete response — a refused
+  connection, a DNS failure, a reset before or during the body — is
+  translated into a fixed `LlmExtractionError` ("LLM request failed
+  before a complete response was received"), never the transport
+  error's own text, mirroring the sandbox adapter's `CONNECTION_FAILED`
+  discipline; an HTTP error status keeps its shape ahead of the
+  translation, and a timer-caused abort stays the timeout.
 - `src/lib/agent/tools.ts` — the agent tool definitions: the four
   typed actions as MCP / Agent Toolkit-shaped tools (name, description,
   closed JSON input schemas), the tool-call envelope validator
@@ -1073,7 +1079,9 @@ signatures mirror the REST resources one-to-one.
   `LLM_MAX_RESPONSE_BYTES` (256 KiB by default) is refused for its size
   — the response-side counterpart of the sandbox adapter's
   `RESPONSE_TOO_LARGE` bound. Its per-request timeout likewise
-  spans the response body, not just the wait for the headers.
+  spans the response body, not just the wait for the headers, and a
+  call that gets no complete response surfaces as a fixed failure
+  message — never the transport error's own text.
   LLM-sourced plans are marked
   `source: "llm"` and pass through the same approval gate. The app is fully
   functional with the LLM unset; no feature, including Judge Mode, requires
@@ -1085,7 +1093,7 @@ signatures mirror the REST resources one-to-one.
 ## Testing
 
 ```bash
-npm test           # vitest — 878 tests, all green
+npm test           # vitest — 885 tests, all green
 npm run typecheck  # TypeScript strict, clean
 npm run build      # Next.js production build
 npm run verify     # the whole gate below, as one command
@@ -1243,7 +1251,13 @@ idempotency (a unique `PayPal-Request-Id` on every mutating sandbox
 call — create / send / remind / record-payment / order create +
 capture / payout — distinct ids for two identical payouts at a
 fixed clock, no id on reads, the OAuth token fetch, or webhook
-verification, and no credential in any id), and the optional LLM adapter (config
+verification, and no credential in any id), the LLM connection failure (a refused fetch, a
+non-Error transport rejection, and a mid-body reset each translated
+into the fixed `LlmExtractionError` message with the transport
+error's own text and the fake key appearing in no message, an HTTP
+error status and a timer-caused timeout each keeping their shape
+ahead of the translation, and the failure still falling back to the
+deterministic parser's error through `parseBriefWithFallback`), and the optional LLM adapter (config
 gating, deterministic-first non-consultation, validator negative cases,
 fallback error honesty, and a full approval-gated loop from an
 LLM-sourced plan), and the resource plan drafts behind

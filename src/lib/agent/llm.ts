@@ -21,6 +21,11 @@
  *  - **Approval gate unchanged.** An LLM-sourced plan is an ordinary
  *    `pending_approval` plan (marked `source: "llm"` for the audit
  *    trail); nothing executes without the same explicit approval.
+ *  - **Transport failures carry no transport text.** A call that gets
+ *    no complete response (refused connection, DNS failure, reset
+ *    mid-body) surfaces as a fixed `LlmExtractionError` message —
+ *    never the raw fetch error's own text, mirroring the sandbox
+ *    adapter's `CONNECTION_FAILED` discipline.
  *
  * The HTTP layer is injectable (fetch + config), so the adapter is fully
  * unit-tested offline against a stub with a fake key — no network, no
@@ -311,7 +316,17 @@ export class OpenAiCompatibleLlmAdapter implements LlmBriefExtractor {
       if (controller.signal.aborted) {
         throw new LlmExtractionError(`LLM request timed out after ${timeoutMs} ms`);
       }
-      throw new LlmExtractionError(`LLM request failed: ${err instanceof Error ? err.message : String(err)}`);
+      // A transport failure — a refused connection, a DNS failure,
+      // a reset before or during the body — is translated into a
+      // fixed message, never the transport error's own text: that
+      // text is the runtime's, not this adapter's contract, and can
+      // carry endpoint internals. The sandbox adapter translates the
+      // same failure class the same way (`CONNECTION_FAILED`, naming
+      // method + path only); here the honest shape is a plain
+      // failure with no detail, and `parseBriefWithFallback` still
+      // rethrows the deterministic parser's original error either
+      // way.
+      throw new LlmExtractionError("LLM request failed before a complete response was received");
     } finally {
       clearTimeout(timer);
     }
