@@ -183,6 +183,24 @@ import { PayPalError, PayPalNotConfiguredError, type PayPalClient } from "./clie
  * default 3600-second lifetime instead of poisoning the cache
  * expiry with NaN (which silently disabled caching) or a past
  * instant.
+ *
+ * Token-fetch coalescing: the cache check alone does not cover
+ * concurrency. The console's read routes fan out in parallel
+ * (the summary route alone calls five list methods at once), and
+ * on a cold or just-expired cache every one of those callers
+ * found the cache empty and started its OWN token fetch before
+ * any of them could populate it — N parallel calls meant N
+ * credential exchanges, with the last writer winning a cache
+ * they had all raced to fill. Callers that arrive while a token
+ * fetch is already in flight now share that single fetch: one
+ * token-endpoint call, one token for every waiter, and the
+ * populated cache serves later calls as before. A failed shared
+ * fetch rejects every waiter with the same error and is never
+ * retained — the in-flight slot is cleared as the fetch settles,
+ * so the next call retries the endpoint instead of re-throwing
+ * a cached failure. The 401 refresh path goes through the same
+ * `getAccessToken`, so parallel calls that share a stale token
+ * also share the single refresh fetch.
  */
 
 export type FetchFn = (url: string, init?: RequestInit) => Promise<Response>;
@@ -363,6 +381,8 @@ export class SandboxPayPalClient implements PayPalClient {
   private requestSeq = 0;
 
   private tokenCache: { token: string; expiresAt: number } | null = null;
+  /** The one in-flight token fetch concurrent callers share, if any. */
+  private tokenFetchInFlight: Promise<string> | null = null;
   /** Orders v2 has no list endpoint — see the header note. */
   private readonly knownOrderIds: string[] = [];
   /** Receiver email -> recipient supplied at payout creation (names). */
@@ -449,6 +469,23 @@ export class SandboxPayPalClient implements PayPalClient {
     if (this.tokenCache && this.tokenCache.expiresAt > this.now() + 30_000) {
       return this.tokenCache.token;
     }
+    // Coalescing: a caller that arrives while a token fetch is
+    // already in flight shares that fetch instead of starting a
+    // second credential exchange (see the header note). Only the
+    // caller that started the fetch clears the slot, and it does
+    // so as the fetch settles — success or failure — so a failed
+    // fetch is never retained for the next caller to re-throw.
+    if (this.tokenFetchInFlight) return this.tokenFetchInFlight;
+    const fetchPromise = this.fetchAccessToken();
+    this.tokenFetchInFlight = fetchPromise;
+    try {
+      return await fetchPromise;
+    } finally {
+      if (this.tokenFetchInFlight === fetchPromise) this.tokenFetchInFlight = null;
+    }
+  }
+
+  private async fetchAccessToken(): Promise<string> {
     const basic = Buffer.from(`${this.clientId}:${this.clientSecret}`).toString("base64");
     const { res, body } = await this.fetchAndRead(`${this.baseUrl}/v1/oauth2/token`, {
       method: "POST",

@@ -756,7 +756,7 @@ are not blocked, the suite also runs on them).
 ```bash
 npm install
 npm run dev        # http://localhost:3000
-npm test           # full test suite (921 tests)
+npm test           # full test suite (927 tests)
 npm run typecheck  # tsc --noEmit
 npm run build      # production build
 ```
@@ -899,7 +899,15 @@ mock mode a config swap rather than a rewrite.
   surfaces as the ordinary `PayPalError`, and a token response whose
   `expires_in` is non-numeric, non-positive, or non-finite falls
   back to the default 3600-second lifetime instead of poisoning the
-  cache expiry.
+  cache expiry. Concurrent callers on a cold or just-expired cache
+  share a single in-flight token fetch — the console's read routes
+  fan out in parallel, and without coalescing each parallel caller
+  started its own credential exchange before any of them could
+  populate the cache — and a failed shared fetch is never retained:
+  every waiter rejects with the same error and the next call retries
+  the token endpoint instead of re-throwing a cached failure. The
+  401 refresh path shares the same fetch, so parallel calls holding
+  one stale token trigger one refresh, not one per call.
 - `src/lib/agent/parser.ts` — deterministic NL brief → typed action plan
   parser (no LLM, no keys; relative due dates resolved against an injectable
   reference date).
@@ -1122,7 +1130,7 @@ signatures mirror the REST resources one-to-one.
 ## Testing
 
 ```bash
-npm test           # vitest — 921 tests, all green
+npm test           # vitest — 927 tests, all green
 npm run typecheck  # TypeScript strict, clean
 npm run build      # Next.js production build
 npm run verify     # the whole gate below, as one command
@@ -1294,7 +1302,13 @@ persistent 401 surfacing after exactly one retry, a mutating
 retry reusing the same `PayPal-Request-Id`, a non-401 failure
 triggering neither refresh nor retry, and a non-numeric or
 non-positive `expires_in` falling back to the default lifetime),
-the LLM connection failure (a refused fetch, a
+the sandbox OAuth token-fetch coalescing (four parallel calls on a
+cold cache sharing one token fetch and proceeding on the same
+token, a failed shared fetch rejecting every waiter with the same
+error and never being retained — the next call retries and
+succeeds — parallel calls sharing one stale token coalescing the
+401 refresh fetch, and a parallel burst after expiry again
+fetching exactly once), the LLM connection failure (a refused fetch, a
 non-Error transport rejection, and a mid-body reset each translated
 into the fixed `LlmExtractionError` message with the transport
 error's own text and the fake key appearing in no message, an HTTP

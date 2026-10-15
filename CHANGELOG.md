@@ -16,6 +16,16 @@ build record behind these summaries.
 
 ### Added
 
+- **Sandbox OAuth token-fetch coalescing.** Concurrent callers on
+  a cold or just-expired token cache now share a single in-flight
+  token fetch instead of each starting its own credential
+  exchange — the console's read routes fan out in parallel, so a
+  summary load previously meant one token request per list call.
+  Every waiter proceeds on the same token, a failed shared fetch
+  rejects every waiter with the same error and is never retained
+  (the next call retries the endpoint), and the 401 refresh path
+  shares the same fetch, so parallel calls holding one stale
+  token trigger one refresh, not one per call.
 - **Sandbox OAuth token refresh on 401.** When PayPal answers an
   API call with 401, the sandbox adapter now invalidates the
   cached access token, fetches a fresh one, and retries the call
