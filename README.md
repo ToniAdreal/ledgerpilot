@@ -774,7 +774,7 @@ are not blocked, the suite also runs on them).
 ```bash
 npm install
 npm run dev        # http://localhost:3000
-npm test           # full test suite (986 tests)
+npm test           # full test suite (994 tests)
 npm run typecheck  # tsc --noEmit
 npm run build      # production build
 ```
@@ -894,7 +894,11 @@ mock mode a config swap rather than a rewrite.
   bytes it admits — the limit the byte-length comparison truly
   enforces, and the integer the refusal names — and a sub-1
   fraction falls back to the default bound, like a non-positive
-  value. A success body that is
+  value. On both adapters the per-request timeout is likewise
+  floored to the whole milliseconds it admits — the integer delay
+  the abort timer truly enforces, and the value the timeout
+  refusal names — and a sub-1 fraction falls back to the default
+  bound the same way. A success body that is
   not valid JSON, or that parses to a scalar / array / null instead
   of an object, is likewise refused at the same read point, with a
   `PayPalError` of status 502 and name `INVALID_RESPONSE` naming the
@@ -1162,7 +1166,9 @@ signatures mirror the REST resources one-to-one.
   by default), and a non-positive or non-finite configured timeout
   falls back to that default instead of arming the abort timer
   with it — the same fallback the sandbox adapter pins for its
-  timeout config.
+  timeout config. A fractional configured timeout is floored to
+  the whole milliseconds it admits, and a sub-1 fraction falls
+  back to the default the same way.
   LLM-sourced plans are marked
   `source: "llm"` and pass through the same approval gate. The app is fully
   functional with the LLM unset; no feature, including Judge Mode, requires
@@ -1174,7 +1180,7 @@ signatures mirror the REST resources one-to-one.
 ## Testing
 
 ```bash
-npm test           # vitest — 986 tests, all green
+npm test           # vitest — 994 tests, all green
 npm run typecheck  # TypeScript strict, clean
 npm run build      # Next.js production build
 npm run verify     # the whole gate below, as one command
@@ -1332,6 +1338,13 @@ naming that integer, a body at the floor accepted and one byte
 over refused, a sub-1 fraction falling back to the default), an oversized LLM
 response refused before parsing and still falling back to the
 deterministic parser's error through `parseBriefWithFallback`), the
+outbound timeout config hygiene (a fractional `timeoutMs` floored
+to the whole milliseconds it admits on both adapters — the sandbox
+504 `REQUEST_TIMEOUT` and the LLM timeout error each naming the
+floored integer and never the fraction — a sub-1 fraction on
+either adapter falling back to its 10-second default so a
+slow-but-fine call completes, and a valid integer `timeoutMs`
+honoured exactly in both timeout messages), the
 outbound body-read timeout (both adapters' timers spanning the
 response body — a hanging sandbox API body and a hanging OAuth
 token body each translated into the same 504 `REQUEST_TIMEOUT`, a

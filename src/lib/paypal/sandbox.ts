@@ -76,6 +76,20 @@ import { PayPalError, PayPalNotConfiguredError, type PayPalClient } from "./clie
  * route with the headers already in hand, outside the bound the
  * timeout claimed to set.
  *
+ * The configured bound is floored to the whole milliseconds it
+ * admits before it arms the timer: the runtime's timer enforces an
+ * integer delay (a 10.9 ms timer fires at 10 ms, and a sub-1 delay
+ * is clamped to ~1 ms), while the 504 above names the configured
+ * value — so a fractional value such as 30.9 would have been
+ * enforced as 30 ms while the refusal named a "30.9 ms" timeout
+ * that can never be the one truly enforced, and a sub-1 fraction
+ * such as 0.5 would have been enforced as ~1 ms while naming half
+ * a millisecond, timing every call out. A value whose floor admits
+ * no whole millisecond falls back to the default bound, like the
+ * non-positive values before it. The LLM adapter floors its
+ * identical bound the same way, as both adapters already floor
+ * their response-size bounds.
+ *
  * Connection failure: the timeout covers a call that never answers
  * in time; this case covers a call that gets no response at all —
  * a refused connection, a DNS failure, a reset mid-body. Until
@@ -281,7 +295,7 @@ export interface SandboxConfig {
   fetchFn?: FetchFn;
   /** Injectable clock in epoch ms (tests / token expiry). Defaults to Date.now. */
   now?: () => number;
-  /** Per-request timeout in ms. Defaults to SANDBOX_REQUEST_TIMEOUT_MS; non-positive or non-finite values fall back to the default. */
+  /** Per-request timeout in ms. Defaults to SANDBOX_REQUEST_TIMEOUT_MS; non-positive or non-finite values fall back to the default, and a fractional value is floored to the whole milliseconds it admits (a sub-1 fraction falls back to the default). */
   timeoutMs?: number;
   /** Maximum response body in bytes. Defaults to SANDBOX_MAX_RESPONSE_BYTES; non-positive or non-finite values fall back to the default, and a fractional value is floored to the whole bytes it admits (a sub-1 fraction falls back to the default). */
   maxResponseBytes?: number;
@@ -491,8 +505,10 @@ export class SandboxPayPalClient implements PayPalClient {
     this.fetchFn = config.fetchFn ?? ((url, init) => fetch(url, init));
     this.now = config.now ?? Date.now;
     this.timeoutMs =
-      config.timeoutMs !== undefined && Number.isFinite(config.timeoutMs) && config.timeoutMs > 0
-        ? config.timeoutMs
+      config.timeoutMs !== undefined &&
+      Number.isFinite(config.timeoutMs) &&
+      Math.floor(config.timeoutMs) >= 1
+        ? Math.floor(config.timeoutMs)
         : SANDBOX_REQUEST_TIMEOUT_MS;
     this.maxResponseBytes =
       config.maxResponseBytes !== undefined &&

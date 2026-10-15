@@ -16,6 +16,21 @@ build record behind these summaries.
 
 ### Added
 
+- **Outbound timeout config hygiene.** Both outbound adapters'
+  per-request timeouts now floor a fractional configured
+  `timeoutMs` to the whole milliseconds it admits — the
+  runtime's abort timer enforces an integer delay (a 10.9 ms
+  timer fires at 10 ms, a sub-1 delay is clamped to ~1 ms),
+  while both timeout refusals name the configured value, so
+  30.9 was enforced as 30 ms while the refusal named a
+  "30.9 ms" timeout, and a sub-1 fraction timed every call
+  out while naming half a millisecond. The timeout refusal
+  now names the integer timeout truly enforced, and a sub-1
+  fraction falls back to the default bound
+  (`SANDBOX_REQUEST_TIMEOUT_MS` / `LLM_REQUEST_TIMEOUT_MS`),
+  like a non-positive value. A valid integer timeout is
+  honoured exactly. This mirrors both adapters' floored
+  response-size bounds.
 - **Outbound response-size config hygiene.** Both outbound
   adapters' response-size bounds now floor a fractional
   configured `maxResponseBytes` to the whole bytes it admits —

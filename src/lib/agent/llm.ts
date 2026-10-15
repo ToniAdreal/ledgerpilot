@@ -48,7 +48,15 @@
  *    unreachable endpoint. The sandbox adapter pins the same
  *    fallback for its timeout config, and this adapter already
  *    sanitised `maxResponseBytes` the same way; the timeout was
- *    the one unsanitised bound.
+ *    the one unsanitised bound. A fractional value is floored to
+ *    the whole milliseconds it admits before it arms the timer:
+ *    the runtime enforces an integer delay (a 10.9 ms timer fires
+ *    at 10 ms, a sub-1 delay is clamped to ~1 ms), while the
+ *    timeout error names the configured value — so 30.9 would
+ *    have been enforced as 30 ms while the error named a
+ *    "30.9 ms" timeout, and a sub-1 fraction falls back to the
+ *    default like the non-positive values. The sandbox adapter
+ *    floors its identical bound the same way.
  *  - **Response-size config hygiene.** A body length is an
  *    integer, so a fractional configured `maxResponseBytes` is
  *    floored to the whole bytes it admits — the limit the
@@ -84,7 +92,7 @@ export interface LlmConfig {
   apiKey: string;
   baseUrl: string;
   model: string;
-  /** Per-request timeout in ms (default LLM_REQUEST_TIMEOUT_MS; spans the response body as well as the wait for headers; non-positive or non-finite values fall back to the default). */
+  /** Per-request timeout in ms (default LLM_REQUEST_TIMEOUT_MS; spans the response body as well as the wait for headers; non-positive or non-finite values fall back to the default, and a fractional value is floored to the whole milliseconds it admits — a sub-1 fraction falls back to the default). */
   timeoutMs?: number;
   /** Maximum response body in bytes. Defaults to LLM_MAX_RESPONSE_BYTES; non-positive or non-finite values fall back to the default, and a fractional value is floored to the whole bytes it admits (a sub-1 fraction falls back to the default). */
   maxResponseBytes?: number;
@@ -320,12 +328,14 @@ export class OpenAiCompatibleLlmAdapter implements LlmBriefExtractor {
     const controller = new AbortController();
     // A malformed timeout value must not arm the abort timer: a
     // non-positive or non-finite value falls back to the default
-    // bound (see the header's timeout-config-hygiene note).
+    // bound, and a fractional value is floored to the whole
+    // milliseconds it admits (a sub-1 fraction falls back too) —
+    // see the header's timeout-config-hygiene note.
     const timeoutMs =
       this.config.timeoutMs !== undefined &&
       Number.isFinite(this.config.timeoutMs) &&
-      this.config.timeoutMs > 0
-        ? this.config.timeoutMs
+      Math.floor(this.config.timeoutMs) >= 1
+        ? Math.floor(this.config.timeoutMs)
         : LLM_REQUEST_TIMEOUT_MS;
     const timer = setTimeout(() => controller.abort(), timeoutMs);
     let res: Awaited<ReturnType<FetchLike>>;
