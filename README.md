@@ -774,7 +774,7 @@ are not blocked, the suite also runs on them).
 ```bash
 npm install
 npm run dev        # http://localhost:3000
-npm test           # full test suite (977 tests)
+npm test           # full test suite (986 tests)
 npm run typecheck  # tsc --noEmit
 npm run build      # production build
 ```
@@ -889,7 +889,12 @@ mock mode a config swap rather than a rewrite.
   is likewise measured in UTF-8 bytes before it is parsed, and a body
   over `SANDBOX_MAX_RESPONSE_BYTES` (4 MiB by default) is refused with
   a `PayPalError` of status 502 and name `RESPONSE_TOO_LARGE` naming
-  the limit only, error responses included. A success body that is
+  the limit only, error responses included. On both outbound
+  adapters, a fractional `maxResponseBytes` is floored to the whole
+  bytes it admits — the limit the byte-length comparison truly
+  enforces, and the integer the refusal names — and a sub-1
+  fraction falls back to the default bound, like a non-positive
+  value. A success body that is
   not valid JSON, or that parses to a scalar / array / null instead
   of an object, is likewise refused at the same read point, with a
   `PayPalError` of status 502 and name `INVALID_RESPONSE` naming the
@@ -1169,7 +1174,7 @@ signatures mirror the REST resources one-to-one.
 ## Testing
 
 ```bash
-npm test           # vitest — 977 tests, all green
+npm test           # vitest — 986 tests, all green
 npm run typecheck  # TypeScript strict, clean
 npm run build      # Next.js production build
 npm run verify     # the whole gate below, as one command
@@ -1321,7 +1326,10 @@ response-size bounds (both adapters measuring the body in UTF-8 bytes
 before parsing — an oversized sandbox response refused as a 502
 `RESPONSE_TOO_LARGE` naming the limit only, token and error responses
 included, at-limit accepted and one-byte-over refused, the
-non-positive-limit fallback to each default, an oversized LLM
+non-positive-limit fallback to each default, a fractional limit
+floored to the whole bytes it admits on both adapters (the refusal
+naming that integer, a body at the floor accepted and one byte
+over refused, a sub-1 fraction falling back to the default), an oversized LLM
 response refused before parsing and still falling back to the
 deterministic parser's error through `parseBriefWithFallback`), the
 outbound body-read timeout (both adapters' timers spanning the

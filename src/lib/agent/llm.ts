@@ -49,6 +49,15 @@
  *    fallback for its timeout config, and this adapter already
  *    sanitised `maxResponseBytes` the same way; the timeout was
  *    the one unsanitised bound.
+ *  - **Response-size config hygiene.** A body length is an
+ *    integer, so a fractional configured `maxResponseBytes` is
+ *    floored to the whole bytes it admits — the limit the
+ *    comparison truly enforces — and the refusal names that
+ *    integer; a value whose floor admits no whole byte (a sub-1
+ *    fraction, like the non-positive values before it) falls back
+ *    to the default bound (`LLM_MAX_RESPONSE_BYTES`) instead. The
+ *    sandbox adapter floors its identical bound the same way, and
+ *    the rate limiter floors its fractional limit likewise.
  *
  * The HTTP layer is injectable (fetch + config), so the adapter is fully
  * unit-tested offline against a stub with a fake key — no network, no
@@ -77,7 +86,7 @@ export interface LlmConfig {
   model: string;
   /** Per-request timeout in ms (default LLM_REQUEST_TIMEOUT_MS; spans the response body as well as the wait for headers; non-positive or non-finite values fall back to the default). */
   timeoutMs?: number;
-  /** Maximum response body in bytes. Defaults to LLM_MAX_RESPONSE_BYTES; non-positive or non-finite values fall back to the default. */
+  /** Maximum response body in bytes. Defaults to LLM_MAX_RESPONSE_BYTES; non-positive or non-finite values fall back to the default, and a fractional value is floored to the whole bytes it admits (a sub-1 fraction falls back to the default). */
   maxResponseBytes?: number;
 }
 
@@ -372,8 +381,8 @@ export class OpenAiCompatibleLlmAdapter implements LlmBriefExtractor {
     const maxResponseBytes =
       this.config.maxResponseBytes !== undefined &&
       Number.isFinite(this.config.maxResponseBytes) &&
-      this.config.maxResponseBytes > 0
-        ? this.config.maxResponseBytes
+      Math.floor(this.config.maxResponseBytes) >= 1
+        ? Math.floor(this.config.maxResponseBytes)
         : LLM_MAX_RESPONSE_BYTES;
     if (new TextEncoder().encode(rawText).byteLength > maxResponseBytes) {
       throw new LlmExtractionError(`LLM response exceeded the ${maxResponseBytes}-byte limit`);

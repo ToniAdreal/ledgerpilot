@@ -117,6 +117,13 @@ import { PayPalError, PayPalNotConfiguredError, type PayPalClient } from "./clie
  * with an arbitrarily large body that the adapter would buffer and
  * parse in full. The bound applies to error responses too: an
  * oversized error body is refused for its size rather than mapped.
+ * Response-size config hygiene: a body length is an integer, so a
+ * fractional configured `maxResponseBytes` is floored to the whole
+ * bytes it admits — the limit the comparison truly enforces — and
+ * the refusal names that integer; a value whose floor admits no
+ * whole byte (a sub-1 fraction, like the non-positive values
+ * before it) falls back to the default bound instead. This mirrors
+ * the rate limiter's floored fractional limit.
  *
  * Invalid success response: every PayPal success body is JSON, and
  * every endpoint this adapter calls answers with a JSON object.
@@ -276,7 +283,7 @@ export interface SandboxConfig {
   now?: () => number;
   /** Per-request timeout in ms. Defaults to SANDBOX_REQUEST_TIMEOUT_MS; non-positive or non-finite values fall back to the default. */
   timeoutMs?: number;
-  /** Maximum response body in bytes. Defaults to SANDBOX_MAX_RESPONSE_BYTES; non-positive or non-finite values fall back to the default. */
+  /** Maximum response body in bytes. Defaults to SANDBOX_MAX_RESPONSE_BYTES; non-positive or non-finite values fall back to the default, and a fractional value is floored to the whole bytes it admits (a sub-1 fraction falls back to the default). */
   maxResponseBytes?: number;
   /** Injectable delay for the transient-error retry (tests). Defaults to a real timer. */
   sleepFn?: (ms: number) => Promise<void>;
@@ -490,8 +497,8 @@ export class SandboxPayPalClient implements PayPalClient {
     this.maxResponseBytes =
       config.maxResponseBytes !== undefined &&
       Number.isFinite(config.maxResponseBytes) &&
-      config.maxResponseBytes > 0
-        ? config.maxResponseBytes
+      Math.floor(config.maxResponseBytes) >= 1
+        ? Math.floor(config.maxResponseBytes)
         : SANDBOX_MAX_RESPONSE_BYTES;
     this.sleepFn =
       config.sleepFn ?? ((ms) => new Promise<void>((resolve) => setTimeout(resolve, ms)));

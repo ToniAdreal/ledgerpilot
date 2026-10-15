@@ -16,6 +16,18 @@ build record behind these summaries.
 
 ### Added
 
+- **Outbound response-size config hygiene.** Both outbound
+  adapters' response-size bounds now floor a fractional
+  configured `maxResponseBytes` to the whole bytes it admits —
+  a body length is an integer, so 1024.9 was enforced as 1024
+  while the refusal named a "1024.9-byte limit", and a sub-1
+  fraction refused every non-empty body while naming half a
+  byte. The refusal now names the integer limit truly
+  enforced, and a sub-1 fraction falls back to the default
+  bound (`SANDBOX_MAX_RESPONSE_BYTES` / `LLM_MAX_RESPONSE_BYTES`),
+  like a non-positive value. A valid integer limit is honoured
+  exactly. This mirrors the rate limiter's floored fractional
+  limit.
 - **Rate-limit limit config hygiene.** The API rate limiter's
   per-window limit is now sanitised the same way as its window:
   a non-finite configured `maxRequests` falls back to
