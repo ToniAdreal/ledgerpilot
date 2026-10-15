@@ -16,6 +16,19 @@ build record behind these summaries.
 
 ### Added
 
+- **Sandbox list pagination (`next`-link following).** Every list
+  call in the sandbox adapter (Invoicing, Payouts, Disputes,
+  Transaction Search) now follows the response's HATEOAS `next`
+  links until the last page and returns the pages concatenated in
+  order — previously each list silently returned only its first
+  page (100 invoices / payouts / transactions, 50 disputes). Each
+  absolute href is reduced to its path + query and fetched from
+  the adapter's configured base URL, never from the href's own
+  origin; a blank or unusable href ends the list like an absent
+  link. Following is bounded by `SANDBOX_MAX_LIST_PAGES` (10): a
+  chain that has not ended by then is refused with a 502
+  `PAGINATION_LIMIT` — never an unbounded loop, never a silently
+  truncated list dressed as success.
 - **Sandbox OAuth token-fetch coalescing.** Concurrent callers on
   a cold or just-expired token cache now share a single in-flight
   token fetch instead of each starting its own credential

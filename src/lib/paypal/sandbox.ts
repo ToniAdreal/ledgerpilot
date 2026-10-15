@@ -201,6 +201,27 @@ import { PayPalError, PayPalNotConfiguredError, type PayPalClient } from "./clie
  * a cached failure. The 401 refresh path goes through the same
  * `getAccessToken`, so parallel calls that share a stale token
  * also share the single refresh fetch.
+ *
+ * List pagination: every list endpoint this adapter calls —
+ * Invoicing, Payouts, Disputes, Transaction Search — answers at
+ * most one page per request, and PayPal says more pages exist by
+ * carrying a HATEOAS `next` link in the response's `links`. Until
+ * this following existed, each list method returned exactly its
+ * first page (100 invoices / payouts / transactions, 50 disputes)
+ * and silently dropped the rest — the console showed a partial
+ * ledger as if it were the whole one. List calls now follow
+ * `next` links until a page carries none, concatenating the pages
+ * in order. The absolute href is reduced to its path + query and
+ * fetched from this adapter's configured base URL — the origin in
+ * the href is never trusted as the destination — and a blank or
+ * unusable href ends the list like an absent link. Following is
+ * bounded by `SANDBOX_MAX_LIST_PAGES` (10 pages: 1,000 invoices /
+ * payouts / transactions or 500 disputes at the requested page
+ * sizes): a `next` chain that has not ended by then — a cyclic or
+ * runaway link — is refused with a `PayPalError` of status 502
+ * and name `PAGINATION_LIMIT` naming the list endpoint only,
+ * never an unbounded loop and never a silently truncated list
+ * dressed as success.
  */
 
 export type FetchFn = (url: string, init?: RequestInit) => Promise<Response>;
@@ -210,6 +231,9 @@ export const SANDBOX_REQUEST_TIMEOUT_MS = 10_000;
 
 /** Maximum response body, in UTF-8 bytes, for every outbound PayPal call. */
 export const SANDBOX_MAX_RESPONSE_BYTES = 4_194_304;
+
+/** Maximum pages one list call will follow via `next` links before refusing. */
+export const SANDBOX_MAX_LIST_PAGES = 10;
 
 export interface SandboxConfig {
   clientId?: string;
@@ -242,6 +266,29 @@ function asString(value: unknown, fallback = ""): string {
 
 function asArray(value: unknown): unknown[] {
   return Array.isArray(value) ? value : [];
+}
+
+/**
+ * The path + query of a list response's HATEOAS `next` link, or
+ * null when the page is the last one. The href PayPal returns is
+ * absolute; only its path + query are taken — the request goes to
+ * this adapter's configured base URL, never to the href's origin.
+ * A blank or unusable href ends the list, like an absent link.
+ */
+function nextPagePath(body: unknown): string | null {
+  for (const link of asArray(asRaw(body).links)) {
+    const r = asRaw(link);
+    if (asString(r.rel) !== "next") continue;
+    const href = asString(r.href).trim();
+    if (!href) return null;
+    try {
+      const u = new URL(href);
+      return `${u.pathname}${u.search}`;
+    } catch {
+      return href.startsWith("/") ? href : null;
+    }
+  }
+  return null;
 }
 
 function splitName(name: string): { given_name: string; surname?: string } {
@@ -613,6 +660,34 @@ export class SandboxPayPalClient implements PayPalClient {
     }
   }
 
+  /**
+   * Fetch every page of a list endpoint, following the responses'
+   * HATEOAS `next` links (see the header's pagination note), and
+   * return the concatenated raw items in page order. A chain that
+   * has not ended after `SANDBOX_MAX_LIST_PAGES` pages is refused
+   * loudly instead of looping forever or truncating silently.
+   */
+  private async listAllPages(
+    firstPath: string,
+    extractItems: (body: unknown) => unknown[],
+  ): Promise<unknown[]> {
+    const collected: unknown[] = [];
+    let path: string | null = firstPath;
+    for (let fetched = 0; path !== null; fetched += 1) {
+      if (fetched >= SANDBOX_MAX_LIST_PAGES) {
+        throw new PayPalError(
+          `PayPal list exceeded the ${SANDBOX_MAX_LIST_PAGES}-page limit: GET ${firstPath.split("?")[0]}`,
+          502,
+          "PAGINATION_LIMIT",
+        );
+      }
+      const body = await this.request<unknown>(path, { method: "GET" });
+      collected.push(...extractItems(body));
+      path = nextPagePath(body);
+    }
+    return collected;
+  }
+
   /* ---------------- Invoicing v2 ---------------- */
 
   async createInvoice(input: CreateInvoiceInput): Promise<Invoice> {
@@ -668,9 +743,10 @@ export class SandboxPayPalClient implements PayPalClient {
   }
 
   async listInvoices(): Promise<Invoice[]> {
-    const raw = await this.request<unknown>("/v2/invoicing/invoices?page_size=100", { method: "GET" });
-    const container = asRaw(raw);
-    const items = asArray(container.items ?? container.invoices);
+    const items = await this.listAllPages("/v2/invoicing/invoices?page_size=100", (body) => {
+      const container = asRaw(body);
+      return asArray(container.items ?? container.invoices);
+    });
     return items.map((item) => toInvoice(item));
   }
 
@@ -818,15 +894,19 @@ export class SandboxPayPalClient implements PayPalClient {
   }
 
   async listPayouts(): Promise<PayoutBatch[]> {
-    const raw = await this.request<unknown>("/v1/payments/payouts?page_size=100", { method: "GET" });
-    return asArray(asRaw(raw).items).map((item) => this.toPayoutBatch(item));
+    const items = await this.listAllPages("/v1/payments/payouts?page_size=100", (body) =>
+      asArray(asRaw(body).items),
+    );
+    return items.map((item) => this.toPayoutBatch(item));
   }
 
   /* ---------------- Read-only surfaces ---------------- */
 
   async listDisputes(): Promise<Dispute[]> {
-    const raw = await this.request<unknown>("/v1/customer/disputes?page_size=50", { method: "GET" });
-    return asArray(asRaw(raw).items).map((item) => {
+    const rawItems = await this.listAllPages("/v1/customer/disputes?page_size=50", (body) =>
+      asArray(asRaw(body).items),
+    );
+    return rawItems.map((item) => {
       const r = asRaw(item);
       const status = asString(r.status, "OPEN");
       return {
@@ -859,8 +939,10 @@ export class SandboxPayPalClient implements PayPalClient {
     const query =
       `start_date=${encodeURIComponent(start.toISOString())}` +
       `&end_date=${encodeURIComponent(end.toISOString())}&fields=all&page_size=100`;
-    const raw = await this.request<unknown>(`/v1/reporting/transactions?${query}`, { method: "GET" });
-    return asArray(asRaw(raw).transaction_details).map((entry) => {
+    const entries = await this.listAllPages(`/v1/reporting/transactions?${query}`, (body) =>
+      asArray(asRaw(body).transaction_details),
+    );
+    return entries.map((entry) => {
       const e = asRaw(entry);
       // Real shape nests the fields under transaction_info; tolerate a flat shape too.
       const info = asRaw(e.transaction_info ?? e);
