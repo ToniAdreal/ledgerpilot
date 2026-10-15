@@ -756,7 +756,7 @@ are not blocked, the suite also runs on them).
 ```bash
 npm install
 npm run dev        # http://localhost:3000
-npm test           # full test suite (948 tests)
+npm test           # full test suite (955 tests)
 npm run typecheck  # tsc --noEmit
 npm run build      # production build
 ```
@@ -1135,6 +1135,11 @@ signatures mirror the REST resources one-to-one.
   success envelope (a non-object choice entry, e.g.
   `choices: [null]`) is refused as an `LlmExtractionError`
   ("LLM choice must be an object"), never a raw `TypeError`.
+  Its timeout bound is named (`LLM_REQUEST_TIMEOUT_MS`, 10 seconds
+  by default), and a non-positive or non-finite configured timeout
+  falls back to that default instead of arming the abort timer
+  with it — the same fallback the sandbox adapter pins for its
+  timeout config.
   LLM-sourced plans are marked
   `source: "llm"` and pass through the same approval gate. The app is fully
   functional with the LLM unset; no feature, including Judge Mode, requires
@@ -1146,7 +1151,7 @@ signatures mirror the REST resources one-to-one.
 ## Testing
 
 ```bash
-npm test           # vitest — 948 tests, all green
+npm test           # vitest — 955 tests, all green
 npm run typecheck  # TypeScript strict, clean
 npm run build      # Next.js production build
 npm run verify     # the whole gate below, as one command
@@ -1336,7 +1341,7 @@ into the fixed `LlmExtractionError` message with the transport
 error's own text and the fake key appearing in no message, an HTTP
 error status and a timer-caused timeout each keeping their shape
 ahead of the translation, and the failure still falling back to the
-deterministic parser's error through `parseBriefWithFallback`), the LLM invalid success envelope (a null choice entry and string / number / boolean / array choice entries each refused as the fixed `LlmExtractionError` "LLM choice must be an object" — never a raw `TypeError`, with the body marker and the fake key in no message — the message-shape, no-text-content, response-shape, and no-choices refusals each keeping their exact previous message, the failure still falling back to the deterministic parser's error through `parseBriefWithFallback`, and a valid envelope still extracting), and the optional LLM adapter (config
+deterministic parser's error through `parseBriefWithFallback`), the LLM invalid success envelope (a null choice entry and string / number / boolean / array choice entries each refused as the fixed `LlmExtractionError` "LLM choice must be an object" — never a raw `TypeError`, with the body marker and the fake key in no message — the message-shape, no-text-content, response-shape, and no-choices refusals each keeping their exact previous message, the failure still falling back to the deterministic parser's error through `parseBriefWithFallback`, and a valid envelope still extracting), the LLM timeout config hygiene (the default bound pinned at `LLM_REQUEST_TIMEOUT_MS`, a zero / negative / NaN / infinite `timeoutMs` each falling back to that default so a slow-but-fine call completes instead of aborting at ~0 ms, and a valid small `timeoutMs` still honoured exactly — a hanging call timing out at the configured bound), and the optional LLM adapter (config
 gating, deterministic-first non-consultation, validator negative cases,
 fallback error honesty, and a full approval-gated loop from an
 LLM-sourced plan), and the resource plan drafts behind

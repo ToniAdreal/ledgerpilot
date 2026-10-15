@@ -38,6 +38,17 @@
  *    (`parseBriefWithFallback` catches every failure either way, so
  *    its fallback honesty was never affected). The refusal message
  *    is a fixed string: no part of the response body is carried.
+ *  - **Timeout config hygiene.** A non-positive or non-finite
+ *    `timeoutMs` falls back to the default bound
+ *    (`LLM_REQUEST_TIMEOUT_MS`) instead of arming the abort timer
+ *    with the raw value: 0, a negative, or NaN would fire at
+ *    ~0 ms and Infinity overflows to ~1 ms, so one malformed
+ *    config value made every call "time out" before any endpoint
+ *    could answer — a config typo dressed as a permanently
+ *    unreachable endpoint. The sandbox adapter pins the same
+ *    fallback for its timeout config, and this adapter already
+ *    sanitised `maxResponseBytes` the same way; the timeout was
+ *    the one unsanitised bound.
  *
  * The HTTP layer is injectable (fetch + config), so the adapter is fully
  * unit-tested offline against a stub with a fake key — no network, no
@@ -57,11 +68,14 @@ export class LlmExtractionError extends Error {
 /** Maximum response body, in UTF-8 bytes, for an LLM call. */
 export const LLM_MAX_RESPONSE_BYTES = 262_144;
 
+/** Per-request timeout, in milliseconds, for an LLM call (spans the response body as well as the wait for headers). */
+export const LLM_REQUEST_TIMEOUT_MS = 10_000;
+
 export interface LlmConfig {
   apiKey: string;
   baseUrl: string;
   model: string;
-  /** Per-request timeout in ms (default 10s; spans the response body as well as the wait for headers). */
+  /** Per-request timeout in ms (default LLM_REQUEST_TIMEOUT_MS; spans the response body as well as the wait for headers; non-positive or non-finite values fall back to the default). */
   timeoutMs?: number;
   /** Maximum response body in bytes. Defaults to LLM_MAX_RESPONSE_BYTES; non-positive or non-finite values fall back to the default. */
   maxResponseBytes?: number;
@@ -295,7 +309,15 @@ export class OpenAiCompatibleLlmAdapter implements LlmBriefExtractor {
 
   async extract(brief: string): Promise<LlmExtraction> {
     const controller = new AbortController();
-    const timeoutMs = this.config.timeoutMs ?? 10_000;
+    // A malformed timeout value must not arm the abort timer: a
+    // non-positive or non-finite value falls back to the default
+    // bound (see the header's timeout-config-hygiene note).
+    const timeoutMs =
+      this.config.timeoutMs !== undefined &&
+      Number.isFinite(this.config.timeoutMs) &&
+      this.config.timeoutMs > 0
+        ? this.config.timeoutMs
+        : LLM_REQUEST_TIMEOUT_MS;
     const timer = setTimeout(() => controller.abort(), timeoutMs);
     let res: Awaited<ReturnType<FetchLike>>;
     let rawText: string;

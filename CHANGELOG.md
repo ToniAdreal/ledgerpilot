@@ -16,6 +16,16 @@ build record behind these summaries.
 
 ### Added
 
+- **LLM timeout config hygiene.** The optional LLM adapter's
+  per-request timeout is now named (`LLM_REQUEST_TIMEOUT_MS`,
+  10 seconds) and sanitised like its response-size bound already
+  was: a non-positive or non-finite configured `timeoutMs` falls
+  back to the default instead of arming the abort timer with the
+  raw value — 0, a negative, or NaN would have fired at ~0 ms and
+  Infinity overflows to ~1 ms, so one malformed config value made
+  every LLM call "time out" before any endpoint could answer.
+  A valid timeout is honoured exactly. This mirrors the sandbox
+  adapter's pinned fallback for its own timeout config.
 - **Sandbox transient-error retry for reads.** A GET call that
   PayPal answers 429 or 503 is now retried exactly once after a
   bounded delay — the response's `Retry-After` delta-seconds
