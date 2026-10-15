@@ -16,6 +16,20 @@ build record behind these summaries.
 
 ### Added
 
+- **Rate-limit window config hygiene.** The API rate limiter's
+  fixed window is now sanitised like the adapters' timeout
+  bounds: a non-positive or non-finite configured `windowMs`
+  falls back to `RATE_LIMIT_WINDOW_MS` (60 seconds) instead of
+  driving the window comparisons raw — 0 or a negative would
+  have made every request open a fresh window, so the flood
+  brake would silently never have engaged, while NaN or
+  Infinity would have made the window never expire (with a
+  NaN or infinite `Retry-After`). The limiter reports and
+  enforces the effective window, so the 429 message and
+  `Retry-After` always name a real window; the deliberate
+  block-all limit (`maxRequests <= 0`) is unchanged and now
+  reports the fallback window. A valid window is honoured
+  exactly.
 - **LLM timeout config hygiene.** The optional LLM adapter's
   per-request timeout is now named (`LLM_REQUEST_TIMEOUT_MS`,
   10 seconds) and sanitised like its response-size bound already

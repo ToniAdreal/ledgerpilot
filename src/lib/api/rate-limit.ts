@@ -45,6 +45,22 @@
  *    dropping them — unlike the 406 exemption, where the header
  *    itself was never PayPal's negotiation to begin with.
  *
+ * Window config hygiene: a non-positive or non-finite `windowMs`
+ * passed to `createRateLimiter` falls back to the default
+ * (`RATE_LIMIT_WINDOW_MS`) instead of driving the window
+ * comparisons raw — 0 or a negative would make every request
+ * open a fresh window, so the flood brake would silently never
+ * engage; NaN would make the window never expire and the
+ * Retry-After arithmetic NaN; Infinity would make the window
+ * never expire at all. One malformed config value either
+ * disarmed the limiter or locked every client out permanently,
+ * with no signal either way. A valid window is honoured exactly.
+ * This mirrors the sandbox and LLM adapters' pinned fallbacks
+ * for their timeout bounds. (The deliberate block-all case is
+ * separate and unchanged: `maxRequests <= 0` refuses every
+ * request, with its Retry-After computed from the sanitised
+ * window.)
+ *
  * Client identity, honestly: the key is the first
  * `x-forwarded-for` entry when a proxy supplies one, else
  * `x-real-ip`, else a single shared "direct" bucket. On an
@@ -99,21 +115,28 @@ export function createRateLimiter(
   maxRequests: number = RATE_LIMIT_MAX_POSTS,
   windowMs: number = RATE_LIMIT_WINDOW_MS,
 ): RateLimiter {
+  // A malformed window must not drive the comparisons raw: a
+  // non-positive or non-finite value falls back to the default
+  // window (see the header's window-config-hygiene note). The
+  // limiter reports and enforces this effective window, so the
+  // 429 message and Retry-After always name a real window.
+  const effectiveWindowMs =
+    Number.isFinite(windowMs) && windowMs > 0 ? windowMs : RATE_LIMIT_WINDOW_MS;
   const windows = new Map<string, WindowState>();
   return {
     maxRequests,
-    windowMs,
+    windowMs: effectiveWindowMs,
     check(key: string, now: number): RateLimitVerdict {
       if (maxRequests <= 0) {
-        return { allowed: false, retryAfterSeconds: Math.ceil(windowMs / 1000) };
+        return { allowed: false, retryAfterSeconds: Math.ceil(effectiveWindowMs / 1000) };
       }
       if (windows.size > 4096) {
         for (const [k, state] of windows) {
-          if (now - state.windowStart >= windowMs) windows.delete(k);
+          if (now - state.windowStart >= effectiveWindowMs) windows.delete(k);
         }
       }
       const state = windows.get(key);
-      if (!state || now - state.windowStart >= windowMs) {
+      if (!state || now - state.windowStart >= effectiveWindowMs) {
         windows.set(key, { windowStart: now, count: 1 });
         return { allowed: true, retryAfterSeconds: 0 };
       }
@@ -123,7 +146,7 @@ export function createRateLimiter(
       }
       const retryAfterSeconds = Math.max(
         1,
-        Math.ceil((state.windowStart + windowMs - now) / 1000),
+        Math.ceil((state.windowStart + effectiveWindowMs - now) / 1000),
       );
       return { allowed: false, retryAfterSeconds };
     },

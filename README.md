@@ -600,7 +600,15 @@ curl -X POST localhost:3000/api/agent/execute -H 'content-type: application/json
   the webhook listener is not exempt (PayPal retries deliveries
   answered with an error status, and verified events are
   processed exactly once, so a refused delivery is delayed, not
-  dropped). State is per-process in-memory. The OpenAPI document
+  dropped). State is per-process in-memory. The rate-limit window
+  itself is sanitised like the adapters' timeout bounds: a
+  non-positive or non-finite configured window falls back to
+  `RATE_LIMIT_WINDOW_MS` (60 seconds) instead of driving the
+  window comparisons raw — 0 or a negative would have made every
+  request open a fresh window, so the flood brake would silently
+  never have engaged, and NaN or Infinity would have made the
+  window never expire. A valid window is honoured exactly. The
+  OpenAPI document
   and `/api-docs` page carry the same shared 429 on every POST
   operation via `apiOperationResponses`.
 - **Request id (the `X-Request-Id` header).** Every response
@@ -756,7 +764,7 @@ are not blocked, the suite also runs on them).
 ```bash
 npm install
 npm run dev        # http://localhost:3000
-npm test           # full test suite (955 tests)
+npm test           # full test suite (965 tests)
 npm run typecheck  # tsc --noEmit
 npm run build      # production build
 ```
@@ -1151,7 +1159,7 @@ signatures mirror the REST resources one-to-one.
 ## Testing
 
 ```bash
-npm test           # vitest — 955 tests, all green
+npm test           # vitest — 965 tests, all green
 npm run typecheck  # TypeScript strict, clean
 npm run build      # Next.js production build
 npm run verify     # the whole gate below, as one command
@@ -1568,7 +1576,12 @@ Retry-After inside the window, per-key windows, reads never
 counted and never consuming allowance, the client-key fallbacks,
 the middleware running the rate guard third with no runtime
 built, and the built OpenAPI document carrying the shared 429
-on POST operations only referencing the shared Error schema), and the request id
+on POST operations only referencing the shared Error schema, and
+the rate-limit window config hygiene — a non-positive or
+non-finite window falling back to `RATE_LIMIT_WINDOW_MS` so the
+limiter reports and enforces the default 60-second window, the
+deliberate block-all limit reporting the fallback window, and a
+valid small window honoured exactly), and the request id
 (`src/lib/api/request-id.ts` + `src/middleware.ts` — the echo
 whitelist accepting uuids / slugs / dotted ids up to 128 chars
 and rejecting whitespace, separators, controls, and non-ASCII,
