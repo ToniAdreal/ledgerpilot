@@ -16,6 +16,19 @@ build record behind these summaries.
 
 ### Added
 
+- **Rate-limit window fractional hygiene.** The API rate
+  limiter's fixed window now floors a fractional configured
+  `windowMs` to the whole milliseconds it admits — the limiter
+  runs on an integer-millisecond clock and its 429 message
+  names the window in seconds, so 5500.9 was reported as a
+  "5.5009 seconds" window no such comparison enforces as
+  stated, and a sub-1 fraction opened a fresh window on the
+  next whole millisecond. The 429 message now names the
+  integer window truly enforced, and a sub-1 fraction falls
+  back to `RATE_LIMIT_WINDOW_MS`, like a non-positive value.
+  A valid integer window is honoured exactly. This mirrors
+  the outbound adapters' floored timeout and response-size
+  bounds.
 - **Outbound timeout config hygiene.** Both outbound adapters'
   per-request timeouts now floor a fractional configured
   `timeoutMs` to the whole milliseconds it admits — the

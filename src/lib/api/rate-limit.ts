@@ -54,12 +54,27 @@
  * Retry-After arithmetic NaN; Infinity would make the window
  * never expire at all. One malformed config value either
  * disarmed the limiter or locked every client out permanently,
- * with no signal either way. A valid window is honoured exactly.
- * This mirrors the sandbox and LLM adapters' pinned fallbacks
- * for their timeout bounds. (The deliberate block-all case is
- * separate and unchanged: `maxRequests <= 0` refuses every
- * request, with its Retry-After computed from the sanitised
- * window.)
+ * with no signal either way. A valid integer window is honoured
+ * exactly. This mirrors the sandbox and LLM adapters' pinned
+ * fallbacks for their timeout bounds. (The deliberate block-all
+ * case is separate and unchanged: `maxRequests <= 0` refuses
+ * every request, with its Retry-After computed from the
+ * sanitised window.)
+ *
+ * Window fractional hygiene: the same discipline applies to a
+ * fractional positive `windowMs`. The limiter runs on an
+ * integer-millisecond clock (`Date.now()`) and its 429 message
+ * names `windowMs / 1000` seconds, so a raw fraction such as
+ * 5500.9 was reported as a "5.5009 seconds" window that no
+ * integer-millisecond comparison enforces as stated, and a
+ * sub-1 fraction such as 0.5 opened a fresh window on the next
+ * whole millisecond — a window that is no window at all, the
+ * same config-typo trap the non-positive fallback closed for 0.
+ * A fractional configured window is floored to the whole
+ * milliseconds it admits — the window the limiter reports and
+ * enforces — and a sub-1 fraction falls back to the default
+ * window like a non-positive value. This mirrors the outbound
+ * adapters' floored timeout and response-size bounds.
  *
  * Limit config hygiene: the same discipline applies to
  * `maxRequests` itself. A non-finite limit falls back to the
@@ -132,11 +147,16 @@ export function createRateLimiter(
 ): RateLimiter {
   // A malformed window must not drive the comparisons raw: a
   // non-positive or non-finite value falls back to the default
-  // window (see the header's window-config-hygiene note). The
+  // window, and a fractional positive value is floored to the
+  // whole milliseconds it admits — a sub-1 fraction floors to
+  // no whole millisecond and falls back like a non-positive
+  // value (see the header's window-config-hygiene notes). The
   // limiter reports and enforces this effective window, so the
   // 429 message and Retry-After always name a real window.
   const effectiveWindowMs =
-    Number.isFinite(windowMs) && windowMs > 0 ? windowMs : RATE_LIMIT_WINDOW_MS;
+    Number.isFinite(windowMs) && Math.floor(windowMs) >= 1
+      ? Math.floor(windowMs)
+      : RATE_LIMIT_WINDOW_MS;
   // A malformed limit must not drive the count comparison raw:
   // a non-finite value falls back to the default limit, and a
   // fractional positive value is floored to the whole requests

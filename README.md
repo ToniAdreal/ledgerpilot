@@ -607,7 +607,15 @@ curl -X POST localhost:3000/api/agent/execute -H 'content-type: application/json
   window comparisons raw — 0 or a negative would have made every
   request open a fresh window, so the flood brake would silently
   never have engaged, and NaN or Infinity would have made the
-  window never expire. A valid window is honoured exactly. The
+  window never expire. A valid integer window is honoured
+  exactly, and a fractional configured window is floored to
+  the whole milliseconds it admits — the limiter runs on an
+  integer-millisecond clock and its 429 message names the
+  window in seconds, so a raw fraction such as 5500.9 would
+  have been reported as a "5.5009 seconds" window no such
+  comparison enforces as stated, and a sub-1 fraction falls
+  back to `RATE_LIMIT_WINDOW_MS` like a non-positive value.
+  The
   rate-limit limit itself is sanitised the same way: a
   non-finite configured limit falls back to
   `RATE_LIMIT_MAX_POSTS` (120) instead of driving the count
@@ -774,7 +782,7 @@ are not blocked, the suite also runs on them).
 ```bash
 npm install
 npm run dev        # http://localhost:3000
-npm test           # full test suite (994 tests)
+npm test           # full test suite (1000 tests)
 npm run typecheck  # tsc --noEmit
 npm run build      # production build
 ```
@@ -1180,7 +1188,7 @@ signatures mirror the REST resources one-to-one.
 ## Testing
 
 ```bash
-npm test           # vitest — 994 tests, all green
+npm test           # vitest — 1000 tests, all green
 npm run typecheck  # TypeScript strict, clean
 npm run build      # Next.js production build
 npm run verify     # the whole gate below, as one command
@@ -1612,7 +1620,11 @@ the rate-limit window config hygiene — a non-positive or
 non-finite window falling back to `RATE_LIMIT_WINDOW_MS` so the
 limiter reports and enforces the default 60-second window, the
 deliberate block-all limit reporting the fallback window, and a
-valid small window honoured exactly, and the rate-limit limit
+valid small window honoured exactly, and the rate-limit window
+fractional hygiene — a fractional window floored to the whole
+milliseconds it admits so the 429 message names the integer
+window truly enforced, and a sub-1 fraction falling back to
+the default window, and the rate-limit limit
 config hygiene — a non-finite limit falling back to
 `RATE_LIMIT_MAX_POSTS` so a NaN limit is not a near-block-all
 and an Infinity limit does not disarm the brake, a fractional

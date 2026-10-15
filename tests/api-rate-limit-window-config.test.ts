@@ -105,3 +105,82 @@ describe("rate-limit window config hygiene", () => {
     expect(readme).toContain("RATE_LIMIT_WINDOW_MS");
   });
 });
+
+/**
+ * Rate-limit window fractional hygiene — a fractional positive
+ * `windowMs` is floored to the whole milliseconds it admits, and
+ * a sub-1 fraction falls back to the default window. The limiter
+ * runs on an integer-millisecond clock (`Date.now()`), and its
+ * 429 message names `windowMs / 1000` seconds: a raw fraction
+ * such as 5500.9 was reported as a "5.5009 seconds" window that
+ * no integer-millisecond comparison enforces as stated, and a
+ * sub-1 fraction such as 0.5 opened a fresh window on the next
+ * whole millisecond — a window that is no window at all, the
+ * same config-typo trap the non-positive fallback closed for 0.
+ * The fix mirrors the outbound adapters' floored timeout and
+ * response-size bounds: floor when the floor admits at least one
+ * whole millisecond, otherwise fall back to the named default
+ * (`RATE_LIMIT_WINDOW_MS`).
+ */
+describe("rate-limit window fractional hygiene", () => {
+  it("floors a fractional windowMs to the whole milliseconds it admits", () => {
+    const limiter = createRateLimiter(1, 5_000.9);
+    expect(limiter.windowMs).toBe(5_000);
+    expect(limiter.check("a", T0)).toEqual({ allowed: true, retryAfterSeconds: 0 });
+    expect(limiter.check("a", T0 + 4_999)).toEqual({
+      allowed: false,
+      retryAfterSeconds: 1,
+    });
+    expect(limiter.check("a", T0 + 5_000)).toEqual({
+      allowed: true,
+      retryAfterSeconds: 0,
+    });
+  });
+
+  it("the 429 message names the floored window, not the raw fraction", () => {
+    const limiter = createRateLimiter(1, 5_500.9);
+    expect(limiter.windowMs).toBe(5_500);
+    expect(describeRateLimited("/api/agent/plan", "POST", new Headers(), limiter, T0)).toBeNull();
+    const described = describeRateLimited(
+      "/api/agent/plan",
+      "POST",
+      new Headers(),
+      limiter,
+      T0 + 1_000,
+    );
+    expect(described).not.toBeNull();
+    expect(described!.retryAfterSeconds).toBe(5);
+    expect(described!.body.error).toContain("1 POST requests per 5.5 seconds");
+    expect(described!.body.error).not.toContain("5.5009");
+  });
+
+  it.each([
+    ["0.5", 0.5],
+    ["0.9", 0.9],
+  ])(
+    "falls back to the default window for a sub-1 fractional windowMs (%s)",
+    (_label, windowMs) => {
+      const limiter = createRateLimiter(1, windowMs);
+      expect(limiter.windowMs).toBe(RATE_LIMIT_WINDOW_MS);
+      expect(limiter.check("a", T0)).toEqual({ allowed: true, retryAfterSeconds: 0 });
+      expect(limiter.check("a", T0 + 1).allowed).toBe(false);
+      expect(limiter.check("a", T0 + 60_000)).toEqual({
+        allowed: true,
+        retryAfterSeconds: 0,
+      });
+    },
+  );
+
+  it("floors a just-above-1 fraction to a 1 ms window, honouring it exactly", () => {
+    const limiter = createRateLimiter(1, 1.9);
+    expect(limiter.windowMs).toBe(1);
+    expect(limiter.check("a", T0)).toEqual({ allowed: true, retryAfterSeconds: 0 });
+    expect(limiter.check("a", T0)).toEqual({ allowed: false, retryAfterSeconds: 1 });
+    expect(limiter.check("a", T0 + 1)).toEqual({ allowed: true, retryAfterSeconds: 0 });
+  });
+
+  it("is documented in the README", () => {
+    const readme = readFileSync(join(ROOT, "README.md"), "utf8");
+    expect(readme).toContain("fractional configured window is floored");
+  });
+});
