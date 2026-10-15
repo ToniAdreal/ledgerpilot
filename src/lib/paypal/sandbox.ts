@@ -157,6 +157,32 @@ import { PayPalError, PayPalNotConfiguredError, type PayPalClient } from "./clie
  * the OAuth token fetch (a credential exchange, made outside
  * `request`) and webhook-signature verification (a query about a
  * delivered event, which creates and commits nothing).
+ *
+ * Token refresh on 401: the access token is cached until its
+ * locally computed expiry, but PayPal can stop accepting a token
+ * before that instant — an early expiry, a revocation, or an
+ * `expires_in` that overstated the real lifetime. Until this
+ * recovery existed, one such token failed EVERY call the adapter
+ * made (reads, mutations, and webhook-signature verification
+ * alike) until the cache happened to expire, with no way back.
+ * A 401 response now invalidates the cached token (only if the
+ * cache still holds the token that was used — a fresher token
+ * cached by another call is never discarded), fetches a fresh
+ * token, and retries the call exactly once. A 401 means PayPal
+ * rejected the request before processing it, so the retry cannot
+ * have duplicated a mutation; a mutating retry reuses the SAME
+ * `PayPal-Request-Id` minted for the logical call, so PayPal's
+ * own deduplication also treats it as the one call. A second 401
+ * surfaces as the ordinary `PayPalError` (status 401, PayPal's
+ * error name) — there is no retry loop — and non-401 failures
+ * never trigger a refresh. The token fetch itself is outside
+ * `request`, so a 401 FROM the token endpoint (bad credentials)
+ * keeps its existing shape and is never retried by this path.
+ * Companion hygiene: a token response whose `expires_in` is
+ * non-numeric, non-positive, or non-finite falls back to the
+ * default 3600-second lifetime instead of poisoning the cache
+ * expiry with NaN (which silently disabled caching) or a past
+ * instant.
  */
 
 export type FetchFn = (url: string, init?: RequestInit) => Promise<Response>;
@@ -435,9 +461,25 @@ export class SandboxPayPalClient implements PayPalClient {
     if (!res.ok) throw this.toError(res.status, body, "OAuth token request failed");
     const token = asString(asRaw(body).access_token);
     if (!token) throw new PayPalError("PayPal OAuth response carried no access_token", res.status, "INVALID_RESPONSE");
-    const expiresInSec = Number(asRaw(body).expires_in ?? 3600);
+    // A malformed lifetime must not poison the cache expiry: a
+    // non-numeric value would make it NaN (caching silently off)
+    // and a non-positive one a past instant — both fall back to
+    // the default lifetime, like a missing value already did.
+    const rawExpiresInSec = Number(asRaw(body).expires_in ?? 3600);
+    const expiresInSec =
+      Number.isFinite(rawExpiresInSec) && rawExpiresInSec > 0 ? rawExpiresInSec : 3600;
     this.tokenCache = { token, expiresAt: this.now() + expiresInSec * 1000 };
     return token;
+  }
+
+  /**
+   * Drop the cached token, but only when the cache still holds
+   * the exact token that was used: a concurrent call may already
+   * have refreshed it, and discarding that fresher token would
+   * throw away a working credential.
+   */
+  private invalidateCachedToken(usedToken: string): void {
+    if (this.tokenCache?.token === usedToken) this.tokenCache = null;
   }
 
   private async readBody(res: Response, label: string): Promise<unknown> {
@@ -502,22 +544,36 @@ export class SandboxPayPalClient implements PayPalClient {
     init: { method: string; body?: unknown },
     options: { requestId?: boolean } = {},
   ): Promise<T> {
-    const token = await this.getAccessToken();
+    let token = await this.getAccessToken();
     // Mutating calls carry an idempotency id by default; reads
     // never do, and a caller whose POST is not a resource
-    // mutation (webhook-signature verification) opts out.
+    // mutation (webhook-signature verification) opts out. The id
+    // is minted once per logical call, before any attempt, so
+    // the 401 retry below reuses it (see the header's token-
+    // refresh note).
     const withRequestId = options.requestId ?? init.method.toUpperCase() === "POST";
+    const requestId = withRequestId ? this.nextRequestId() : undefined;
+    for (let attempt = 0; ; attempt += 1) {
     const { res, body } = await this.fetchAndRead(`${this.baseUrl}${path}`, {
       method: init.method,
       headers: {
         Authorization: `Bearer ${token}`,
         "Content-Type": "application/json",
-        ...(withRequestId ? { "PayPal-Request-Id": this.nextRequestId() } : {}),
+        ...(requestId ? { "PayPal-Request-Id": requestId } : {}),
       },
       ...(init.body !== undefined ? { body: JSON.stringify(init.body) } : {}),
     }, `${init.method} ${path.split("?")[0]}`);
+    // A 401 indicts the token, not the call: invalidate it,
+    // fetch a fresh one, and retry exactly once. A second 401
+    // falls through to the ordinary error mapping below.
+    if (res.status === 401 && attempt === 0) {
+      this.invalidateCachedToken(token);
+      token = await this.getAccessToken();
+      continue;
+    }
     if (!res.ok) throw this.toError(res.status, body, `PayPal ${init.method} ${path} failed`);
     return body as T;
+    }
   }
 
   /* ---------------- Invoicing v2 ---------------- */

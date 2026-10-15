@@ -756,7 +756,7 @@ are not blocked, the suite also runs on them).
 ```bash
 npm install
 npm run dev        # http://localhost:3000
-npm test           # full test suite (912 tests)
+npm test           # full test suite (921 tests)
 npm run typecheck  # tsc --noEmit
 npm run build      # production build
 ```
@@ -889,7 +889,17 @@ mock mode a config swap rather than a rewrite.
   twice, each logical call mints a new id (a per-client sequence
   keeps ids distinct even at a fixed clock), and reads, the OAuth
   token fetch, and webhook-signature verification — a query, not
-  a mutation — carry none.
+  a mutation — carry none. If PayPal answers a call with 401, the
+  cached OAuth token is treated as the suspect — it may have expired
+  early, been revoked, or had its lifetime overstated by the token
+  response — so the adapter invalidates it, fetches a fresh token,
+  and retries the call exactly once (a 401 means the request was
+  rejected before processing, and a mutating retry reuses the same
+  `PayPal-Request-Id` minted for the logical call); a second 401
+  surfaces as the ordinary `PayPalError`, and a token response whose
+  `expires_in` is non-numeric, non-positive, or non-finite falls
+  back to the default 3600-second lifetime instead of poisoning the
+  cache expiry.
 - `src/lib/agent/parser.ts` — deterministic NL brief → typed action plan
   parser (no LLM, no keys; relative due dates resolved against an injectable
   reference date).
@@ -1112,7 +1122,7 @@ signatures mirror the REST resources one-to-one.
 ## Testing
 
 ```bash
-npm test           # vitest — 912 tests, all green
+npm test           # vitest — 921 tests, all green
 npm run typecheck  # TypeScript strict, clean
 npm run build      # Next.js production build
 npm run verify     # the whole gate below, as one command
@@ -1277,7 +1287,14 @@ idempotency (a unique `PayPal-Request-Id` on every mutating sandbox
 call — create / send / remind / record-payment / order create +
 capture / payout — distinct ids for two identical payouts at a
 fixed clock, no id on reads, the OAuth token fetch, or webhook
-verification, and no credential in any id), the LLM connection failure (a refused fetch, a
+verification, and no credential in any id), the sandbox OAuth token refresh (a read and a
+webhook verification each recovering after a 401 via one token
+refresh and one retry, the refreshed token reused afterwards, a
+persistent 401 surfacing after exactly one retry, a mutating
+retry reusing the same `PayPal-Request-Id`, a non-401 failure
+triggering neither refresh nor retry, and a non-numeric or
+non-positive `expires_in` falling back to the default lifetime),
+the LLM connection failure (a refused fetch, a
 non-Error transport rejection, and a mid-body reset each translated
 into the fixed `LlmExtractionError` message with the transport
 error's own text and the fake key appearing in no message, an HTTP

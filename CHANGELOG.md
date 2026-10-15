@@ -16,6 +16,19 @@ build record behind these summaries.
 
 ### Added
 
+- **Sandbox OAuth token refresh on 401.** When PayPal answers an
+  API call with 401, the sandbox adapter now invalidates the
+  cached access token, fetches a fresh one, and retries the call
+  exactly once — previously one early-expired or revoked token
+  failed every call (reads, mutations, and webhook-signature
+  verification alike) until the cache happened to expire. A 401
+  means the request was rejected before processing, and a
+  mutating retry reuses the same `PayPal-Request-Id` minted for
+  the logical call; a second 401 surfaces as the ordinary
+  `PayPalError`, and non-401 failures never trigger a refresh. A
+  token response whose `expires_in` is non-numeric, non-positive,
+  or non-finite now falls back to the default 3600-second
+  lifetime instead of poisoning the cache expiry.
 - **LLM invalid success envelope (fixed message).** A 200 response
   from the optional LLM endpoint whose first choice entry is not
   an object (`choices: [null]`, from a proxy or a non-conforming
