@@ -61,6 +61,21 @@
  * request, with its Retry-After computed from the sanitised
  * window.)
  *
+ * Limit config hygiene: the same discipline applies to
+ * `maxRequests` itself. A non-finite limit falls back to the
+ * default (`RATE_LIMIT_MAX_POSTS`) instead of driving the count
+ * comparison raw — NaN made `count < maxRequests` false from
+ * the second request on, so the limiter silently became a
+ * near-block-all that reported "NaN POST requests"; Infinity
+ * made the comparison always true, so the flood brake silently
+ * never engaged. A fractional positive limit is floored to the
+ * whole number of requests it can actually admit (2.9 admits 2,
+ * and reports 2 — a request count is an integer, and the 429
+ * message must name the limit that is truly enforced); a
+ * sub-1 fraction floors to 0 and therefore behaves exactly
+ * like the deliberate block-all case. A finite non-positive
+ * limit is that deliberate block-all case and is unchanged.
+ *
  * Client identity, honestly: the key is the first
  * `x-forwarded-for` entry when a proxy supplies one, else
  * `x-real-ip`, else a single shared "direct" bucket. On an
@@ -122,12 +137,25 @@ export function createRateLimiter(
   // 429 message and Retry-After always name a real window.
   const effectiveWindowMs =
     Number.isFinite(windowMs) && windowMs > 0 ? windowMs : RATE_LIMIT_WINDOW_MS;
+  // A malformed limit must not drive the count comparison raw:
+  // a non-finite value falls back to the default limit, and a
+  // fractional positive value is floored to the whole requests
+  // it admits (see the header's limit-config-hygiene note). The
+  // limiter reports and enforces this effective limit, so the
+  // 429 message always names the limit that is truly enforced.
+  // A finite non-positive limit is the deliberate block-all
+  // case and passes through unchanged.
+  const effectiveMaxRequests = !Number.isFinite(maxRequests)
+    ? RATE_LIMIT_MAX_POSTS
+    : maxRequests > 0
+      ? Math.floor(maxRequests)
+      : maxRequests;
   const windows = new Map<string, WindowState>();
   return {
-    maxRequests,
+    maxRequests: effectiveMaxRequests,
     windowMs: effectiveWindowMs,
     check(key: string, now: number): RateLimitVerdict {
-      if (maxRequests <= 0) {
+      if (effectiveMaxRequests <= 0) {
         return { allowed: false, retryAfterSeconds: Math.ceil(effectiveWindowMs / 1000) };
       }
       if (windows.size > 4096) {
@@ -140,7 +168,7 @@ export function createRateLimiter(
         windows.set(key, { windowStart: now, count: 1 });
         return { allowed: true, retryAfterSeconds: 0 };
       }
-      if (state.count < maxRequests) {
+      if (state.count < effectiveMaxRequests) {
         state.count += 1;
         return { allowed: true, retryAfterSeconds: 0 };
       }

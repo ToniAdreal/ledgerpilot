@@ -16,6 +16,17 @@ build record behind these summaries.
 
 ### Added
 
+- **Rate-limit limit config hygiene.** The API rate limiter's
+  per-window limit is now sanitised the same way as its window:
+  a non-finite configured `maxRequests` falls back to
+  `RATE_LIMIT_MAX_POSTS` (120) instead of driving the count
+  comparison raw — NaN would have made the limiter a
+  near-block-all whose 429 message reported "NaN POST
+  requests", and Infinity would have silently disarmed the
+  flood brake. A fractional positive limit is floored to the
+  whole requests it admits, so the message always names the
+  integer limit truly enforced; a finite non-positive limit
+  remains the deliberate block-all case, unchanged.
 - **Rate-limit window config hygiene.** The API rate limiter's
   fixed window is now sanitised like the adapters' timeout
   bounds: a non-positive or non-finite configured `windowMs`

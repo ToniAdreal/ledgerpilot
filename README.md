@@ -608,6 +608,16 @@ curl -X POST localhost:3000/api/agent/execute -H 'content-type: application/json
   request open a fresh window, so the flood brake would silently
   never have engaged, and NaN or Infinity would have made the
   window never expire. A valid window is honoured exactly. The
+  rate-limit limit itself is sanitised the same way: a
+  non-finite configured limit falls back to
+  `RATE_LIMIT_MAX_POSTS` (120) instead of driving the count
+  comparison raw — NaN would have made the limiter a
+  near-block-all reporting "NaN POST requests", and Infinity
+  would have silently disarmed the flood brake — and a
+  fractional positive limit is floored to the whole requests
+  it admits, so the 429 message always names the integer limit
+  truly enforced; a finite non-positive limit remains the
+  deliberate block-all case. The
   OpenAPI document
   and `/api-docs` page carry the same shared 429 on every POST
   operation via `apiOperationResponses`.
@@ -764,7 +774,7 @@ are not blocked, the suite also runs on them).
 ```bash
 npm install
 npm run dev        # http://localhost:3000
-npm test           # full test suite (965 tests)
+npm test           # full test suite (977 tests)
 npm run typecheck  # tsc --noEmit
 npm run build      # production build
 ```
@@ -1159,7 +1169,7 @@ signatures mirror the REST resources one-to-one.
 ## Testing
 
 ```bash
-npm test           # vitest — 965 tests, all green
+npm test           # vitest — 977 tests, all green
 npm run typecheck  # TypeScript strict, clean
 npm run build      # Next.js production build
 npm run verify     # the whole gate below, as one command
@@ -1581,7 +1591,13 @@ the rate-limit window config hygiene — a non-positive or
 non-finite window falling back to `RATE_LIMIT_WINDOW_MS` so the
 limiter reports and enforces the default 60-second window, the
 deliberate block-all limit reporting the fallback window, and a
-valid small window honoured exactly), and the request id
+valid small window honoured exactly, and the rate-limit limit
+config hygiene — a non-finite limit falling back to
+`RATE_LIMIT_MAX_POSTS` so a NaN limit is not a near-block-all
+and an Infinity limit does not disarm the brake, a fractional
+positive limit floored to the whole requests it admits, the
+deliberate block-all limit unchanged, and a valid integer
+limit honoured exactly), and the request id
 (`src/lib/api/request-id.ts` + `src/middleware.ts` — the echo
 whitelist accepting uuids / slugs / dotted ids up to 128 chars
 and rejecting whitespace, separators, controls, and non-ASCII,
