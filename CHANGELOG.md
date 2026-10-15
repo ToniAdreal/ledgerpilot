@@ -16,6 +16,18 @@ build record behind these summaries.
 
 ### Added
 
+- **Sandbox transient-error retry for reads.** A GET call that
+  PayPal answers 429 or 503 is now retried exactly once after a
+  bounded delay — the response's `Retry-After` delta-seconds
+  when usable, otherwise 250 ms, never more than
+  `SANDBOX_TRANSIENT_RETRY_MAX_DELAY_MS` (2,000 ms) — instead of
+  failing the call outright. A second transient answer surfaces
+  as the ordinary `PayPalError`; mutations are never retried on
+  a transient answer (their outcome is not knowable from the
+  status alone; the `PayPal-Request-Id` protects a caller's own
+  retry), the OAuth token fetch is outside the retried path,
+  and the retry composes with the 401 token refresh — each
+  mechanism fires at most once per logical call.
 - **Sandbox list pagination (`next`-link following).** Every list
   call in the sandbox adapter (Invoicing, Payouts, Disputes,
   Transaction Search) now follows the response's HATEOAS `next`

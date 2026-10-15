@@ -222,6 +222,30 @@ import { PayPalError, PayPalNotConfiguredError, type PayPalClient } from "./clie
  * and name `PAGINATION_LIMIT` naming the list endpoint only,
  * never an unbounded loop and never a silently truncated list
  * dressed as success.
+ *
+ * Transient-error retry for reads: PayPal answers overload with
+ * 429 (and, like any service, maintenance with 503) — transient
+ * states a read will usually clear in well under a second. Until
+ * this retry existed, one such answer failed the call outright:
+ * a console refresh racing a sandbox rate limit showed an error
+ * for state that a single retry would have returned. A GET call
+ * that answers 429 or 503 is now retried exactly once, after a
+ * bounded delay: the response's `Retry-After` delta-seconds when
+ * it carries a usable one, otherwise
+ * `SANDBOX_TRANSIENT_RETRY_DEFAULT_DELAY_MS` (250 ms), never more
+ * than `SANDBOX_TRANSIENT_RETRY_MAX_DELAY_MS` (2,000 ms). The
+ * delay is spent between attempts, outside either attempt's
+ * per-request timeout. Scoping is the safety half: ONLY reads
+ * (GET) are retried — a mutating call's outcome after a 429/503
+ * is not knowable from the status alone, so mutations surface
+ * the ordinary `PayPalError` at once (the `PayPal-Request-Id`
+ * above is what protects a caller's own retry of one); a second
+ * 429/503 also surfaces at once — there is no retry loop; and
+ * the OAuth token fetch is outside `request`, so a transient
+ * answer from the token endpoint is never retried by this path
+ * either. The retry is independent of the 401 token refresh:
+ * each mechanism fires at most once per logical call, so a call
+ * makes at most three attempts in total.
  */
 
 export type FetchFn = (url: string, init?: RequestInit) => Promise<Response>;
@@ -234,6 +258,12 @@ export const SANDBOX_MAX_RESPONSE_BYTES = 4_194_304;
 
 /** Maximum pages one list call will follow via `next` links before refusing. */
 export const SANDBOX_MAX_LIST_PAGES = 10;
+
+/** Delay before the single transient-error retry of a read, when the response carries no usable `Retry-After`. */
+export const SANDBOX_TRANSIENT_RETRY_DEFAULT_DELAY_MS = 250;
+
+/** Hard cap on the delay before the single transient-error retry of a read, however large `Retry-After` is. */
+export const SANDBOX_TRANSIENT_RETRY_MAX_DELAY_MS = 2_000;
 
 export interface SandboxConfig {
   clientId?: string;
@@ -248,6 +278,8 @@ export interface SandboxConfig {
   timeoutMs?: number;
   /** Maximum response body in bytes. Defaults to SANDBOX_MAX_RESPONSE_BYTES; non-positive or non-finite values fall back to the default. */
   maxResponseBytes?: number;
+  /** Injectable delay for the transient-error retry (tests). Defaults to a real timer. */
+  sleepFn?: (ms: number) => Promise<void>;
 }
 
 /* ------------------------------------------------------------------ */
@@ -424,6 +456,7 @@ export class SandboxPayPalClient implements PayPalClient {
   private readonly now: () => number;
   private readonly timeoutMs: number;
   private readonly maxResponseBytes: number;
+  private readonly sleepFn: (ms: number) => Promise<void>;
 
   private requestSeq = 0;
 
@@ -460,6 +493,8 @@ export class SandboxPayPalClient implements PayPalClient {
       config.maxResponseBytes > 0
         ? config.maxResponseBytes
         : SANDBOX_MAX_RESPONSE_BYTES;
+    this.sleepFn =
+      config.sleepFn ?? ((ms) => new Promise<void>((resolve) => setTimeout(resolve, ms)));
   }
 
   /* ---------------- transport ---------------- */
@@ -623,6 +658,21 @@ export class SandboxPayPalClient implements PayPalClient {
     return `ledgerpilot-req-${this.now()}-${this.requestSeq}`;
   }
 
+  /**
+   * The delay before the single transient-error retry of a read:
+   * the response's `Retry-After` delta-seconds when it carries a
+   * usable one (a bare non-negative integer — HTTP-date forms and
+   * anything unparseable fall back), otherwise the default, and
+   * never above the cap however large the header is.
+   */
+  private transientRetryDelayMs(headers: Headers): number {
+    const raw = headers.get("retry-after")?.trim() ?? "";
+    if (/^\d+$/.test(raw)) {
+      return Math.min(Number(raw) * 1000, SANDBOX_TRANSIENT_RETRY_MAX_DELAY_MS);
+    }
+    return SANDBOX_TRANSIENT_RETRY_DEFAULT_DELAY_MS;
+  }
+
   private async request<T>(
     path: string,
     init: { method: string; body?: unknown },
@@ -637,7 +687,10 @@ export class SandboxPayPalClient implements PayPalClient {
     // refresh note).
     const withRequestId = options.requestId ?? init.method.toUpperCase() === "POST";
     const requestId = withRequestId ? this.nextRequestId() : undefined;
-    for (let attempt = 0; ; attempt += 1) {
+    const isRead = init.method.toUpperCase() === "GET";
+    let tokenRefreshed = false;
+    let transientRetried = false;
+    for (;;) {
     const { res, body } = await this.fetchAndRead(`${this.baseUrl}${path}`, {
       method: init.method,
       headers: {
@@ -650,9 +703,21 @@ export class SandboxPayPalClient implements PayPalClient {
     // A 401 indicts the token, not the call: invalidate it,
     // fetch a fresh one, and retry exactly once. A second 401
     // falls through to the ordinary error mapping below.
-    if (res.status === 401 && attempt === 0) {
+    if (res.status === 401 && !tokenRefreshed) {
+      tokenRefreshed = true;
       this.invalidateCachedToken(token);
       token = await this.getAccessToken();
+      continue;
+    }
+    // A 429/503 indicts the moment, not the call — but only a
+    // read may be retried on that basis (see the header's
+    // transient-error note): wait the bounded delay and retry
+    // exactly once. A second transient answer, and any
+    // transient answer to a mutation, falls through to the
+    // ordinary error mapping below.
+    if (!res.ok && isRead && !transientRetried && (res.status === 429 || res.status === 503)) {
+      transientRetried = true;
+      await this.sleepFn(this.transientRetryDelayMs(res.headers));
       continue;
     }
     if (!res.ok) throw this.toError(res.status, body, `PayPal ${init.method} ${path} failed`);

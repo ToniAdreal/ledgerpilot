@@ -756,7 +756,7 @@ are not blocked, the suite also runs on them).
 ```bash
 npm install
 npm run dev        # http://localhost:3000
-npm test           # full test suite (934 tests)
+npm test           # full test suite (948 tests)
 npm run typecheck  # tsc --noEmit
 npm run build      # production build
 ```
@@ -915,7 +915,15 @@ mock mode a config swap rather than a rewrite.
   URL, never from the href's own origin — and a `next` chain that
   has not ended after `SANDBOX_MAX_LIST_PAGES` (10 pages) is refused
   as a 502 `PAGINATION_LIMIT`, never an unbounded loop and never a
-  silently truncated list dressed as success.
+  silently truncated list dressed as success. A read (GET) that
+  PayPal answers with a transient 429 or 503 is retried exactly
+  once after a bounded delay — the response's `Retry-After`
+  delta-seconds when usable, otherwise 250 ms, never more than
+  `SANDBOX_TRANSIENT_RETRY_MAX_DELAY_MS` (2,000 ms); a second
+  transient answer surfaces as the ordinary error, mutations are
+  never retried on a transient answer (their outcome is not
+  knowable from the status alone), and the OAuth token fetch is
+  outside the retried path.
 - `src/lib/agent/parser.ts` — deterministic NL brief → typed action plan
   parser (no LLM, no keys; relative due dates resolved against an injectable
   reference date).
@@ -1138,7 +1146,7 @@ signatures mirror the REST resources one-to-one.
 ## Testing
 
 ```bash
-npm test           # vitest — 934 tests, all green
+npm test           # vitest — 948 tests, all green
 npm run typecheck  # TypeScript strict, clean
 npm run build      # Next.js production build
 npm run verify     # the whole gate below, as one command
