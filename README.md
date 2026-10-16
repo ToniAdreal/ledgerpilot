@@ -321,6 +321,24 @@ curl -X POST localhost:3000/api/agent/execute -H 'content-type: application/json
   renders and summarises the outcome — a resumed plan is the headline, an
   idempotent re-run is reported honestly as "nothing new to reconcile") and
   then refreshes every grid, so reconciled state flips flash as usual.
+- **Mock adapter money validation (the demo's PayPal stand-in checks its
+  own inputs).** Every app surface already validates amounts before a plan
+  can execute, but the mock adapter itself trusted whatever it was called
+  with: its payout check (`Number(value) <= 0`) let a non-numeric amount
+  through (NaN comparisons are false), so a payout of `abc` was created as
+  SUCCESS with a `-abc` transaction; invoice totals summed to `NaN` or went
+  negative via a negative quantity; a `-5.00` order captured as a `-5.00`
+  transaction; and a recorded payment of `-50.00` *increased* the amount
+  due, a zero payment flipped an invoice to `PARTIALLY_PAID`, and an
+  overpayment was silently clamped (the excess vanished). The adapter now
+  validates at its own boundary, before any state changes: amounts and
+  quantities must be finite and greater than zero (fractional quantities
+  such as 2.5 hours stay legitimate), an invoice needs at least one item,
+  and a recorded payment must be in the invoice's own currency and never
+  exceed the amount due — an overpayment is refused, never clamped, the
+  same rule the record-payment leg states. Create-call refusals are
+  400 `VALIDATION_ERROR`; recorded-payment refusals are
+  422 `UNPROCESSABLE_ENTITY`; a refusal leaves every resource untouched.
 - **Optional ledger persistence.** The ledger store (plans, the append-only
   audit log, webhook event-id idempotency) is in-memory by default. Set
   `LEDGERPILOT_STORE_FILE` to a JSON file path and every mutation is written
@@ -803,7 +821,7 @@ are not blocked, the suite also runs on them).
 ```bash
 npm install
 npm run dev        # http://localhost:3000
-npm test           # full test suite (1054 tests)
+npm test           # full test suite (1088 tests)
 npm run typecheck  # tsc --noEmit
 npm run build      # production build
 ```
@@ -1212,7 +1230,7 @@ signatures mirror the REST resources one-to-one.
 ## Testing
 
 ```bash
-npm test           # vitest — 1054 tests, all green
+npm test           # vitest — 1088 tests, all green
 npm run typecheck  # TypeScript strict, clean
 npm run build      # Next.js production build
 npm run verify     # the whole gate below, as one command
@@ -1339,6 +1357,13 @@ Ask-the-grid parsing +
 validator negative cases, Ask amount hygiene (digit-less commas-only
 captures refused with guidance in the comparison, between, and or-more
 forms; ordinary comma-grouped amounts and large finite filters honoured),
+mock adapter money validation (non-numeric / zero / negative payout,
+invoice unit, and order amounts refused at the adapter boundary with
+nothing created; non-positive and non-numeric invoice quantities refused
+while fractional quantities total correctly; recorded payments refused
+when non-positive, non-numeric, in the wrong currency, or above the
+amount due — with the invoice, its recorded partials, and the
+transaction ledger left exactly as they were),
 the full Judge Mode loop (seed idempotency,
 the historical-event guard, double-payment no-op), and the sandbox REST
 adapter against a stub fetch (OAuth caching/expiry, the links-only

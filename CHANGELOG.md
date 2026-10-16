@@ -16,6 +16,23 @@ build record behind these summaries.
 
 ### Added
 
+- **Mock adapter money validation.** The mock PayPal adapter now
+  validates money at its own boundary, before any state changes:
+  payout, invoice unit, and order amounts must be finite and
+  greater than zero (a non-numeric amount previously slipped the
+  payout check — NaN comparisons are false — and was created as
+  SUCCESS with a `-abc` transaction; invoice totals could sum to
+  `NaN` or go negative, and a negative order amount captured);
+  invoice quantities must be finite and greater than zero, with
+  fractional quantities (2.5 hours) still legitimate, and an
+  invoice needs at least one item; a recorded payment must be
+  finite and positive, in the invoice's own currency, and no
+  more than the amount due — a negative payment previously
+  *increased* the amount due, a zero payment flipped an invoice
+  to `PARTIALLY_PAID`, and an overpayment was silently clamped.
+  An overpayment is now refused, never clamped, matching the
+  record-payment leg's stated rule. Refusals leave all state
+  untouched.
 - **Ask-the-grid amount hygiene.** An Ask-the-grid amount
   capture with no digits (a commas-only capture such as
   `over ,,,` — commas are grouping separators, so it stripped

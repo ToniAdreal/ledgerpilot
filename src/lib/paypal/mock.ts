@@ -59,6 +59,62 @@ function sumMoney(items: Array<{ quantity: string; unit_amount: Money }>): Money
   return { currency_code: currency, value: total.toFixed(2) };
 }
 
+/**
+ * Adapter-level money validation — the mock is the demo's PayPal
+ * stand-in, so it enforces the same money rules the real API and
+ * every app surface enforce, at its own boundary, before any state
+ * changes. Until this existed the mock trusted its inputs: the
+ * payout check `Number(value) <= 0` let a non-numeric amount
+ * through (NaN comparisons are false), so a payout of "abc" was
+ * created as SUCCESS with a "-abc" transaction; invoice totals
+ * summed to "NaN" (or went negative via a negative quantity); an
+ * order of "-5.00" captured as a "-5.00" transaction; and a
+ * recorded payment of "-50.00" *increased* the amount due, a zero
+ * payment flipped an invoice to PARTIALLY_PAID, and an
+ * overpayment was silently clamped by `Math.max` (the excess
+ * vanished) — while the app-level record-payment leg states the
+ * opposite rule: an overpayment is refused, never clamped.
+ *
+ * The rules, all checked before any mutation (a refusal leaves
+ * invoices, orders, payouts, transactions, and events untouched):
+ *  - Money amounts (invoice unit amounts, order amounts, payout
+ *    item amounts, recorded payments) must be finite and greater
+ *    than zero — as numbers, so "abc" / "" / "Infinity" refuse,
+ *    not only "0.00" and negatives.
+ *  - Invoice quantities must be finite and greater than zero;
+ *    fractional quantities (2.5 hours) are legitimate and kept.
+ *  - An invoice needs at least one item.
+ *  - A recorded payment must be in the invoice's own currency
+ *    and must not exceed the amount due.
+ * Create-call refusals are 400 VALIDATION_ERROR (the payout
+ * check's existing shape); recorded-payment refusals are 422
+ * UNPROCESSABLE_ENTITY (that method's existing shape).
+ */
+function requirePositiveAmount(value: string, label: string, status: number, name: string): number {
+  const n = Number(value);
+  if (!Number.isFinite(n) || n <= 0) {
+    throw new PayPalError(`${label} must be a positive amount — got '${value}'`, status, name);
+  }
+  return n;
+}
+
+function validateInvoiceItems(items: CreateInvoiceInput["items"]): void {
+  if (!Array.isArray(items) || items.length === 0) {
+    throw new PayPalError("An invoice needs at least one item", 400, "VALIDATION_ERROR");
+  }
+  for (const item of items) {
+    const quantity = Number(item.quantity);
+    if (!Number.isFinite(quantity) || quantity <= 0) {
+      throw new PayPalError(
+        `Invoice item quantities must be positive — got '${item.quantity}' for '${item.name}'`,
+        400,
+        "VALIDATION_ERROR",
+      );
+    }
+    requirePositiveAmount(item.unit_amount.value, `Invoice item unit amounts ('${item.name}')`, 400, "VALIDATION_ERROR");
+  }
+}
+
 let seq = 0;
 function nextId(prefix: string): string {
   seq += 1;
@@ -281,6 +337,7 @@ export class MockPayPalClient implements PayPalClient {
   /* ---------------- Invoicing v2 ---------------- */
 
   async createInvoice(input: CreateInvoiceInput): Promise<Invoice> {
+    validateInvoiceItems(input.items);
     const amount = sumMoney(input.items);
     const id = nextId("INV2");
     const invoice: Invoice = {
@@ -332,9 +389,23 @@ export class MockPayPalClient implements PayPalClient {
     if (invoice.status === "PAID") {
       throw new PayPalError(`Invoice ${invoiceId} is already paid`, 422, "UNPROCESSABLE_ENTITY");
     }
-    const paid = Number(amount.value);
+    const paid = requirePositiveAmount(amount.value, "Recorded payment amounts", 422, "UNPROCESSABLE_ENTITY");
+    if (amount.currency_code !== invoice.due_amount.currency_code) {
+      throw new PayPalError(
+        `Recorded payment currency ${amount.currency_code} does not match invoice ${invoiceId}'s currency ${invoice.due_amount.currency_code}`,
+        422,
+        "UNPROCESSABLE_ENTITY",
+      );
+    }
     const due = Number(invoice.due_amount.value);
-    invoice.due_amount = { ...invoice.due_amount, value: Math.max(0, due - paid).toFixed(2) };
+    if (paid > due) {
+      throw new PayPalError(
+        `Recorded payment ${amount.value} exceeds the amount due ${invoice.due_amount.value} on invoice ${invoiceId} — an overpayment is refused, never silently clamped`,
+        422,
+        "UNPROCESSABLE_ENTITY",
+      );
+    }
+    invoice.due_amount = { ...invoice.due_amount, value: (due - paid).toFixed(2) };
     invoice.status = invoice.due_amount.value === "0.00" ? "PAID" : "PARTIALLY_PAID";
     if (invoice.status === "PAID") {
       const txnId = nextId("TXN");
@@ -395,6 +466,7 @@ export class MockPayPalClient implements PayPalClient {
   /* ---------------- Orders v2 ---------------- */
 
   async createOrder(input: CreateOrderInput): Promise<Order> {
+    requirePositiveAmount(input.amount.value, "Order amounts", 400, "VALIDATION_ERROR");
     const id = nextId("ORDER");
     const order: Order = {
       id,
@@ -451,9 +523,7 @@ export class MockPayPalClient implements PayPalClient {
       throw new PayPalError("A payout batch needs at least one item", 400, "VALIDATION_ERROR");
     }
     for (const item of input.items) {
-      if (Number(item.amount.value) <= 0) {
-        throw new PayPalError("Payout item amounts must be positive", 400, "VALIDATION_ERROR");
-      }
+      requirePositiveAmount(item.amount.value, "Payout item amounts", 400, "VALIDATION_ERROR");
     }
     const batchId = nextId("BATCH");
     const batch: PayoutBatch = {
