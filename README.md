@@ -93,6 +93,11 @@ curl -X POST localhost:3000/api/agent/execute -H 'content-type: application/json
   out-of-range relative offset ("due in 999999999999 days") each get
   the documented 422 with guidance — the same real-calendar rule the
   API drafts, the LLM validator, and the invoice form enforce.
+  Amounts are refused the same way: a non-positive amount ("$0", or a
+  commas-only amount that parses to zero) and an amount over the
+  100,000 cap every LedgerPilot amount surface enforces each get the
+  documented 422 naming the rule — never a 0.00 plan, an over-cap
+  plan, or (for a huge amount) an exponential money string.
 - **Approval gate (the trust invariant).** No plan executes without an
   explicit approve decision, enforced server-side: unapproved or rejected
   plans execute nothing, and re-executing a settled plan is refused (409).
@@ -787,7 +792,7 @@ are not blocked, the suite also runs on them).
 ```bash
 npm install
 npm run dev        # http://localhost:3000
-npm test           # full test suite (1014 tests)
+npm test           # full test suite (1030 tests)
 npm run typecheck  # tsc --noEmit
 npm run build      # production build
 ```
@@ -1193,7 +1198,7 @@ signatures mirror the REST resources one-to-one.
 ## Testing
 
 ```bash
-npm test           # vitest — 1014 tests, all green
+npm test           # vitest — 1030 tests, all green
 npm run typecheck  # TypeScript strict, clean
 npm run build      # Next.js production build
 npm run verify     # the whole gate below, as one command
@@ -1244,7 +1249,9 @@ failing the plan),
 invoice reminders (mock open-invoice rules, executor resolution by
 reference and by most-overdue open invoice, unmatched-reference and
 already-paid failures, the sandbox `/remind` request shape), the
-agent pipeline (brief parsing incl. due-date forms and currencies, the
+agent pipeline (brief parsing incl. due-date forms, amount rules
+(non-positive and over-cap amounts refused, never carried into a
+plan), and currencies, the
 approval gate, trigger resume, audit ordering), site navigation (the
 nav list matching the page routes on disk exactly, dynamic detail
 routes excluded, active-link resolution — root exact, sections by

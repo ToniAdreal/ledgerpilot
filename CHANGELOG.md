@@ -16,6 +16,18 @@ build record behind these summaries.
 
 ### Added
 
+- **Parser amount hygiene.** The deterministic brief parser
+  now refuses an amount no other LedgerPilot surface would
+  accept, instead of carrying it into a plan: a non-positive
+  amount ("$0", or a commas-only amount that parses to zero)
+  and an amount over the 100,000 cap (the API drafts, the LLM
+  validator, the tool calls, and the console forms all enforce
+  the same ceiling) are each rejected with a `BriefParseError`
+  naming the rule — the documented 422 at the plan route. A
+  huge amount used to be formatted into an exponential money
+  string ("1e+22"); it is now refused at the cap. Boundary
+  amounts ($0.01 and exactly $100,000) and ordinary
+  comma-grouped amounts are unchanged.
 - **Parser due-date hygiene.** The deterministic brief parser
   now refuses a due date that cannot exist instead of carrying
   it into a plan: an ISO-shaped but impossible date

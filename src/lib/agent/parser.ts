@@ -113,10 +113,35 @@ export function parseDueDate(text: string, now: Date): string | undefined {
   return undefined;
 }
 
+/** Hard cap on any single parsed amount — the same ceiling every other amount surface enforces (API drafts, LLM validator, tool calls, forms). */
+export const MAX_PARSER_AMOUNT = 100_000;
+
 function money(symbolOrCode: string | undefined, amount: string): { currency_code: CurrencyCode; value: string } {
   const currency_code: CurrencyCode =
     symbolOrCode === "€" || symbolOrCode === "EUR" ? "EUR" : symbolOrCode === "£" || symbolOrCode === "GBP" ? "GBP" : "USD";
-  return { currency_code, value: Number(amount.replace(/,/g, "")).toFixed(2) };
+  const n = Number(amount.replace(/,/g, ""));
+  // The same amount rules every other surface in the app already
+  // enforces (the API drafts' `parseMoney`, the LLM validator, the
+  // tool-call schemas, the console forms): an amount must be a
+  // positive, finite number at or under the hard cap. This parser
+  // used to format whatever the regex captured verbatim, so "$0"
+  // and a commas-only amount ("$,,,") became a 0.00 plan, an
+  // over-cap amount was carried unchecked, and a huge amount was
+  // formatted by `toFixed` into an exponential money string
+  // ("1e+22") that no adapter should ever see. Refusing here —
+  // with a `BriefParseError`, which the plan route translates
+  // into the documented 422 — means no plan is produced at all.
+  if (!Number.isFinite(n) || n <= 0) {
+    throw new BriefParseError(
+      `'amount' must be greater than zero — '${amount}' is not a positive amount. Name an amount above zero.`,
+    );
+  }
+  if (n > MAX_PARSER_AMOUNT) {
+    throw new BriefParseError(
+      `'amount' must not exceed ${MAX_PARSER_AMOUNT} — '${amount}' is over the cap every LedgerPilot amount surface enforces.`,
+    );
+  }
+  return { currency_code, value: n.toFixed(2) };
 }
 
 interface Found {
