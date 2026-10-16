@@ -16,6 +16,19 @@ build record behind these summaries.
 
 ### Added
 
+- **Parser due-date hygiene.** The deterministic brief parser
+  now refuses a due date that cannot exist instead of carrying
+  it into a plan: an ISO-shaped but impossible date
+  ("2026-02-30") is rejected with a `BriefParseError` naming
+  the real-calendar rule every other due-date surface (API
+  drafts, LLM validator, tool calls, invoice form) already
+  enforces, and a relative offset large enough to leave the
+  four-digit-year range is rejected the same way — it used to
+  return a corrupt extended-year string, and a still larger
+  offset escaped as a raw `RangeError`, an opaque 500 at the
+  plan route instead of the documented 422. Real leap days
+  and ordinary relative forms ("Friday", "in 3 days",
+  "tomorrow") are unchanged.
 - **Rate-limit window fractional hygiene.** The API rate
   limiter's fixed window now floors a fractional configured
   `windowMs` to the whole milliseconds it admits — the limiter

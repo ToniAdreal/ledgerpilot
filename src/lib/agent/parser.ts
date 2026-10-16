@@ -64,14 +64,47 @@ function addDays(base: Date, days: number): Date {
   return d;
 }
 
-/** Parse "Friday" / "in 5 days" / "tomorrow" / "2026-10-16" into an ISO date, or undefined. */
+/**
+ * Parse "Friday" / "in 5 days" / "tomorrow" / "2026-10-16" into an ISO date, or undefined.
+ *
+ * Two input shapes are refused with a `BriefParseError` instead of
+ * being carried into a plan — the same real-calendar rule every
+ * other due-date surface in the app already enforces (the API
+ * drafts, the LLM validator, the tool-call validator, the invoice
+ * form): an ISO-shaped date that is not a real calendar date
+ * ("2026-02-30" — it used to be returned verbatim, so the plan's
+ * invoice carried an impossible due date), and a relative offset
+ * so large the result leaves the four-digit-year range the ISO
+ * shape promises ("in 9999999 days" produced a corrupt extended-
+ * year string; "in 999999999999 days" overflowed the Date range
+ * and escaped as a raw `RangeError` from `toISOString` — an opaque
+ * 500 at the plan route, which only translates `BriefParseError`
+ * into the documented 422). A phrase that names no date at all
+ * ("whenever") still returns undefined, as before.
+ */
 export function parseDueDate(text: string, now: Date): string | undefined {
   const t = text.trim().toLowerCase().replace(/[.\s]+$/, "");
-  if (/^\d{4}-\d{2}-\d{2}$/.test(t)) return t;
+  if (/^\d{4}-\d{2}-\d{2}$/.test(t)) {
+    const parsed = new Date(`${t}T00:00:00Z`);
+    if (Number.isNaN(parsed.getTime()) || parsed.toISOString().slice(0, 10) !== t) {
+      throw new BriefParseError(
+        `'dueDate' must be a real calendar date (yyyy-mm-dd) — '${t}' is not one. Name a date that exists.`,
+      );
+    }
+    return t;
+  }
   if (t === "tomorrow") return fmtDate(addDays(now, 1));
   if (t === "today") return fmtDate(now);
   const inDays = t.match(/^in (\d+) days?$/);
-  if (inDays) return fmtDate(addDays(now, Number(inDays[1])));
+  if (inDays) {
+    const result = addDays(now, Number(inDays[1]));
+    if (Number.isNaN(result.getTime()) || !/^\d{4}-\d{2}-\d{2}$/.test(fmtDate(result))) {
+      throw new BriefParseError(
+        `The due date '${t}' is out of range — name a due date within four-digit-year range.`,
+      );
+    }
+    return fmtDate(result);
+  }
   const weekday = WEEKDAYS.indexOf(t);
   if (weekday >= 0) {
     const delta = (weekday - now.getUTCDay() + 7) % 7;

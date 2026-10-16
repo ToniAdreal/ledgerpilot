@@ -88,6 +88,11 @@ curl -X POST localhost:3000/api/agent/execute -H 'content-type: application/json
   `send_reminder`) with exact amounts, currencies ($/€/£), relative due dates
   ("due Friday", "in 5 days", "tomorrow"), and trigger gating ("when it
   lands, pay…" defers a payout until the invoice-paid event arrives).
+  A due date that cannot exist is refused, never carried into a plan:
+  an ISO-shaped but impossible date ("due 2026-02-30") and an
+  out-of-range relative offset ("due in 999999999999 days") each get
+  the documented 422 with guidance — the same real-calendar rule the
+  API drafts, the LLM validator, and the invoice form enforce.
 - **Approval gate (the trust invariant).** No plan executes without an
   explicit approve decision, enforced server-side: unapproved or rejected
   plans execute nothing, and re-executing a settled plan is refused (409).
@@ -782,7 +787,7 @@ are not blocked, the suite also runs on them).
 ```bash
 npm install
 npm run dev        # http://localhost:3000
-npm test           # full test suite (1000 tests)
+npm test           # full test suite (1014 tests)
 npm run typecheck  # tsc --noEmit
 npm run build      # production build
 ```
@@ -1188,7 +1193,7 @@ signatures mirror the REST resources one-to-one.
 ## Testing
 
 ```bash
-npm test           # vitest — 1000 tests, all green
+npm test           # vitest — 1014 tests, all green
 npm run typecheck  # TypeScript strict, clean
 npm run build      # Next.js production build
 npm run verify     # the whole gate below, as one command
@@ -1630,7 +1635,14 @@ config hygiene — a non-finite limit falling back to
 and an Infinity limit does not disarm the brake, a fractional
 positive limit floored to the whole requests it admits, the
 deliberate block-all limit unchanged, and a valid integer
-limit honoured exactly), and the request id
+limit honoured exactly), and the parser due dates
+(`src/lib/agent/parser.ts` — an ISO-shaped but impossible due
+date refused with a `BriefParseError` naming the real-calendar
+rule the drafts / LLM / tool validators already enforce, a real
+leap day accepted, an out-of-range relative offset refused as
+a `BriefParseError` — never a raw `RangeError` and never a
+corrupt extended-year string — and the ordinary relative
+forms unchanged), and the request id
 (`src/lib/api/request-id.ts` + `src/middleware.ts` — the echo
 whitelist accepting uuids / slugs / dotted ids up to 128 chars
 and rejecting whitespace, separators, controls, and non-ASCII,
