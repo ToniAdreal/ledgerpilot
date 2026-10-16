@@ -140,6 +140,16 @@ export async function recordInvoicePayment(
     );
   }
   const recordedAmount = amount.toFixed(2);
+  // The positivity check above governs the input number; this one
+  // governs the amount actually recorded. A sub-cent payment
+  // (0.001–0.004) is positive as a number but records as "0.00" — a
+  // zero-value payment that moves nothing yet would read as success.
+  if (Number(recordedAmount) <= 0) {
+    throw new InvoicePaymentError(
+      `'amount' ${input.amount} rounds to 0.00 when kept to two decimal places — name an amount of at least 0.01. No payment was recorded.`,
+      422,
+    );
+  }
 
   let paid: Invoice;
   try {

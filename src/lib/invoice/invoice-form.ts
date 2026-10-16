@@ -148,6 +148,8 @@ export function validateInvoiceForm(form: InvoiceFormState): InvoiceValidation {
     const amount = parseInvoiceAmount(form.amount);
     if (amount === null) push("amount", "'amount' is required and must be a number (or numeric string)");
     else if (amount <= 0) push("amount", "'amount' must be greater than zero");
+    else if (Number(amount.toFixed(2)) <= 0)
+      push("amount", "'amount' must be at least 0.01 — amounts are kept to two decimal places, so this rounds to 0.00");
     else if (amount > MAX_INVOICE_AMOUNT) push("amount", `'amount' must not exceed ${MAX_INVOICE_AMOUNT}`);
   }
 

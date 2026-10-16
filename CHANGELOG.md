@@ -16,6 +16,22 @@ build record behind these summaries.
 
 ### Added
 
+- **Sub-cent amount hygiene.** Every amount-validating surface
+  now enforces its positivity rule on the value it actually
+  emits, not the pre-rounding input: a sub-cent amount
+  (0.001–0.004) is positive as a number but formats to "0.00"
+  at two decimal places, and the API drafts validator, the LLM
+  extraction validator, plan-amount edits (which share the
+  drafts validator), the invoice record-payment leg, and the
+  three console form mirrors (invoice, sell, payout batch) now
+  refuse it naming the 0.01 floor. Before this, a zero-value
+  invoice / order / payout could be drafted and approved, and a
+  "0.00" payment could be recorded as success. Amounts of 0.01
+  and amounts that format to a non-zero value (0.005 → "0.01")
+  are unchanged; the brief parser was already safe by
+  construction (its amount pattern captures at most two
+  decimals, so a sub-cent brief matches no money action and is
+  refused).
 - **Parser amount hygiene.** The deterministic brief parser
   now refuses an amount no other LedgerPilot surface would
   accept, instead of carrying it into a plan: a non-positive

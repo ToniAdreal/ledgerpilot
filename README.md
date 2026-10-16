@@ -98,6 +98,13 @@ curl -X POST localhost:3000/api/agent/execute -H 'content-type: application/json
   100,000 cap every LedgerPilot amount surface enforces each get the
   documented 422 naming the rule — never a 0.00 plan, an over-cap
   plan, or (for a huge amount) an exponential money string.
+  On the structured surfaces the same rule governs the emitted
+  value, not just the input number: a sub-cent amount (0.001–0.004)
+  is positive as a number but formats to "0.00" at the two decimal
+  places every money value is kept to, so the API drafts, the LLM
+  validator, plan-amount edits, and the record-payment leg refuse it
+  naming the 0.01 floor — a zero-value invoice, payout, or payment
+  is never drafted, proposed, or recorded as success.
 - **Approval gate (the trust invariant).** No plan executes without an
   explicit approve decision, enforced server-side: unapproved or rejected
   plans execute nothing, and re-executing a settled plan is refused (409).
@@ -792,7 +799,7 @@ are not blocked, the suite also runs on them).
 ```bash
 npm install
 npm run dev        # http://localhost:3000
-npm test           # full test suite (1030 tests)
+npm test           # full test suite (1045 tests)
 npm run typecheck  # tsc --noEmit
 npm run build      # production build
 ```
@@ -1198,7 +1205,7 @@ signatures mirror the REST resources one-to-one.
 ## Testing
 
 ```bash
-npm test           # vitest — 1030 tests, all green
+npm test           # vitest — 1045 tests, all green
 npm run typecheck  # TypeScript strict, clean
 npm run build      # Next.js production build
 npm run verify     # the whole gate below, as one command
@@ -1251,7 +1258,8 @@ reference and by most-overdue open invoice, unmatched-reference and
 already-paid failures, the sandbox `/remind` request shape), the
 agent pipeline (brief parsing incl. due-date forms, amount rules
 (non-positive and over-cap amounts refused, never carried into a
-plan), and currencies, the
+plan; sub-cent amounts that round to 0.00 refused on the drafts,
+LLM-validator, record-payment, and console-form surfaces), and currencies, the
 approval gate, trigger resume, audit ordering), site navigation (the
 nav list matching the page routes on disk exactly, dynamic detail
 routes excluded, active-link resolution — root exact, sections by

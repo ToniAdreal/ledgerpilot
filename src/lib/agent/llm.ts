@@ -165,7 +165,14 @@ function cleanAmount(value: unknown): string {
   const n = typeof value === "number" ? value : typeof value === "string" ? Number(value.replace(/,/g, "")) : NaN;
   if (!Number.isFinite(n) || n <= 0) fail("amount must be a positive number");
   if (n > MAX_LLM_AMOUNT) fail(`amount exceeds the ${MAX_LLM_AMOUNT} cap for LLM-proposed steps`);
-  return n.toFixed(2);
+  const formatted = n.toFixed(2);
+  // Same two-decimal boundary as the drafts validator: a sub-cent
+  // amount is positive as a number but formats to "0.00", and a
+  // zero-value step is refused on every other amount surface.
+  if (Number(formatted) <= 0) {
+    fail("amount must be at least 0.01 — amounts are kept to two decimal places, so this rounds to 0.00");
+  }
+  return formatted;
 }
 
 function cleanCurrency(value: unknown): CurrencyCode {

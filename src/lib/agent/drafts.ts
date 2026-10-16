@@ -132,7 +132,18 @@ function parseAmount(value: unknown): string {
   }
   if (n <= 0) throw new DraftValidationError("'amount' must be greater than zero");
   if (n > MAX_AMOUNT) throw new DraftValidationError(`'amount' must not exceed ${MAX_AMOUNT}`);
-  return n.toFixed(2);
+  const formatted = n.toFixed(2);
+  // The positivity rule governs the amount that is actually emitted,
+  // not the pre-rounding input: a sub-cent amount (0.001–0.004) is
+  // greater than zero as a number but formats to "0.00" — a zero-value
+  // invoice / order / payout that every downstream surface states it
+  // refuses. Refuse it here, at the two-decimal boundary.
+  if (Number(formatted) <= 0) {
+    throw new DraftValidationError(
+      "'amount' must be at least 0.01 — amounts are kept to two decimal places, so this rounds to 0.00",
+    );
+  }
+  return formatted;
 }
 
 function parseCurrency(value: unknown): CurrencyCode {
