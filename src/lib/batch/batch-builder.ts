@@ -234,12 +234,23 @@ export function buildBatchRequestBody(lines: BatchLineForm[], options: BatchForm
  * currently valid (the live preview while typing). Invalid lines are
  * skipped here — validation reports them separately; a preview must
  * never present a guessed total as fact.
+ *
+ * Preview sub-cent hygiene: "currently valid" includes the
+ * emitted-value rule the per-line validator applies — a sub-cent
+ * amount (0.001–0.004) is positive as a number but formats to
+ * "0.00", and validation refuses it naming the 0.01 floor, so the
+ * line is skipped here too, even when several sub-cent lines would
+ * aggregate past a cent (each line is invalid on its own). Before
+ * this, a sole sub-cent line previewed as a "USD 0.00" total
+ * instead of "no amounts yet". The boundary is the emitted
+ * value: 0.005 formats to "0.01" and contributes normally,
+ * exactly as the validator accepts it.
  */
 export function batchTotalsPreview(lines: BatchLineForm[]): Money[] {
   const byCurrency = new Map<CurrencyCode, number>();
   for (const line of lines) {
     const amount = parseFormAmount(line.amount);
-    if (amount === null || amount <= 0 || amount > MAX_BATCH_AMOUNT) continue;
+    if (amount === null || amount <= 0 || Number(amount.toFixed(2)) <= 0 || amount > MAX_BATCH_AMOUNT) continue;
     const currency = (line.currency.trim().toUpperCase() || "USD") as CurrencyCode;
     if (!BATCH_CURRENCIES.includes(currency)) continue;
     byCurrency.set(currency, (byCurrency.get(currency) ?? 0) + amount);

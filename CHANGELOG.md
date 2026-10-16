@@ -16,6 +16,15 @@ build record behind these summaries.
 
 ### Added
 
+- **Form-preview sub-cent hygiene.** The live previews of the three
+  console money forms (invoice, sell, payout batch) now apply the
+  same emitted-value sub-cent rule as their validators: a sub-cent
+  amount (0.001–0.004, which formats to "0.00") is no longer
+  presented as a real "USD 0.00" total — the invoice and sell
+  previews read "no amount yet" and the batch totals preview skips
+  the line, even when several sub-cent lines would aggregate past
+  a cent. Amounts of 0.01, and 0.005 (which formats to "0.01"),
+  preview normally.
 - **Mock adapter money validation.** The mock PayPal adapter now
   validates money at its own boundary, before any state changes:
   payout, invoice unit, and order amounts must be finite and

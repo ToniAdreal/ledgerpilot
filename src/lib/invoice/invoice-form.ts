@@ -217,11 +217,21 @@ export function buildInvoiceRequestBody(form: InvoiceFormState): InvoiceRequestB
  * work, due 2026-10-16" or "Invoice Ana · no amount yet". An invalid
  * amount is reported as such, never guessed — validation names it
  * separately; a preview must never present a guessed total as fact.
+ *
+ * Preview sub-cent hygiene: the amount check includes the
+ * emitted-value rule the validator applies — a sub-cent amount
+ * (0.001–0.004) is positive as a number but formats to "0.00",
+ * and validation refuses it naming the 0.01 floor, so the preview
+ * must not present it as a real "USD 0.00" total either. It reads
+ * as "no amount yet", like every other invalid amount. The
+ * boundary is the emitted value: 0.005 formats to "0.01" and
+ * previews normally, exactly as the validator accepts it.
  */
 export function invoicePreviewSummary(form: InvoiceFormState): string {
   const recipient = form.recipientName.trim() || "Unnamed recipient";
   const amount = parseInvoiceAmount(form.amount);
-  if (amount === null || amount <= 0 || amount > MAX_INVOICE_AMOUNT) return `Invoice ${recipient} · no amount yet`;
+  if (amount === null || amount <= 0 || Number(amount.toFixed(2)) <= 0 || amount > MAX_INVOICE_AMOUNT)
+    return `Invoice ${recipient} · no amount yet`;
   const currency = (form.currency.trim().toUpperCase() || "USD") as CurrencyCode;
   if (!INVOICE_CURRENCIES.includes(currency)) return `Invoice ${recipient} · no amount yet`;
   const description = form.description.trim();

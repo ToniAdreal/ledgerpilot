@@ -339,6 +339,23 @@ curl -X POST localhost:3000/api/agent/execute -H 'content-type: application/json
   same rule the record-payment leg states. Create-call refusals are
   400 `VALIDATION_ERROR`; recorded-payment refusals are
   422 `UNPROCESSABLE_ENTITY`; a refusal leaves every resource untouched.
+- **Form-preview sub-cent hygiene (the live previews never present a
+  0.00 total).** The three console money forms (invoice, sell, payout
+  batch) each carry a live preview whose stated rule is that an invalid
+  amount is never presented as a fact: the invoice and sell previews
+  read "no amount yet" for an invalid amount, and the batch totals
+  preview skips invalid lines. Their validators refuse a sub-cent
+  amount (0.001–0.004 — positive as a number, but it formats to "0.00"
+  at two decimal places) naming the 0.01 floor, yet the previews
+  checked only `amount <= 0` and the cap, so a sub-cent amount was
+  presented as a real "USD 0.00" total — the batch preview even
+  aggregated several individually-invalid sub-cent lines into a
+  seemingly valid total. The previews now apply the same
+  emitted-value rule as the validators (`Number(amount.toFixed(2)) <= 0`
+  is not a valid amount): a sub-cent amount reads as "no amount yet"
+  in the invoice and sell previews and is skipped in the batch totals
+  preview. The boundary is the emitted value — 0.01 previews normally,
+  and 0.005 previews as the "0.01" it formats to.
 - **Optional ledger persistence.** The ledger store (plans, the append-only
   audit log, webhook event-id idempotency) is in-memory by default. Set
   `LEDGERPILOT_STORE_FILE` to a JSON file path and every mutation is written
@@ -821,7 +838,7 @@ are not blocked, the suite also runs on them).
 ```bash
 npm install
 npm run dev        # http://localhost:3000
-npm test           # full test suite (1088 tests)
+npm test           # full test suite (1099 tests)
 npm run typecheck  # tsc --noEmit
 npm run build      # production build
 ```
@@ -1230,7 +1247,7 @@ signatures mirror the REST resources one-to-one.
 ## Testing
 
 ```bash
-npm test           # vitest — 1088 tests, all green
+npm test           # vitest — 1099 tests, all green
 npm run typecheck  # TypeScript strict, clean
 npm run build      # Next.js production build
 npm run verify     # the whole gate below, as one command
@@ -1284,7 +1301,11 @@ already-paid failures, the sandbox `/remind` request shape), the
 agent pipeline (brief parsing incl. due-date forms, amount rules
 (non-positive and over-cap amounts refused, never carried into a
 plan; sub-cent amounts that round to 0.00 refused on the drafts,
-LLM-validator, record-payment, and console-form surfaces), and currencies, the
+LLM-validator, record-payment, and console-form surfaces, and never
+presented as a 0.00 total by the console forms' live previews — the
+invoice and sell previews read "no amount yet" and the batch totals
+preview skips the line, with 0.005 previewing as the 0.01 it formats
+to), and currencies, the
 approval gate, trigger resume, audit ordering), site navigation (the
 nav list matching the page routes on disk exactly, dynamic detail
 routes excluded, active-link resolution — root exact, sections by
