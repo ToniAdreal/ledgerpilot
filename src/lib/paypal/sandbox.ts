@@ -203,7 +203,17 @@ import { PayPalError, PayPalNotConfiguredError, type PayPalClient } from "./clie
  * non-numeric, non-positive, or non-finite falls back to the
  * default 3600-second lifetime instead of poisoning the cache
  * expiry with NaN (which silently disabled caching) or a past
- * instant.
+ * instant. A fractional `expires_in` is floored to the whole
+ * seconds it admits — `expires_in` is an integer-seconds
+ * lifetime and the cache expiry is computed on an integer-
+ * millisecond clock, so a raw fraction such as 3600.9 cached
+ * the token for a fraction of a second longer than the whole
+ * seconds stated, and a sub-1 fraction such as 0.5 produced an
+ * expiry the cache's own 30-second validity buffer could never
+ * honour (every call refetched the token). A sub-1 fraction
+ * therefore falls back to the default lifetime like a
+ * non-positive value. This mirrors the floored fractional
+ * timeout and response-size bounds on this adapter.
  *
  * Token-fetch coalescing: the cache check alone does not cover
  * concurrency. The console's read routes fan out in parallel
@@ -607,9 +617,15 @@ export class SandboxPayPalClient implements PayPalClient {
     // non-numeric value would make it NaN (caching silently off)
     // and a non-positive one a past instant — both fall back to
     // the default lifetime, like a missing value already did.
+    // A fractional lifetime is floored to the whole seconds it
+    // admits, and a sub-1 fraction falls back like a
+    // non-positive value (see the header's companion-hygiene
+    // note).
     const rawExpiresInSec = Number(asRaw(body).expires_in ?? 3600);
     const expiresInSec =
-      Number.isFinite(rawExpiresInSec) && rawExpiresInSec > 0 ? rawExpiresInSec : 3600;
+      Number.isFinite(rawExpiresInSec) && Math.floor(rawExpiresInSec) >= 1
+        ? Math.floor(rawExpiresInSec)
+        : 3600;
     this.tokenCache = { token, expiresAt: this.now() + expiresInSec * 1000 };
     return token;
   }

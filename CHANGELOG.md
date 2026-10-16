@@ -16,6 +16,19 @@ build record behind these summaries.
 
 ### Added
 
+- **Sandbox token `expires_in` fractional hygiene.** The
+  sandbox adapter's OAuth token cache now floors a fractional
+  `expires_in` to the whole seconds it admits — `expires_in`
+  is an integer-seconds lifetime and the cache expiry runs on
+  an integer-millisecond clock, so 3600.9 cached the token
+  for a fraction of a second longer than the whole seconds
+  stated, and a sub-1 fraction such as 0.5 produced an expiry
+  the cache's own 30-second validity buffer could never
+  honour (every call refetched the token). A sub-1 fraction
+  now falls back to the default 3600-second lifetime, like a
+  non-positive value; a valid integer lifetime is honoured
+  exactly. This mirrors the floored fractional timeout and
+  response-size bounds on the same adapter.
 - **Sub-cent amount hygiene.** Every amount-validating surface
   now enforces its positivity rule on the value it actually
   emits, not the pre-rounding input: a sub-cent amount

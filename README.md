@@ -799,7 +799,7 @@ are not blocked, the suite also runs on them).
 ```bash
 npm install
 npm run dev        # http://localhost:3000
-npm test           # full test suite (1045 tests)
+npm test           # full test suite (1050 tests)
 npm run typecheck  # tsc --noEmit
 npm run build      # production build
 ```
@@ -951,7 +951,10 @@ mock mode a config swap rather than a rewrite.
   surfaces as the ordinary `PayPalError`, and a token response whose
   `expires_in` is non-numeric, non-positive, or non-finite falls
   back to the default 3600-second lifetime instead of poisoning the
-  cache expiry. Concurrent callers on a cold or just-expired cache
+  cache expiry. A fractional `expires_in` is floored to the whole
+  seconds it admits, and a sub-1 fraction falls back to the same default
+  instead of producing an expiry the cache's 30-second validity
+  buffer could never honour. Concurrent callers on a cold or just-expired cache
   share a single in-flight token fetch — the console's read routes
   fan out in parallel, and without coalescing each parallel caller
   started its own credential exchange before any of them could
@@ -1205,7 +1208,7 @@ signatures mirror the REST resources one-to-one.
 ## Testing
 
 ```bash
-npm test           # vitest — 1045 tests, all green
+npm test           # vitest — 1050 tests, all green
 npm run typecheck  # TypeScript strict, clean
 npm run build      # Next.js production build
 npm run verify     # the whole gate below, as one command
@@ -1389,7 +1392,11 @@ refresh and one retry, the refreshed token reused afterwards, a
 persistent 401 surfacing after exactly one retry, a mutating
 retry reusing the same `PayPal-Request-Id`, a non-401 failure
 triggering neither refresh nor retry, and a non-numeric or
-non-positive `expires_in` falling back to the default lifetime),
+non-positive `expires_in` falling back to the default lifetime,
+a fractional `expires_in` floored to the whole seconds it
+admits at the exact cache boundary, a sub-1 fraction falling
+back to the same default, and an integer lifetime honoured
+exactly),
 the sandbox OAuth token-fetch coalescing (four parallel calls on a
 cold cache sharing one token fetch and proceeding on the same
 token, a failed shared fetch rejecting every waiter with the same
