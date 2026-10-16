@@ -16,6 +16,17 @@ build record behind these summaries.
 
 ### Added
 
+- **Ask-the-grid amount hygiene.** An Ask-the-grid amount
+  capture with no digits (a commas-only capture such as
+  `over ,,,` — commas are grouping separators, so it stripped
+  to an empty string and compiled into a silent `over 0.00`
+  filter) is now refused with `AskParseError` guidance at the
+  one conversion point every amount form passes through, in
+  the comparison, between, and or-more forms alike. A
+  non-finite conversion is refused the same way as defence in
+  depth; a large but finite amount is honoured, since a
+  filter is not a money movement and carries no amount cap.
+  This mirrors the brief parser's amount hygiene.
 - **Sandbox token `expires_in` fractional hygiene.** The
   sandbox adapter's OAuth token cache now floors a fractional
   `expires_in` to the whole seconds it admits — `expires_in`

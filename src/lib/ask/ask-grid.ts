@@ -18,6 +18,12 @@
  * - A query with no recognizable condition throws `AskParseError`
  *   with guidance — the grid is never silently cleared or given a
  *   model the parser did not understand.
+ * - Amount captures are checked at conversion: a digit-less
+ *   (commas-only) capture is refused with `AskParseError` guidance,
+ *   never compiled into a silent 0.00 filter; a non-finite
+ *   conversion (unreachable under today's query-length cap) is
+ *   refused the same way rather than surfaced as an internal
+ *   validation failure.
  */
 
 export class AskParseError extends Error {
@@ -328,10 +334,36 @@ const OP_LABELS: Record<AmountOp, string> = {
 const SYMBOL_CURRENCIES: Record<string, string> = { $: "USD", "€": "EUR", "£": "GBP" };
 
 function parseAmount(text: string): AmountCondition | undefined {
-  const money = (symbol: string | undefined, num: string, code: string | undefined): { value: number; currency?: string } => ({
-    value: Number(num.replace(/,/g, "")),
-    currency: (symbol ? SYMBOL_CURRENCIES[symbol] : undefined) ?? code?.toUpperCase(),
-  });
+  // Amount hygiene (mirrors the brief parser's amount rule): the
+  // amount patterns below admit commas as grouping separators, so a
+  // commas-only capture (``over ,,,``) strips to an empty string and
+  // Number("") is 0 — a silent ``over 0.00`` filter the user never
+  // asked for. It is refused here with AskParseError guidance, at
+  // the one conversion point every amount form (between /
+  // comparison / or-more) passes through. The finite check beside
+  // it is defence in depth: the 300-character query cap keeps every
+  // reachable digit string finite today, but if that cap ever
+  // changes, an overflowing digit string would become Infinity and
+  // surface as a misleading internal-validation failure instead of
+  // this user-facing refusal. A large but finite amount is NOT
+  // refused — a filter is not a money movement and carries no cap.
+  const money = (symbol: string | undefined, num: string, code: string | undefined): { value: number; currency?: string } => {
+    if (!/\d/.test(num)) {
+      throw new AskParseError(
+        `That amount ("${num}") has no digits — try an amount like "over $200" or "between $50 and $150".`,
+      );
+    }
+    const value = Number(num.replace(/,/g, ""));
+    if (!Number.isFinite(value)) {
+      throw new AskParseError(
+        "That amount is too large to filter by — try a smaller amount like \"over $200\".",
+      );
+    }
+    return {
+      value,
+      currency: (symbol ? SYMBOL_CURRENCIES[symbol] : undefined) ?? code?.toUpperCase(),
+    };
+  };
 
   const between = text.match(
     /between\s+([$€£])?\s*([\d,]+(?:\.\d{1,2})?)\s*(USD|EUR|GBP)?\s+and\s+([$€£])?\s*([\d,]+(?:\.\d{1,2})?)\s*(USD|EUR|GBP)?/i,

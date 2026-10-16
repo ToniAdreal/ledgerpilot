@@ -138,6 +138,46 @@ describe("parseAskQuery — amounts", () => {
   });
 });
 
+describe("parseAskQuery — amount hygiene (digit-less and overflowing amounts refused)", () => {
+  it("refuses a commas-only amount instead of compiling an over-0.00 filter", () => {
+    expect(() => parseAskQuery("show invoices over ,,,", { now: NOW })).toThrowError(/has no digits/);
+    expect(() => parseAskQuery("show invoices over ,,,", { now: NOW })).not.toThrowError(/Internal validation/);
+  });
+
+  it("refuses a commas-only amount in the or-more and between forms", () => {
+    expect(() => parseAskQuery("invoices $, or more", { now: NOW })).toThrowError(/has no digits/);
+    expect(() => parseAskQuery("invoices between $, and $150", { now: NOW })).toThrowError(/has no digits/);
+    expect(() => parseAskQuery("invoices between $50 and ,,,", { now: NOW })).toThrowError(/has no digits/);
+  });
+
+  it("a very large but finite amount still compiles and validates (a filter carries no money cap)", () => {
+    // The 300-character query cap keeps every reachable digit string
+    // finite, so the conversion point's non-finite guard is defence
+    // in depth; what must hold today is that a large finite filter —
+    // far above any plan-amount cap — is honoured, not refused.
+    const result = parseAskQuery("invoices over $999999999999", { now: NOW });
+    expect(invoices(result).amountValue).toEqual({
+      filterType: "number",
+      type: "greaterThan",
+      filter: 999999999999,
+    });
+    expect(validateAskFilterModels(result.models)).toEqual([]);
+  });
+
+  it("ordinary comma-grouped and decimal amounts are unchanged", () => {
+    expect(invoices(parseAskQuery("invoices over $1,200.50", { now: NOW })).amountValue).toEqual({
+      filterType: "number",
+      type: "greaterThan",
+      filter: 1200.5,
+    });
+    expect(invoices(parseAskQuery("invoices over $0.01", { now: NOW })).amountValue).toEqual({
+      filterType: "number",
+      type: "greaterThan",
+      filter: 0.01,
+    });
+  });
+});
+
 describe("parseAskQuery — people, keywords, kinds, dates", () => {
   it("recipient: “payouts to Marco” filters recipientName contains Marco", () => {
     const result = parseAskQuery("Show payouts to Marco", { now: NOW });

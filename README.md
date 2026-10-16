@@ -455,7 +455,11 @@ curl -X POST localhost:3000/api/agent/execute -H 'content-type: application/json
   invoices / COMPLETED orders / SUCCESS payouts), amounts with currency,
   recipients, overdue (open + due date in the past), and relative dates.
   Only whitelisted columns, filter types, and operators can ever reach the
-  grid; every emitted model is validated before it is applied.
+  grid; every emitted model is validated before it is applied. A digit-less
+  amount capture (``over ,,,`` — commas are grouping separators, so it would
+  otherwise strip to a silent 0.00 filter) is refused with guidance; a large
+  but finite amount is honoured, since a filter is not a money movement and
+  carries no amount cap.
 - **Judge Mode.** `/judge` seeds the fictional scenario above (all customers
   are invented; the one sample dispute is explicitly flagged `sample: true`)
   and explains exactly what will happen before it happens. When a run is
@@ -799,7 +803,7 @@ are not blocked, the suite also runs on them).
 ```bash
 npm install
 npm run dev        # http://localhost:3000
-npm test           # full test suite (1050 tests)
+npm test           # full test suite (1054 tests)
 npm run typecheck  # tsc --noEmit
 npm run build      # production build
 ```
@@ -1208,7 +1212,7 @@ signatures mirror the REST resources one-to-one.
 ## Testing
 
 ```bash
-npm test           # vitest — 1050 tests, all green
+npm test           # vitest — 1054 tests, all green
 npm run typecheck  # TypeScript strict, clean
 npm run build      # Next.js production build
 npm run verify     # the whole gate below, as one command
@@ -1332,7 +1336,10 @@ every step shape, pending-only editing with regenerated descriptions
 and an audit record, the 404/409/400 refusal matrix including a
 no-change edit, and a full loop executed at the amended amounts),
 Ask-the-grid parsing +
-validator negative cases, the full Judge Mode loop (seed idempotency,
+validator negative cases, Ask amount hygiene (digit-less commas-only
+captures refused with guidance in the comparison, between, and or-more
+forms; ordinary comma-grouped amounts and large finite filters honoured),
+the full Judge Mode loop (seed idempotency,
 the historical-event guard, double-payment no-op), and the sandbox REST
 adapter against a stub fetch (OAuth caching/expiry, the links-only
 create-invoice flow, order capture + list-by-id, payout mapping, the
