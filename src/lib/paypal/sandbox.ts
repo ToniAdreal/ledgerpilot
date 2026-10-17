@@ -381,7 +381,10 @@ function toParty(value: unknown): Party {
 
 function toMoney(value: unknown, fallback?: Money): Money {
   const raw = asRaw(value);
-  const currency = asString(raw.currency_code);
+  // Orders/Invoicing carry `currency_code`; Payouts responses carry
+  // `currency`. Accept both so payout amounts do not fall back to a
+  // zero USD stub.
+  const currency = asString(raw.currency_code) || asString(raw.currency);
   const amount = asString(raw.value);
   if (currency && amount) {
     return { currency_code: currency as Money["currency_code"], value: amount };
@@ -496,6 +499,14 @@ export class SandboxPayPalClient implements PayPalClient {
   private tokenFetchInFlight: Promise<string> | null = null;
   /** Orders v2 has no list endpoint — see the header note. */
   private readonly knownOrderIds: string[] = [];
+  /**
+   * Batches this client created. The Payouts list endpoint 404s on
+   * some sandbox accounts (seen live 2026-10-16: create + single-
+   * batch GET work, every list variant 404s), so listPayouts falls
+   * back to per-batch GETs of these ids — the same pattern
+   * listOrders uses for Orders v2.
+   */
+  private readonly knownPayoutBatchIds: string[] = [];
   /** Receiver email -> recipient supplied at payout creation (names). */
   private readonly knownRecipients = new Map<string, Party>();
   private payoutSeq = 0;
@@ -819,10 +830,15 @@ export class SandboxPayPalClient implements PayPalClient {
     const raw = asRaw(created);
     let id = asString(raw.id);
     if (!id) {
+      // PayPal's create-invoice 201 body is a single HATEOAS link
+      // object ({rel:"self", href, method}) — not the resource, and
+      // not wrapped in a `links` array (verified live in sandbox,
+      // 2026-10-16). Accept that shape as well as links[].
+      const directHref = asString(raw.rel) === "self" ? asString(raw.href) : "";
       const self = asArray(raw.links)
         .map((link) => asRaw(link))
         .find((link) => asString(link.rel) === "self");
-      const href = asString(self?.href);
+      const href = directHref || asString(self?.href);
       id = href.split("/").filter(Boolean).pop() ?? "";
     }
     if (!id) {
@@ -988,20 +1004,49 @@ export class SandboxPayPalClient implements PayPalClient {
         items: input.items.map((item, idx) => ({
           recipient_type: "EMAIL",
           receiver: item.recipient.email_address,
-          amount: item.amount,
+          // The Payouts API names the currency field `currency`, not
+          // the `currency_code` used by Orders/Invoicing — sending
+          // `currency_code` is rejected by live PayPal with
+          // VALIDATION_ERROR "items[0].amount.currency may not be
+          // null" (found by the 2026-10-16 real-sandbox run).
+          amount: { value: item.amount.value, currency: item.amount.currency_code },
           note: item.note,
           sender_item_id: item.sender_item_id ?? `item-${idx + 1}`,
         })),
       },
     });
-    return this.toPayoutBatch(raw, fallbackItems);
+    const batch = this.toPayoutBatch(raw, fallbackItems);
+    if (batch.batch_header.payout_batch_id && !this.knownPayoutBatchIds.includes(batch.batch_header.payout_batch_id)) {
+      this.knownPayoutBatchIds.push(batch.batch_header.payout_batch_id);
+    }
+    return batch;
   }
 
   async listPayouts(): Promise<PayoutBatch[]> {
-    const items = await this.listAllPages("/v1/payments/payouts?page_size=100", (body) =>
-      asArray(asRaw(body).items),
-    );
-    return items.map((item) => this.toPayoutBatch(item));
+    try {
+      const items = await this.listAllPages("/v1/payments/payouts?page_size=100", (body) =>
+        asArray(asRaw(body).items),
+      );
+      return items.map((item) => this.toPayoutBatch(item));
+    } catch (err) {
+      // Sandbox accounts answer the list endpoint with 404 while
+      // create and single-batch GET work (verified live 2026-10-16
+      // on two independent sandbox accounts, including before any
+      // batch existed). Fall back to the batches this client
+      // created; with none known, an empty list is the truthful
+      // answer for this endpoint on those accounts.
+      if (err instanceof PayPalError && err.status === 404) {
+        const batches: PayoutBatch[] = [];
+        for (const id of this.knownPayoutBatchIds) {
+          const raw = await this.request<unknown>(`/v1/payments/payouts/${encodeURIComponent(id)}`, {
+            method: "GET",
+          });
+          batches.push(this.toPayoutBatch(raw));
+        }
+        return batches;
+      }
+      throw err;
+    }
   }
 
   /* ---------------- Read-only surfaces ---------------- */

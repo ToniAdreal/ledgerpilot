@@ -249,8 +249,15 @@ async function main() {
     throw new SmokeError(payStep, `expected HTTP 200, got HTTP ${pay.status}: ${serverError(pay.json)}`);
   }
   expectEqual(payStep, "alreadyPaid on first payment", pay.json?.alreadyPaid, false);
-  expectEqual(payStep, "invoice status after payment", pay.json?.invoice?.status, "PAID");
-  ok(`invoice ${invoiceId} recorded PAID`);
+  // PayPal marks an externally recorded payment MARKED_AS_PAID;
+  // PAID is reserved for payments captured through PayPal itself
+  // (verified live in sandbox 2026-10-16). Both are settled states
+  // in the app's model (record-payment.ts treats them alike).
+  const settledStatus = pay.json?.invoice?.status;
+  if (settledStatus !== "PAID" && settledStatus !== "MARKED_AS_PAID") {
+    throw new SmokeError(payStep, `invoice status after payment: expected a settled state (PAID or MARKED_AS_PAID), got ${JSON.stringify(settledStatus)}`);
+  }
+  ok(`invoice ${invoiceId} recorded paid (${settledStatus})`);
 
   // 4. Payout leg: draft through the gate and execute one batch.
   //    Acceptance is PayPal-side (see header): the batch must exist

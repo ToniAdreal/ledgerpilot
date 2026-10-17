@@ -28,11 +28,12 @@ function json(status: number, value: unknown): Response {
   });
 }
 
-function makeStubFetch() {
+function makeStubFetch(opts: { payoutsList404?: boolean } = {}) {
   const requests: RecordedRequest[] = [];
   let tokenCalls = 0;
   const invoices = new Map<string, Record<string, unknown>>();
   const orders = new Map<string, Record<string, unknown>>();
+  const payoutBatches = new Map<string, Record<string, unknown>>();
   let invoiceSeq = 0;
 
   const fetchFn: FetchFn = async (url, init) => {
@@ -67,9 +68,12 @@ function makeStubFetch() {
         due_amount: { currency_code: currency, value: total.toFixed(2) },
         links: [],
       });
-      // Real PayPal: 201 + HATEOAS links only, no resource body.
+      // Real PayPal (verified live in sandbox 2026-10-16): 201 +
+      // a bare HATEOAS link object — no id, no links array.
       return json(201, {
-        links: [{ href: `https://api-m.sandbox.paypal.com/v2/invoicing/invoices/${id}`, rel: "self", method: "GET" }],
+        rel: "self",
+        href: `https://api-m.sandbox.paypal.com/v2/invoicing/invoices/${id}`,
+        method: "GET",
       });
     }
     const invoiceMatch = path.match(/^\/v2\/invoicing\/invoices\/([^/]+)$/);
@@ -132,7 +136,7 @@ function makeStubFetch() {
 
     if (path === "/v1/payments/payouts" && method === "POST") {
       const parsed = JSON.parse(body) as Record<string, any>;
-      return json(201, {
+      const batch = {
         batch_header: {
           payout_batch_id: "BATCH-STUB-1",
           batch_status: "SUCCESS",
@@ -145,9 +149,20 @@ function makeStubFetch() {
           payout_item: item,
         })),
         links: [],
-      });
+      };
+      payoutBatches.set("BATCH-STUB-1", batch);
+      return json(201, batch);
+    }
+    const payoutMatch = path.match(/^\/v1\/payments\/payouts\/([^/]+)$/);
+    if (payoutMatch && method === "GET") {
+      const batch = payoutBatches.get(payoutMatch[1]!);
+      if (!batch) return json(404, { name: "RESOURCE_NOT_FOUND", message: "Payout batch not found." });
+      return json(200, batch);
     }
     if (path === "/v1/payments/payouts" && method === "GET") {
+      // Some real sandbox accounts 404 the list endpoint while
+      // create + single-batch GET work (verified live 2026-10-16).
+      if (opts.payoutsList404) return json(404, { name: "RESOURCE_NOT_FOUND", message: "Not found." });
       return json(200, { total_items: 0, items: [] });
     }
 
@@ -201,8 +216,8 @@ function makeStubFetch() {
   return { fetchFn, requests, tokenCalls: () => tokenCalls };
 }
 
-function makeClient(nowRef: { ms: number }, webhookId = "WH-ID-1") {
-  const stub = makeStubFetch();
+function makeClient(nowRef: { ms: number }, webhookId = "WH-ID-1", stubOpts: { payoutsList404?: boolean } = {}) {
+  const stub = makeStubFetch(stubOpts);
   const client = new SandboxPayPalClient({
     clientId: "fake-client-id",
     clientSecret: "fake-client-secret",
@@ -342,6 +357,31 @@ describe("sandbox payouts", () => {
     const postBody = JSON.parse(postReq.body) as Record<string, any>;
     expect(postBody.items[0]).toMatchObject({ recipient_type: "EMAIL", receiver: "marco@example.com" });
     expect(postBody.sender_batch_header.sender_batch_id).toMatch(/^LEDGERPILOT-/);
+    // The live Payouts API requires `amount.currency` (not the
+    // Orders-style `currency_code`) — a real-sandbox run on
+    // 2026-10-16 was rejected with "items[0].amount.currency may
+    // not be null" when the adapter passed `currency_code` through.
+    expect(postBody.items[0].amount).toEqual({ currency: "USD", value: "200.00" });
+    // The stub echoes the request item back as PayPal would (with
+    // the `currency` field name); parsing must restore the internal
+    // Money shape instead of falling back to a zero amount.
+    expect(batch.items[0]?.payout_item.amount).toEqual({ currency_code: "USD", value: "200.00" });
+  });
+
+  it("falls back to per-batch GETs when the list endpoint 404s (real sandbox behavior)", async () => {
+    const { client } = makeClient({ ...T0 }, "WH-ID-1", { payoutsList404: true });
+    await client.createPayout({
+      items: [{ recipient: MARCO, amount: { currency_code: "USD", value: "200.00" }, note: "Contractor share" }],
+    });
+    const batches = await client.listPayouts();
+    expect(batches).toHaveLength(1);
+    expect(batches[0]?.batch_header.payout_batch_id).toBe("BATCH-STUB-1");
+    expect(batches[0]?.items[0]?.payout_item.amount).toEqual({ currency_code: "USD", value: "200.00" });
+  });
+
+  it("returns an empty list when the list endpoint 404s before any payout exists", async () => {
+    const { client } = makeClient({ ...T0 }, "WH-ID-1", { payoutsList404: true });
+    await expect(client.listPayouts()).resolves.toEqual([]);
   });
 });
 
