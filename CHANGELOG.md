@@ -16,6 +16,20 @@ build record behind these summaries.
 
 ### Added
 
+- **Mock adapter sub-cent hygiene.** The mock PayPal adapter now
+  applies the two-decimal emitted-value rule at its own boundary,
+  mirroring every app surface: a sub-cent amount (0.001–0.004,
+  which formats to "0.00") is refused naming the 0.01 floor on
+  invoice unit amounts, order amounts, payout item amounts, and
+  recorded payments — previously a direct adapter call could
+  create a "0.00" invoice, capture a "0.001" order, pay a
+  "-0.001" payout as SUCCESS, and flip an invoice to
+  `PARTIALLY_PAID` for a recorded payment that moved nothing. An
+  invoice total that rounds to 0.00 via a tiny fractional
+  quantity refuses as well, amounts are stored as emitted (0.005
+  is the 0.01 it formats to), and a non-array payout `items`
+  refuses as a 400 `VALIDATION_ERROR` instead of a raw
+  `TypeError`. Refusals leave all state untouched.
 - **Form-preview sub-cent hygiene.** The live previews of the three
   console money forms (invoice, sell, payout batch) now apply the
   same emitted-value sub-cent rule as their validators: a sub-cent

@@ -339,6 +339,22 @@ curl -X POST localhost:3000/api/agent/execute -H 'content-type: application/json
   same rule the record-payment leg states. Create-call refusals are
   400 `VALIDATION_ERROR`; recorded-payment refusals are
   422 `UNPROCESSABLE_ENTITY`; a refusal leaves every resource untouched.
+- **Mock adapter sub-cent hygiene (the two-decimal boundary at the
+  adapter's own boundary).** The validation above governed the
+  pre-rounding number, so a direct adapter caller could still create an
+  invoice whose total formatted to `0.00`, capture an order whose
+  transaction carried the verbatim `0.001`, pay out a `-0.001`
+  transaction as SUCCESS, record a `0.004` payment that flipped an
+  invoice to `PARTIALLY_PAID` while the amount due stayed `450.00`
+  (a payment that moved nothing, recorded as progress), and total a
+  `0.00` invoice from a tiny fractional quantity (`0.001 × 1.00`). The
+  adapter now applies the same emitted-value rule every app surface
+  enforces (drafts, LLM validator, record-payment leg, forms): an
+  amount whose two-decimal form is `0.00` is refused naming the 0.01
+  floor, the invoice total is checked at the same boundary, amounts
+  are stored as emitted (`0.005` is stored as the `0.01` it formats
+  to), and a non-array payout `items` refuses as a
+  400 `VALIDATION_ERROR` instead of escaping as a raw `TypeError`.
 - **Form-preview sub-cent hygiene (the live previews never present a
   0.00 total).** The three console money forms (invoice, sell, payout
   batch) each carry a live preview whose stated rule is that an invalid
@@ -838,7 +854,7 @@ are not blocked, the suite also runs on them).
 ```bash
 npm install
 npm run dev        # http://localhost:3000
-npm test           # full test suite (1099 tests)
+npm test           # full test suite (1115 tests)
 npm run typecheck  # tsc --noEmit
 npm run build      # production build
 ```
@@ -1247,7 +1263,7 @@ signatures mirror the REST resources one-to-one.
 ## Testing
 
 ```bash
-npm test           # vitest — 1099 tests, all green
+npm test           # vitest — 1115 tests, all green
 npm run typecheck  # TypeScript strict, clean
 npm run build      # Next.js production build
 npm run verify     # the whole gate below, as one command
@@ -1385,6 +1401,12 @@ while fractional quantities total correctly; recorded payments refused
 when non-positive, non-numeric, in the wrong currency, or above the
 amount due — with the invoice, its recorded partials, and the
 transaction ledger left exactly as they were),
+mock adapter sub-cent hygiene (sub-cent invoice unit, order, payout, and
+recorded-payment amounts refused at the adapter boundary naming the 0.01
+floor; an invoice total that rounds to 0.00 via a tiny fractional quantity
+refused; 0.005 stored and transacted as the 0.01 it formats to on every
+create path, including a 0.005 recorded payment paying a 0.01 invoice in
+full; a non-array payout items value refused as a 400, never a TypeError),
 the full Judge Mode loop (seed idempotency,
 the historical-event guard, double-payment no-op), and the sandbox REST
 adapter against a stub fetch (OAuth caching/expiry, the links-only

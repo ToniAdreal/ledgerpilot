@@ -81,9 +81,27 @@ function sumMoney(items: Array<{ quantity: string; unit_amount: Money }>): Money
  *    item amounts, recorded payments) must be finite and greater
  *    than zero — as numbers, so "abc" / "" / "Infinity" refuse,
  *    not only "0.00" and negatives.
+ *  - The positivity rule governs the amount actually emitted, at
+ *    the same two-decimal boundary every app surface enforces
+ *    (drafts, LLM validator, record-payment leg, forms): a
+ *    sub-cent amount (0.001–0.004) is positive as a number but
+ *    formats to "0.00", so it refuses here too, naming the 0.01
+ *    floor. Before this, the mock created a "0.00" invoice,
+ *    captured a "0.001" order, paid a "-0.001" payout, and flipped
+ *    an invoice to PARTIALLY_PAID for a recorded payment that
+ *    moved nothing (the due amount was unchanged after rounding).
+ *    The value this helper returns — and the amounts the create
+ *    methods store — is the emitted two-decimal value (0.005 is
+ *    the 0.01 it formats to, exactly as the app surfaces emit it).
  *  - Invoice quantities must be finite and greater than zero;
  *    fractional quantities (2.5 hours) are legitimate and kept.
- *  - An invoice needs at least one item.
+ *    The invoice *total* is checked at the same boundary: a tiny
+ *    fractional quantity can shrink a valid unit amount below one
+ *    cent (0.001 × 1.00), and a total that rounds to "0.00"
+ *    refuses rather than creating a zero-value invoice.
+ *  - An invoice needs at least one item; a payout batch needs an
+ *    items array with at least one item (a non-array `items`
+ *    refuses as a 400 here, never as a raw TypeError).
  *  - A recorded payment must be in the invoice's own currency
  *    and must not exceed the amount due.
  * Create-call refusals are 400 VALIDATION_ERROR (the payout
@@ -95,7 +113,15 @@ function requirePositiveAmount(value: string, label: string, status: number, nam
   if (!Number.isFinite(n) || n <= 0) {
     throw new PayPalError(`${label} must be a positive amount — got '${value}'`, status, name);
   }
-  return n;
+  const formatted = n.toFixed(2);
+  if (Number(formatted) <= 0) {
+    throw new PayPalError(
+      `${label} must be at least 0.01 — amounts are kept to two decimal places, so '${value}' rounds to 0.00`,
+      status,
+      name,
+    );
+  }
+  return Number(formatted);
 }
 
 function validateInvoiceItems(items: CreateInvoiceInput["items"]): void {
@@ -338,7 +364,23 @@ export class MockPayPalClient implements PayPalClient {
 
   async createInvoice(input: CreateInvoiceInput): Promise<Invoice> {
     validateInvoiceItems(input.items);
-    const amount = sumMoney(input.items);
+    // Amounts are stored as emitted — two-decimal values, summed
+    // from the emitted units, exactly as the app surfaces produce
+    // them (a unit of "0.005" is stored as the "0.01" it formats
+    // to). The total is then checked at the same boundary: a tiny
+    // fractional quantity can shrink valid units below one cent.
+    const items = input.items.map((item) => ({
+      ...item,
+      unit_amount: { ...item.unit_amount, value: Number(item.unit_amount.value).toFixed(2) },
+    }));
+    const amount = sumMoney(items);
+    if (Number(amount.value) <= 0) {
+      throw new PayPalError(
+        "Invoice totals must be at least 0.01 — these items total 0.00 when kept to two decimal places (quantity × unit amount)",
+        400,
+        "VALIDATION_ERROR",
+      );
+    }
     const id = nextId("INV2");
     const invoice: Invoice = {
       id,
@@ -353,7 +395,7 @@ export class MockPayPalClient implements PayPalClient {
       primary_recipients: [
         { billing_info: { name: input.recipient.name, email_address: input.recipient.email_address } },
       ],
-      items: input.items,
+      items,
       amount,
       due_amount: amount,
       links: [{ href: `mock://paypal/v2/invoicing/invoices/${id}`, rel: "self", method: "GET" }],
@@ -466,14 +508,18 @@ export class MockPayPalClient implements PayPalClient {
   /* ---------------- Orders v2 ---------------- */
 
   async createOrder(input: CreateOrderInput): Promise<Order> {
-    requirePositiveAmount(input.amount.value, "Order amounts", 400, "VALIDATION_ERROR");
+    const valid = requirePositiveAmount(input.amount.value, "Order amounts", 400, "VALIDATION_ERROR");
+    // Stored as emitted: the two-decimal value (see the money-rules
+    // note on requirePositiveAmount), so the capture transaction
+    // carries exactly what the order stated.
+    const amount: Money = { ...input.amount, value: valid.toFixed(2) };
     const id = nextId("ORDER");
     const order: Order = {
       id,
       status: "CREATED",
       intent: "CAPTURE",
       purchase_units: [
-        { reference_id: input.reference_id, description: input.description, amount: input.amount },
+        { reference_id: input.reference_id, description: input.description, amount },
       ],
       links: [
         { href: `mock://paypal/v2/checkout/orders/${id}`, rel: "self", method: "GET" },
@@ -519,12 +565,15 @@ export class MockPayPalClient implements PayPalClient {
   /* ---------------- Payouts ---------------- */
 
   async createPayout(input: CreatePayoutInput): Promise<PayoutBatch> {
-    if (input.items.length === 0) {
+    if (!Array.isArray(input.items) || input.items.length === 0) {
       throw new PayPalError("A payout batch needs at least one item", 400, "VALIDATION_ERROR");
     }
-    for (const item of input.items) {
-      requirePositiveAmount(item.amount.value, "Payout item amounts", 400, "VALIDATION_ERROR");
-    }
+    // Amounts stored as emitted — two-decimal values, so each
+    // payout transaction carries exactly what its item stated.
+    const items = input.items.map((item) => {
+      const valid = requirePositiveAmount(item.amount.value, "Payout item amounts", 400, "VALIDATION_ERROR");
+      return { ...item, amount: { ...item.amount, value: valid.toFixed(2) } };
+    });
     const batchId = nextId("BATCH");
     const batch: PayoutBatch = {
       batch_header: {
@@ -537,7 +586,7 @@ export class MockPayPalClient implements PayPalClient {
           email_message: input.emailMessage,
         },
       },
-      items: input.items.map((item, idx) => ({
+      items: items.map((item, idx) => ({
         payout_item_id: `${batchId}-ITEM-${idx + 1}`,
         transaction_status: "SUCCESS" as const,
         payout_item: { ...item, receiver: item.recipient.email_address },
