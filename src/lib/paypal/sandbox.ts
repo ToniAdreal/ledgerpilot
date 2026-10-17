@@ -30,10 +30,18 @@ import { PayPalError, PayPalNotConfiguredError, type PayPalClient } from "./clie
  * (`now`), so the full REST surface — OAuth token fetch + caching,
  * request/response mapping, and PayPal error translation — is unit
  * tested against a stub fetch with fake credentials. Nothing in those
- * tests touches the network or a real PayPal account. The adapter has
- * NOT yet been exercised against the live sandbox: that happens once
- * the PayPal Developer account exists (see BUILD_LOG BLOCKERS,
- * hard deadline Oct 24).
+ * tests touches the network or a real PayPal account. The adapter was
+ * exercised end to end against the live PayPal sandbox on 2026-10-16
+ * via `npm run smoke:sandbox` (invoice created + SENT, record-payment
+ * settled it as MARKED_AS_PAID, a payout batch was accepted, an order
+ * was created with a real checkout link, and the sync reconciler
+ * answered). That live run found three shapes the stub tests had
+ * modelled wrong, each fixed and pinned by regression tests: Payouts
+ * amounts carry `currency`, not `currency_code`; create-invoice
+ * answers 201 with a bare HATEOAS link object (no `id`, no `links`
+ * array); and the Payouts list endpoint answers 404 on some sandbox
+ * accounts while create + single-batch GET work, so listing falls
+ * back to per-batch GETs.
  *
  * Known PayPal API shapes this adapter is honest about:
  * - Create-invoice returns 201 with HATEOAS links and no resource body,

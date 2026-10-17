@@ -854,7 +854,7 @@ are not blocked, the suite also runs on them).
 ```bash
 npm install
 npm run dev        # http://localhost:3000
-npm test           # full test suite (1117 tests)
+npm test           # full test suite (1123 tests)
 npm run typecheck  # tsc --noEmit
 npm run build      # production build
 ```
@@ -1272,7 +1272,7 @@ signatures mirror the REST resources one-to-one.
 ## Testing
 
 ```bash
-npm test           # vitest — 1117 tests, all green
+npm test           # vitest — 1123 tests, all green
 npm run typecheck  # TypeScript strict, clean
 npm run build      # Next.js production build
 npm run verify     # the whole gate below, as one command
@@ -1603,7 +1603,11 @@ Unreleased with no version claimed as released before the public
 launch, the pending version agreeing with `package.json`, the
 shipped capabilities and the honesty notes — sandbox
 live-verified on 2026-10-16, AG Grid Community only, money never summed across
-currencies — all pinned), and the HTTP security headers
+currencies — all pinned), and the sandbox live status (the adapter
+and factory headers stating the 2026-10-16 live verification via
+`smoke:sandbox` with the live run's three adapter fixes named, and
+no stale not-yet-live claim surviving in the adapter layer, this
+README, or the CHANGELOG — all pinned), and the HTTP security headers
 (`next.config.mjs` — one header set applied to every route, the
 same-origin Content-Security-Policy with no wildcard or external
 origin and frame-ancestors 'none', HSTS without a preload claim,

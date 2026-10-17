@@ -16,6 +16,14 @@ build record behind these summaries.
 
 ### Added
 
+- **Sandbox live-status honesty.** The sandbox adapter and client
+  factory headers now state the live verification that actually
+  happened — exercised end to end against the live PayPal sandbox
+  on 2026-10-16 via `npm run smoke:sandbox`, with the live run's
+  three adapter fixes named — replacing the stale "not yet
+  exercised against a live sandbox" claim that survived the
+  verification in those two headers. Shape tests forbid the stale
+  claim in the adapter layer, the README, and this changelog.
 - **Mock adapter sub-cent hygiene.** The mock PayPal adapter now
   applies the two-decimal emitted-value rule at its own boundary,
   mirroring every app surface: a sub-cent amount (0.001–0.004,
