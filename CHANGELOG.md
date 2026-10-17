@@ -16,6 +16,15 @@ build record behind these summaries.
 
 ### Added
 
+- **Domain-types live-status honesty.** The domain types header no
+  longer calls the sandbox adapter a future adapter: both adapters
+  exist and are interchangeable behind the one `PayPalClient`
+  contract (the sandbox adapter shipped with the sandbox milestone
+  and was live-verified on 2026-10-16). Shape tests pin the
+  present-tense wording in the types header and forbid the stale
+  "future" claim in the adapter layer, the types, and the README —
+  the same stale-claim class the sandbox live-status entry below
+  closed in the adapter and factory headers.
 - **Sandbox live-status honesty.** The sandbox adapter and client
   factory headers now state the live verification that actually
   happened — exercised end to end against the live PayPal sandbox

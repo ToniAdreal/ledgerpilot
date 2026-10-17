@@ -3,7 +3,8 @@
  *
  * Shapes intentionally mirror the PayPal REST resources they wrap
  * (Invoicing v2, Orders v2, Payouts, Disputes, Transaction Search)
- * so the mock adapter and the future sandbox adapter are interchangeable.
+ * so the mock and sandbox adapters are interchangeable behind the
+ * one PayPalClient contract.
  */
 
 export type CurrencyCode = "USD" | "EUR" | "GBP";

@@ -12,7 +12,10 @@ import { describe, expect, it } from "vitest";
  * submission draft, and would undersell a verified flow to judges.
  * These tests pin the live-verified wording in the two source-file
  * headers that state it, and forbid the stale claim anywhere in the
- * adapter layer, the README, or the CHANGELOG.
+ * adapter layer, the README, or the CHANGELOG. The domain-types
+ * header is pinned too: it called the sandbox adapter "future" long
+ * after the adapter shipped and was live-verified — the same stale
+ * claim in a third header, closed by the types tests below.
  */
 
 const root = resolve(__dirname, "..");
@@ -20,6 +23,7 @@ const read = (rel: string) => readFileSync(resolve(root, rel), "utf8");
 
 const sandboxTs = read("src/lib/paypal/sandbox.ts");
 const factoryTs = read("src/lib/paypal/index.ts");
+const typesTs = read("src/lib/types.ts");
 const readme = read("README.md");
 const changelog = read("CHANGELOG.md");
 
@@ -74,6 +78,27 @@ describe("sandbox live status (live-verified 2026-10-16)", () => {
     expect(changelog.toLowerCase()).toContain(
       "exercised end to end against a live",
     );
+  });
+
+  it("types.ts no longer calls the sandbox adapter future", () => {
+    expect(typesTs.toLowerCase()).not.toContain("future sandbox adapter");
+    // The header states the present-tense fact instead: both adapters
+    // exist and are interchangeable behind the one contract.
+    expect(typesTs).toContain("mock and sandbox adapters are interchangeable");
+    expect(typesTs).toContain("PayPalClient");
+  });
+
+  it("no source or README surface calls the sandbox adapter future", () => {
+    for (const [name, text] of [
+      ["sandbox.ts", sandboxTs],
+      ["index.ts", factoryTs],
+      ["types.ts", typesTs],
+      ["README.md", readme],
+    ] as const) {
+      expect(text.toLowerCase(), `${name} must not claim: future sandbox adapter`).not.toContain(
+        "future sandbox adapter",
+      );
+    }
   });
 
   it("the live run's three adapter fixes stay named in the sandbox header", () => {
