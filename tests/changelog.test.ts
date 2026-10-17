@@ -59,8 +59,11 @@ describe("CHANGELOG.md", () => {
     }
   });
 
-  it("keeps the honesty notes: sandbox not live-verified, grouping not used", () => {
+  it("keeps the honesty notes: sandbox live-verified, grouping not used", () => {
     expect(changelog.toLowerCase()).toContain(
+      "exercised end to end against a live",
+    );
+    expect(changelog.toLowerCase()).not.toContain(
       "not yet been exercised against a live",
     );
     expect(changelog.toLowerCase()).toContain("community edition only");

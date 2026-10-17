@@ -854,7 +854,7 @@ are not blocked, the suite also runs on them).
 ```bash
 npm install
 npm run dev        # http://localhost:3000
-npm test           # full test suite (1115 tests)
+npm test           # full test suite (1117 tests)
 npm run typecheck  # tsc --noEmit
 npm run build      # production build
 ```
@@ -872,17 +872,26 @@ Set `PAYPAL_MODE=sandbox` and provide **your own** PayPal Developer sandbox
 credentials (see `.env.example`): `PAYPAL_CLIENT_ID`, `PAYPAL_CLIENT_SECRET`,
 `PAYPAL_WEBHOOK_ID`. Sandbox Business/Personal (buyer) test accounts are
 created inside your own developer dashboard; the hosted Judge Mode needs
-none of this. Status: the sandbox adapter now implements the full REST
+none of this. Status: the sandbox adapter implements the full REST
 surface behind the same contract — OAuth token fetch with caching,
 Invoicing v2, Orders v2, Payouts, Disputes + Transaction Search
-(read-only), and webhook signature verification — and that wiring is unit
-tested against a stub HTTP layer with fake credentials. It has **not yet
-been exercised against the live sandbox** (that needs a real sandbox app);
-mock mode remains the default and nothing in it depends on the sandbox
-adapter. Two PayPal shapes worth knowing: create-invoice returns only
-HATEOAS links, so the adapter reads the id from the `self` link and then
-GETs the invoice; and Orders v2 has no list endpoint, so listing re-GETs
-the orders this process created.
+(read-only), and webhook signature verification — unit tested against a
+stub HTTP layer with fake credentials, and **exercised end to end
+against the live PayPal sandbox on 2026-10-16** via
+`npm run smoke:sandbox` (invoice created + SENT, record-payment settled
+as `MARKED_AS_PAID`, payout batch accepted, order created with a real
+checkout link, sync reconciler answering). That live run found three
+adapter shapes the stub had modelled wrong, each now fixed and pinned
+by regression tests: Payouts amounts carry `currency`, not
+`currency_code`; create-invoice answers 201 with a bare HATEOAS link
+object (no `id`, no `links` array), so the adapter reads the id from
+that link's `href` (or a `links` array's `self` link) and then GETs the
+invoice; and the Payouts list endpoint answers 404 on some sandbox
+accounts while create + single-batch GET work, so listing falls back
+to per-batch GETs of the batches this process created. Orders v2
+likewise has no list endpoint, so listing re-GETs the orders this
+process created. Mock mode remains the default and nothing in it
+depends on the sandbox adapter.
 
 Once your sandbox app exists, `npm run smoke:sandbox` (see Testing)
 verifies this mode end to end against a running sandbox instance —
@@ -1263,7 +1272,7 @@ signatures mirror the REST resources one-to-one.
 ## Testing
 
 ```bash
-npm test           # vitest — 1115 tests, all green
+npm test           # vitest — 1117 tests, all green
 npm run typecheck  # TypeScript strict, clean
 npm run build      # Next.js production build
 npm run verify     # the whole gate below, as one command
@@ -1592,8 +1601,8 @@ address, referenced from CONTRIBUTING.md), and the changelog
 (`CHANGELOG.md` — Keep a Changelog format, everything under
 Unreleased with no version claimed as released before the public
 launch, the pending version agreeing with `package.json`, the
-shipped capabilities and the honesty notes — sandbox not yet
-live-verified, AG Grid Community only, money never summed across
+shipped capabilities and the honesty notes — sandbox
+live-verified on 2026-10-16, AG Grid Community only, money never summed across
 currencies — all pinned), and the HTTP security headers
 (`next.config.mjs` — one header set applied to every route, the
 same-origin Content-Security-Policy with no wildcard or external
@@ -1806,7 +1815,10 @@ mock-mode target fails that step (use `npm run smoke` there), and
 a misconfigured sandbox stops there too, naming the missing
 variables. It then drives the instance's own API surfaces through
 the approval gate — an invoice drafted, approved, executed
-(created + SENT) and recorded PAID; a payout batch drafted,
+(created + SENT) and recorded paid (PayPal marks an externally
+recorded payment `MARKED_AS_PAID`; `PAID` is reserved for payments
+captured through PayPal itself — the script accepts either settled
+state); a payout batch drafted,
 approved, and executed (an item status of SUCCESS, UNCLAIMED, or
 PENDING counts as PayPal acceptance; a refusal, e.g. Payouts not
 enabled on the sandbox Business account, fails the step with

@@ -601,8 +601,10 @@ build record behind these summaries.
   (default, zero credentials) and a sandbox REST implementation
   (Invoicing v2, Orders v2, Payouts, Disputes and Transaction Search
   read-only), selected by `PAYPAL_MODE`. The sandbox adapter is wired
-  and stub-tested; it has not yet been exercised against a live
-  sandbox account.
+  and stub-tested, and was exercised end to end against a live
+  sandbox account on 2026-10-16 (invoice → record-payment → payout
+  batch → order with a real checkout link → sync); the live run's
+  three adapter fixes are pinned by regression tests.
 - **Verified, idempotent webhooks plus a sync reconciler.** Webhook
   deliveries are signature-verified before they are trusted and each
   event id is processed exactly once; trigger-gated steps resume only
