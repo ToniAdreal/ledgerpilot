@@ -48,6 +48,10 @@ describe("Share image (opengraph-image / twitter-image file conventions)", () =>
     expect(src).not.toContain("fonts:");
   });
 
+  // ImageResponse rendering is CPU-heavy (measured 4.2s standalone);
+  // under full-suite load it exceeds vitest's 5s default timeout and
+  // fails spuriously, so this render test carries an explicit timeout.
+  // No assertion is relaxed — only the time budget is honest.
   it("renders a real PNG of the declared size", async () => {
     const { default: image } = await import("../src/app/opengraph-image");
     const res = image();
@@ -60,7 +64,7 @@ describe("Share image (opengraph-image / twitter-image file conventions)", () =>
     const view = new DataView(bytes.buffer, bytes.byteOffset);
     expect(view.getUint32(16)).toBe(1200);
     expect(view.getUint32(20)).toBe(630);
-  });
+  }, 30000);
 
   it("twitter-image re-exports the same generated image", () => {
     const src = readApp("twitter-image.tsx");

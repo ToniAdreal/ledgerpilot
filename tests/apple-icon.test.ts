@@ -47,6 +47,10 @@ describe("Apple touch icon (apple-icon file convention)", () => {
     expect(src).not.toContain("fonts:");
   });
 
+  // ImageResponse rendering is CPU-heavy (measured 2.4s standalone);
+  // under full-suite load it exceeds vitest's 5s default timeout and
+  // fails spuriously, so this render test carries an explicit timeout.
+  // No assertion is relaxed — only the time budget is honest.
   it("renders a real PNG of the declared size", async () => {
     const { default: icon } = await import("../src/app/apple-icon");
     const res = icon();
@@ -58,7 +62,7 @@ describe("Apple touch icon (apple-icon file convention)", () => {
     const view = new DataView(bytes.buffer, bytes.byteOffset);
     expect(view.getUint32(16)).toBe(180);
     expect(view.getUint32(20)).toBe(180);
-  });
+  }, 30000);
 
   it("layout leaves the touch icon to the convention (no hand-declared link)", () => {
     const src = readApp("layout.tsx");
