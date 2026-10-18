@@ -285,6 +285,29 @@ import { PayPalError, PayPalNotConfiguredError, type PayPalClient } from "./clie
  * either. The retry is independent of the 401 token refresh:
  * each mechanism fires at most once per logical call, so a call
  * makes at most three attempts in total.
+ *
+ * Money-mapping hygiene: every amount this adapter maps from a
+ * PayPal response passes through `toMoney`, and every downstream
+ * consumer converts that amount with `Number(...)` — the console
+ * read models and KPI totals, the invoice-detail line totals, and
+ * the record-payment leg's amount-due arithmetic. Until this check
+ * existed, `toMoney` accepted any non-empty string as an amount, so
+ * a malformed amount in a response (a non-numeric string from a
+ * proxy-shaped or non-conforming payload) was carried verbatim and
+ * every one of those conversions produced NaN: KPI totals rendered
+ * as "NaN", a line total rendered as "NaN", and a record-payment
+ * against such an invoice compared against a NaN due amount — and
+ * NaN comparisons are false, the exact slip the mock adapter's
+ * money validation closed at its own boundary — so the leg would
+ * have recorded a "NaN" payment instead of refusing. `toMoney` now
+ * accepts an amount only when it parses to a finite number
+ * (negative amounts stay valid: Transaction Search reports signed
+ * amounts); anything else falls back exactly as a missing amount
+ * already did. An invoice item's quantity is sanitised the same
+ * way (a non-numeric quantity maps to the "1" an absent quantity
+ * already mapped to), and the items-total fallback sums with
+ * finite-or-zero factors, so the fallback total can never be NaN
+ * either. Valid PayPal amounts are preserved verbatim.
  */
 
 export type FetchFn = (url: string, init?: RequestInit) => Promise<Response>;
@@ -387,6 +410,11 @@ function toParty(value: unknown): Party {
   };
 }
 
+/** True when a string carries a finite numeric amount (see the header's money-mapping note). */
+function isFiniteAmountString(value: string): boolean {
+  return value.trim() !== "" && Number.isFinite(Number(value));
+}
+
 function toMoney(value: unknown, fallback?: Money): Money {
   const raw = asRaw(value);
   // Orders/Invoicing carry `currency_code`; Payouts responses carry
@@ -394,7 +422,10 @@ function toMoney(value: unknown, fallback?: Money): Money {
   // zero USD stub.
   const currency = asString(raw.currency_code) || asString(raw.currency);
   const amount = asString(raw.value);
-  if (currency && amount) {
+  // A malformed amount is treated exactly like a missing one: it
+  // falls back instead of poisoning every downstream Number(...)
+  // conversion with NaN (see the header's money-mapping note).
+  if (currency && amount && isFiniteAmountString(amount)) {
     return { currency_code: currency as Money["currency_code"], value: amount };
   }
   return fallback ?? { currency_code: "USD", value: "0.00" };
@@ -402,10 +433,14 @@ function toMoney(value: unknown, fallback?: Money): Money {
 
 function sumItems(items: Array<{ quantity: string; unit_amount: Money }>): Money {
   const currency = items[0]?.unit_amount.currency_code ?? "USD";
-  const total = items.reduce(
-    (acc, i) => acc + Number(i.quantity) * Number(i.unit_amount.value),
-    0,
-  );
+  const total = items.reduce((acc, i) => {
+    const quantity = Number(i.quantity);
+    const unitValue = Number(i.unit_amount.value);
+    // Finite-or-zero factors: this fallback total must never be NaN,
+    // even if a caller hands it an unsanitised item (defence in depth
+    // behind the quantity/toMoney sanitisation in toInvoice).
+    return acc + (Number.isFinite(quantity) ? quantity : 0) * (Number.isFinite(unitValue) ? unitValue : 0);
+  }, 0);
   return { currency_code: currency, value: total.toFixed(2) };
 }
 
@@ -415,9 +450,12 @@ function toInvoice(rawInput: unknown): Invoice {
   const paymentTerm = asRaw(detail.payment_term);
   const items = asArray(raw.items).map((item) => {
     const r = asRaw(item);
+    const rawQuantity = asString(r.quantity, "1");
     return {
       name: asString(r.name),
-      quantity: asString(r.quantity, "1"),
+      // A non-numeric quantity maps to the "1" an absent quantity
+      // already maps to, so line totals never compute to NaN.
+      quantity: isFiniteAmountString(rawQuantity) ? rawQuantity : "1",
       unit_amount: toMoney(r.unit_amount),
     };
   });

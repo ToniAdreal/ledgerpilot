@@ -16,6 +16,19 @@ build record behind these summaries.
 
 ### Added
 
+- **Sandbox money-mapping hygiene.** Amounts mapped from PayPal
+  responses are now accepted only when they parse to a finite
+  number: a malformed amount in an invoice, order, payout, dispute,
+  or transaction response falls back exactly like a missing amount
+  instead of carrying verbatim into downstream `Number(...)`
+  conversions as NaN (console KPI totals, invoice line totals, and
+  the record-payment leg's amount-due arithmetic — where NaN
+  comparisons are false, so a "NaN" payment could have been
+  recorded instead of refused). A non-numeric invoice item
+  quantity maps to the "1" an absent quantity already mapped to,
+  the items-total fallback sums with finite-or-zero factors so it
+  can never be NaN, and valid amounts — including signed
+  Transaction Search amounts — are preserved verbatim.
 - **Domain-types live-status honesty.** The domain types header no
   longer calls the sandbox adapter a future adapter: both adapters
   exist and are interchangeable behind the one `PayPalClient`

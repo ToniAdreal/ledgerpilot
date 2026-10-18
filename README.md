@@ -854,7 +854,7 @@ are not blocked, the suite also runs on them).
 ```bash
 npm install
 npm run dev        # http://localhost:3000
-npm test           # full test suite (1125 tests)
+npm test           # full test suite (1129 tests)
 npm run typecheck  # tsc --noEmit
 npm run build      # production build
 ```
@@ -1272,7 +1272,7 @@ signatures mirror the REST resources one-to-one.
 ## Testing
 
 ```bash
-npm test           # vitest — 1125 tests, all green
+npm test           # vitest — 1129 tests, all green
 npm run typecheck  # TypeScript strict, clean
 npm run build      # Next.js production build
 npm run verify     # the whole gate below, as one command
@@ -1421,7 +1421,13 @@ the historical-event guard, double-payment no-op), and the sandbox REST
 adapter against a stub fetch (OAuth caching/expiry, the links-only
 create-invoice flow, order capture + list-by-id, payout mapping, the
 nested Transaction Search shape, webhook verification SUCCESS/FAILURE,
-and PayPal error translation), the sandbox transport timeout (an
+and PayPal error translation), the sandbox money mapping (a malformed
+amount in an invoice, dispute, or transaction response falling back
+exactly like a missing amount instead of carrying verbatim into
+Number(...) conversions as NaN, a non-numeric invoice quantity mapping
+to 1, the items-total fallback never NaN, a valid signed transaction
+amount preserved verbatim, and the console KPI totals staying finite),
+the sandbox transport timeout (an
 AbortSignal on every outbound call, a hanging API call and a hanging
 OAuth token fetch each translated into a 504 `REQUEST_TIMEOUT`
 `PayPalError` naming method + path only, a slow-but-inside-the-bound
