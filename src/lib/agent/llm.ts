@@ -100,6 +100,24 @@
  *    blank, or whitespace only) falls back to the default
  *    (`LLM_DEFAULT_MODEL`). The base URL above is normalised the
  *    same way.
+ *  - **API-key normalisation.** Every request this adapter builds
+ *    carries the configured key in its Bearer header, so the key
+ *    must be clean and present. Until this normalisation existed,
+ *    only the env-built config was sanitised: `getLlmConfig`
+ *    trimmed `LLM_API_KEY` and returned null (adapter off) for a
+ *    blank value, while a directly constructed adapter carried
+ *    its `apiKey` verbatim — a padded key was sent padded, and a
+ *    blank or whitespace-only key was sent as an empty Bearer
+ *    credential no endpoint accepts, from an adapter that looked
+ *    configured. The key is now normalised in one place
+ *    (`normalizeLlmApiKey`, used by both `getLlmConfig` and the
+ *    adapter constructor): trimmed, and a value that is empty once
+ *    trimmed counts as not configured — `getLlmConfig` returns
+ *    null, and the constructor refuses with a fixed
+ *    `LlmExtractionError` naming no credential value, mirroring
+ *    the sandbox adapter's `PayPalNotConfiguredError` discipline
+ *    for its credentials. The health report's non-blank rule for
+ *    `LLM_API_KEY` agrees with this normalisation.
  *
  * The HTTP layer is injectable (fetch + config), so the adapter is fully
  * unit-tested offline against a stub with a fake key — no network, no
@@ -150,7 +168,19 @@ export function normalizeLlmModel(value: string | undefined | null): string {
   return normalised === "" ? LLM_DEFAULT_MODEL : normalised;
 }
 
+/**
+ * Normalise a configured LLM API key: trim surrounding whitespace,
+ * and return the empty string when the value is missing or empty
+ * once trimmed (not configured) — see the header's API-key
+ * normalisation note. The key value itself is never logged or
+ * carried in any error.
+ */
+export function normalizeLlmApiKey(value: string | undefined | null): string {
+  return (value ?? "").trim();
+}
+
 export interface LlmConfig {
+  /** API key for the OpenAI-compatible endpoint. The value is normalised by `normalizeLlmApiKey` in `getLlmConfig` and again in the adapter constructor: trimmed, and a value that is empty once trimmed counts as not configured (the constructor refuses it). */
   apiKey: string;
   /** Base URL for the OpenAI-compatible endpoint. The value is normalised by `normalizeLlmBaseUrl` in `getLlmConfig` and again in the adapter constructor: trimmed, stripped of all trailing slashes, and a value that is empty once normalised falls back to LLM_DEFAULT_BASE_URL. */
   baseUrl: string;
@@ -176,7 +206,7 @@ export interface LlmAdapterOptions {
 
 /** Build the LLM config from the environment; null when the adapter is off. */
 export function getLlmConfig(env: Record<string, string | undefined>): LlmConfig | null {
-  const apiKey = env.LLM_API_KEY?.trim();
+  const apiKey = normalizeLlmApiKey(env.LLM_API_KEY);
   if (!apiKey) return null;
   return {
     apiKey,
@@ -392,6 +422,9 @@ export class OpenAiCompatibleLlmAdapter implements LlmBriefExtractor {
   /** The normalised model name every request body carries (see `normalizeLlmModel`). */
   readonly model: string;
 
+  /** The normalised API key every request's Bearer header carries (see `normalizeLlmApiKey`). The value is exposed only so tests and diagnostics can verify the normalisation; it is never logged. */
+  readonly apiKey: string;
+
   private readonly config: LlmConfig;
   private readonly fetchFn: FetchLike;
 
@@ -399,6 +432,17 @@ export class OpenAiCompatibleLlmAdapter implements LlmBriefExtractor {
     config: LlmConfig,
     options: LlmAdapterOptions = {},
   ) {
+    // A directly constructed adapter gets the same API-key
+    // normalisation the env-built config gets — see the header's
+    // API-key normalisation note. A key that is empty once trimmed
+    // counts as not configured, and there is no adapter without a
+    // key, so construction refuses it (naming no credential value).
+    this.apiKey = normalizeLlmApiKey(config.apiKey);
+    if (!this.apiKey) {
+      throw new LlmExtractionError(
+        "LLM API key is not configured — set LLM_API_KEY or pass a non-empty apiKey; the LLM adapter is off without one",
+      );
+    }
     // A directly constructed adapter gets the same base-URL
     // normalisation the env-built config gets — see the header's
     // base-URL normalisation note.
@@ -406,7 +450,7 @@ export class OpenAiCompatibleLlmAdapter implements LlmBriefExtractor {
     // …and the same model normalisation — see the header's model
     // normalisation note.
     this.model = normalizeLlmModel(config.model);
-    this.config = { ...config, baseUrl: this.baseUrl, model: this.model };
+    this.config = { ...config, apiKey: this.apiKey, baseUrl: this.baseUrl, model: this.model };
     this.fetchFn = options.fetchFn ?? (globalThis.fetch as unknown as FetchLike);
   }
 

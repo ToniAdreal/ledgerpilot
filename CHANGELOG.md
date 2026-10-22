@@ -16,6 +16,18 @@ build record behind these summaries.
 
 ### Added
 
+- **LLM API-key normalisation.** The optional LLM adapter's
+  configured API key is now normalised in one place
+  (`normalizeLlmApiKey`, used by both the env factory and the
+  adapter constructor): trimmed, with a value that is empty once
+  trimmed counting as not configured — the env factory returns
+  null (adapter off) and the constructor refuses with a fixed
+  `LlmExtractionError` naming no credential value. Previously
+  only the env-built config was sanitised, and a directly
+  constructed adapter carried its key verbatim into the Bearer
+  header — a padded key was sent padded, and a blank key was
+  sent as an empty credential — mirroring the sandbox
+  adapter's credential normalisation.
 - **PAYPAL_MODE normalisation.** The effective PayPal mode is now
   decided in one shared normaliser (`normalizePayPalMode` in
   `src/lib/paypal/mode.ts`), used by both the client factory and

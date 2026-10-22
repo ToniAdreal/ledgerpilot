@@ -854,7 +854,7 @@ are not blocked, the suite also runs on them).
 ```bash
 npm install
 npm run dev        # http://localhost:3000
-npm test           # full test suite (1165 tests)
+npm test           # full test suite (1171 tests)
 npm run typecheck  # tsc --noEmit
 npm run build      # production build
 ```
@@ -1272,7 +1272,7 @@ signatures mirror the REST resources one-to-one.
 ## Testing
 
 ```bash
-npm test           # vitest — 1165 tests, all green
+npm test           # vitest — 1171 tests, all green
 npm run typecheck  # TypeScript strict, clean
 npm run build      # Next.js production build
 npm run verify     # the whole gate below, as one command
@@ -1460,6 +1460,14 @@ directly constructed adapter previously carried its model
 verbatim into every request body, so a padded name was sent
 padded and a blank name was sent as an empty model; a blank or
 whitespace-only value now falls back to the default model),
+the LLM API-key normalisation (the same normalisation applied in
+both the env-built config and the adapter constructor — a
+directly constructed adapter previously carried its key verbatim
+into the Bearer header, so a padded key was sent padded and a
+blank key was sent as an empty credential; the key is now trimmed
+in both paths, and a blank or whitespace-only key counts as not
+configured — the env factory returns null and the constructor
+refuses, naming no credential value),
 the sandbox transport timeout (an
 AbortSignal on every outbound call, a hanging API call and a hanging
 OAuth token fetch each translated into a 504 `REQUEST_TIMEOUT`
