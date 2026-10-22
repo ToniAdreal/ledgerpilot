@@ -85,6 +85,21 @@
  *    the default (`LLM_DEFAULT_BASE_URL`) instead of producing
  *    relative request URLs. The sandbox adapter normalises its
  *    base URL in its constructor exactly the same way.
+ *  - **Model normalisation.** Every request body this adapter
+ *    builds names the configured model, so the name must be a
+ *    clean model identifier. Until this normalisation existed,
+ *    only the env-built config was sanitised: `getLlmConfig`
+ *    trimmed `LLM_MODEL` and fell back to the default on a blank
+ *    value, while a directly constructed adapter carried its
+ *    `model` verbatim — a value like `"  local-model  "` was sent
+ *    padded, and a blank or whitespace-only value was sent as an
+ *    empty model name no OpenAI-compatible endpoint accepts. The
+ *    model is now normalised in one place (`normalizeLlmModel`,
+ *    used by both `getLlmConfig` and the adapter constructor):
+ *    trimmed, and a value that is empty once trimmed (missing,
+ *    blank, or whitespace only) falls back to the default
+ *    (`LLM_DEFAULT_MODEL`). The base URL above is normalised the
+ *    same way.
  *
  * The HTTP layer is injectable (fetch + config), so the adapter is fully
  * unit-tested offline against a stub with a fake key — no network, no
@@ -121,10 +136,25 @@ export function normalizeLlmBaseUrl(value: string | undefined | null): string {
   return normalised === "" ? LLM_DEFAULT_BASE_URL : normalised;
 }
 
+/** Default model for the OpenAI-compatible endpoint, used when none is configured (or the configured value normalises to empty). */
+export const LLM_DEFAULT_MODEL = "gpt-4o-mini";
+
+/**
+ * Normalise a configured LLM model name: trim surrounding
+ * whitespace, and fall back to `LLM_DEFAULT_MODEL` when the value
+ * is missing or empty once trimmed — see the header's model
+ * normalisation note.
+ */
+export function normalizeLlmModel(value: string | undefined | null): string {
+  const normalised = (value ?? "").trim();
+  return normalised === "" ? LLM_DEFAULT_MODEL : normalised;
+}
+
 export interface LlmConfig {
   apiKey: string;
   /** Base URL for the OpenAI-compatible endpoint. The value is normalised by `normalizeLlmBaseUrl` in `getLlmConfig` and again in the adapter constructor: trimmed, stripped of all trailing slashes, and a value that is empty once normalised falls back to LLM_DEFAULT_BASE_URL. */
   baseUrl: string;
+  /** Model name for the OpenAI-compatible endpoint. The value is normalised by `normalizeLlmModel` in `getLlmConfig` and again in the adapter constructor: trimmed, and a value that is empty once trimmed falls back to LLM_DEFAULT_MODEL. */
   model: string;
   /** Per-request timeout in ms (default LLM_REQUEST_TIMEOUT_MS; spans the response body as well as the wait for headers; non-positive or non-finite values fall back to the default, and a fractional value is floored to the whole milliseconds it admits — a sub-1 fraction falls back to the default). */
   timeoutMs?: number;
@@ -151,7 +181,7 @@ export function getLlmConfig(env: Record<string, string | undefined>): LlmConfig
   return {
     apiKey,
     baseUrl: normalizeLlmBaseUrl(env.LLM_BASE_URL),
-    model: env.LLM_MODEL?.trim() || "gpt-4o-mini",
+    model: normalizeLlmModel(env.LLM_MODEL),
   };
 }
 
@@ -359,6 +389,9 @@ export class OpenAiCompatibleLlmAdapter implements LlmBriefExtractor {
   /** The normalised base URL every request is built from (see `normalizeLlmBaseUrl`). */
   readonly baseUrl: string;
 
+  /** The normalised model name every request body carries (see `normalizeLlmModel`). */
+  readonly model: string;
+
   private readonly config: LlmConfig;
   private readonly fetchFn: FetchLike;
 
@@ -370,7 +403,10 @@ export class OpenAiCompatibleLlmAdapter implements LlmBriefExtractor {
     // normalisation the env-built config gets — see the header's
     // base-URL normalisation note.
     this.baseUrl = normalizeLlmBaseUrl(config.baseUrl);
-    this.config = { ...config, baseUrl: this.baseUrl };
+    // …and the same model normalisation — see the header's model
+    // normalisation note.
+    this.model = normalizeLlmModel(config.model);
+    this.config = { ...config, baseUrl: this.baseUrl, model: this.model };
     this.fetchFn = options.fetchFn ?? (globalThis.fetch as unknown as FetchLike);
   }
 

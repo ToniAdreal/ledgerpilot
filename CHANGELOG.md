@@ -16,6 +16,17 @@ build record behind these summaries.
 
 ### Added
 
+- **LLM model normalisation.** The optional LLM adapter's
+  configured model name is now normalised in one place
+  (`normalizeLlmModel`, used by both the env factory and the
+  adapter constructor): trimmed, with a value that is empty once
+  trimmed (missing, blank, or whitespace only) falling back to
+  the default model (`LLM_DEFAULT_MODEL`, `gpt-4o-mini`).
+  Previously only the env-built config was sanitised, and a
+  directly constructed adapter carried its model verbatim into
+  every request body — a padded name was sent padded, and a
+  blank name was sent as an empty model no endpoint accepts —
+  mirroring the LLM base-URL normalisation.
 - **LLM base-URL normalisation.** The optional LLM adapter's
   configured base URL is now normalised in one place
   (`normalizeLlmBaseUrl`, used by both the env factory and the
