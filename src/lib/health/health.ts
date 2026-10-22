@@ -23,6 +23,8 @@
  *    discipline as the parser / read models / view-models elsewhere.
  */
 
+import { normalizePayPalMode } from "../paypal/mode";
+
 export type HealthStatus = "ok" | "degraded" | "misconfigured";
 
 export type HealthCheckStatus = "pass" | "warn" | "fail";
@@ -67,9 +69,13 @@ export function buildHealthReport(
 ): HealthReport {
   const paypalModeRaw = (env.PAYPAL_MODE ?? "").trim();
   const modeLower = paypalModeRaw.toLowerCase();
-  // The client factory's rule: only "sandbox" selects the sandbox
-  // adapter; anything else (including unset) is mock. Mirror it here.
-  const paypalMode: "mock" | "sandbox" = modeLower === "sandbox" ? "sandbox" : "mock";
+  // The client factory's rule, via the shared normaliser in
+  // paypal/mode.ts: only "sandbox" (trimmed, any case) selects the
+  // sandbox adapter; anything else (including unset) is mock. Using
+  // the one normaliser keeps this report and the factory in agreement
+  // — previously the factory did not trim, so a padded " sandbox "
+  // reported as sandbox here while the factory silently ran mock.
+  const paypalMode: "mock" | "sandbox" = normalizePayPalMode(env.PAYPAL_MODE);
 
   const sandboxCredentialsConfigured = SANDBOX_REQUIRED.every((name) => nonBlank(env, name));
   const sandboxWebhookConfigured = nonBlank(env, "PAYPAL_WEBHOOK_ID");

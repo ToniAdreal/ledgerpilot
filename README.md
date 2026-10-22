@@ -854,7 +854,7 @@ are not blocked, the suite also runs on them).
 ```bash
 npm install
 npm run dev        # http://localhost:3000
-npm test           # full test suite (1158 tests)
+npm test           # full test suite (1165 tests)
 npm run typecheck  # tsc --noEmit
 npm run build      # production build
 ```
@@ -1272,7 +1272,7 @@ signatures mirror the REST resources one-to-one.
 ## Testing
 
 ```bash
-npm test           # vitest — 1158 tests, all green
+npm test           # vitest — 1165 tests, all green
 npm run typecheck  # TypeScript strict, clean
 npm run build      # Next.js production build
 npm run verify     # the whole gate below, as one command
@@ -1439,6 +1439,14 @@ rule — a whitespace-only webhook id counting as unconfigured so
 verification returns false with no network call, and padded
 credentials reaching the OAuth Basic auth header and the verify
 request trimmed),
+the PAYPAL_MODE normalisation (the effective mode decided in one
+shared normaliser, `normalizePayPalMode`, used by both the client
+factory and the health report — trimmed and lower-cased, so a
+padded value such as ` sandbox ` selects the sandbox adapter and
+fails loudly without credentials instead of the factory silently
+running mock while health reported sandbox; padded mock, blank,
+and unknown values stay mock, and factory and health agree on the
+effective mode for every spelling),
 the LLM base URL normalisation (the same normalisation applied in
 both the env-built config and the adapter constructor — a
 slashes-only env value previously normalised to the empty string

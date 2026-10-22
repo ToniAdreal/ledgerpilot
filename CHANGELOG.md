@@ -16,6 +16,15 @@ build record behind these summaries.
 
 ### Added
 
+- **PAYPAL_MODE normalisation.** The effective PayPal mode is now
+  decided in one shared normaliser (`normalizePayPalMode` in
+  `src/lib/paypal/mode.ts`), used by both the client factory and
+  the health report: the configured value is trimmed and
+  lower-cased, and only `sandbox` selects the sandbox adapter.
+  Previously the factory lower-cased but did not trim while the
+  health report trimmed first, so a padded value such as
+  ` sandbox ` was reported by `GET /api/health` as sandbox while
+  the factory silently ran the mock adapter.
 - **Sandbox credential normalisation.** The sandbox adapter's
   configured client id, client secret, and webhook id are now
   trimmed in the constructor, and a value that is empty once
