@@ -27,6 +27,17 @@
  * they live at PayPal and are re-fetched; in mock mode the adapter has
  * its own opt-in snapshot (`PAYPAL_MOCK_STORE_FILE`, see mock.ts), and
  * setting both files makes a mock-mode restart lose nothing.
+ *
+ * File-path normalisation: the supplied path is normalised in one
+ * place (`normalizeLedgerStoreFilePath`, used by both
+ * `ledgerStoreFromEnv` and the constructor): trimmed, and a value
+ * that is empty once trimmed counts as not configured (purely
+ * in-memory). Previously the env helper alone trimmed, so a directly
+ * constructed store carried its path verbatim — a padded path
+ * persisted to a file whose name contained the padding, and a
+ * whitespace-only path turned persistence on for a file named by
+ * spaces instead of counting as unset. The mock adapter's snapshot
+ * path follows the same rule (`normalizeMockStoreFilePath`).
  */
 
 import { mkdirSync, readFileSync, renameSync, writeFileSync } from "node:fs";
@@ -40,6 +51,19 @@ export const LEDGER_STORE_SNAPSHOT_VERSION = 1;
 /** Env var that turns on file persistence for the API runtime. */
 export const LEDGER_STORE_FILE_ENV = "LEDGERPILOT_STORE_FILE";
 
+/**
+ * Normalise a configured ledger store file path: trim surrounding
+ * whitespace, and return `undefined` (not configured — purely
+ * in-memory) when the value is missing or empty once trimmed — see
+ * the header's file-path normalisation note.
+ */
+export function normalizeLedgerStoreFilePath(
+  value: string | undefined | null,
+): string | undefined {
+  const normalised = (value ?? "").trim();
+  return normalised === "" ? undefined : normalised;
+}
+
 export class LedgerStorePersistenceError extends Error {
   constructor(message: string) {
     super(message);
@@ -49,9 +73,12 @@ export class LedgerStorePersistenceError extends Error {
 
 export interface LedgerStoreOptions {
   /**
-   * Path of the JSON snapshot file. When set, the store loads any
-   * existing snapshot from it and writes every mutation through.
-   * When unset, the store is purely in-memory.
+   * Path of the JSON snapshot file. The value is normalised by
+   * `normalizeLedgerStoreFilePath` in the constructor: trimmed, and
+   * a value that is empty once trimmed counts as unset. When set
+   * (once normalised), the store loads any existing snapshot from
+   * it and writes every mutation through. When unset, the store is
+   * purely in-memory.
    */
   filePath?: string;
 }
@@ -71,7 +98,7 @@ export class LedgerStore {
   private readonly filePath?: string;
 
   constructor(options: LedgerStoreOptions = {}) {
-    this.filePath = options.filePath;
+    this.filePath = normalizeLedgerStoreFilePath(options.filePath);
     if (this.filePath) this.load();
   }
 
@@ -259,6 +286,6 @@ export class LedgerStore {
  * deployment can persist the ledger without any code change.
  */
 export function ledgerStoreFromEnv(env: Record<string, string | undefined> = process.env): LedgerStore {
-  const filePath = env[LEDGER_STORE_FILE_ENV]?.trim();
+  const filePath = normalizeLedgerStoreFilePath(env[LEDGER_STORE_FILE_ENV]);
   return filePath ? new LedgerStore({ filePath }) : new LedgerStore();
 }

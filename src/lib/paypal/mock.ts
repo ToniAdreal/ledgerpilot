@@ -42,6 +42,17 @@ import { PayPalError, type PayPalClient } from "./client";
  * multi-writer store — one server process per file. A corrupt or
  * unsupported snapshot fails loudly (`MockPayPalPersistenceError`)
  * instead of silently reseeding demo state over real mock history.
+ *
+ * File-path normalisation: the supplied path is normalised in one
+ * place (`normalizeMockStoreFilePath`, used by both the client
+ * factory and the constructor): trimmed, and a value that is empty
+ * once trimmed counts as not configured (purely in-memory).
+ * Previously the factory alone trimmed, so a directly constructed
+ * client carried its path verbatim — a padded path persisted to a
+ * file whose name contained the padding, and a whitespace-only
+ * path turned persistence on for a file named by spaces instead of
+ * counting as unset. The ledger store's snapshot path follows the
+ * same rule (`normalizeLedgerStoreFilePath`).
  */
 export const MOCK_WEBHOOK_SECRET = "ledgerpilot-mock-webhook-secret";
 export const MOCK_SELLER = { name: "LedgerPilot Demo Seller", email_address: "seller@ledgerpilot.example" };
@@ -152,6 +163,19 @@ export const MOCK_PAYPAL_SNAPSHOT_VERSION = 1;
 /** Env var that turns on file persistence for the mock adapter. */
 export const MOCK_PAYPAL_STORE_FILE_ENV = "PAYPAL_MOCK_STORE_FILE";
 
+/**
+ * Normalise a configured mock store file path: trim surrounding
+ * whitespace, and return `undefined` (not configured — purely
+ * in-memory) when the value is missing or empty once trimmed — see
+ * the header's file-path normalisation note.
+ */
+export function normalizeMockStoreFilePath(
+  value: string | undefined | null,
+): string | undefined {
+  const normalised = (value ?? "").trim();
+  return normalised === "" ? undefined : normalised;
+}
+
 export class MockPayPalPersistenceError extends Error {
   constructor(message: string) {
     super(message);
@@ -163,9 +187,12 @@ export interface MockSeedOptions {
   /** Include the clearly-labeled sample dispute row (Judge Mode). Default true. */
   sampleDispute?: boolean;
   /**
-   * Path of the JSON snapshot file. When set, the client loads any
-   * existing snapshot from it (the seed options then do not apply)
-   * and writes every mutation through. When unset, purely in-memory.
+   * Path of the JSON snapshot file. The value is normalised by
+   * `normalizeMockStoreFilePath` in the constructor: trimmed, and a
+   * value that is empty once trimmed counts as unset. When set
+   * (once normalised), the client loads any existing snapshot from
+   * it (the seed options then do not apply) and writes every
+   * mutation through. When unset, purely in-memory.
    */
   filePath?: string;
 }
@@ -198,7 +225,7 @@ export class MockPayPalClient implements PayPalClient {
   private readonly sampleDispute: boolean;
 
   constructor(seed: MockSeedOptions = {}) {
-    this.filePath = seed.filePath;
+    this.filePath = normalizeMockStoreFilePath(seed.filePath);
     this.sampleDispute = seed.sampleDispute !== false;
     const snap = this.filePath ? this.load() : null;
     if (snap) {

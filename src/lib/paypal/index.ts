@@ -1,5 +1,9 @@
 import type { PayPalClient } from "./client";
-import { MOCK_PAYPAL_STORE_FILE_ENV, MockPayPalClient } from "./mock";
+import {
+  MOCK_PAYPAL_STORE_FILE_ENV,
+  MockPayPalClient,
+  normalizeMockStoreFilePath,
+} from "./mock";
 import { normalizePayPalMode } from "./mode";
 import { SandboxPayPalClient } from "./sandbox";
 
@@ -28,7 +32,9 @@ export function getPayPalClient(env: Record<string, string | undefined> = proces
     });
   }
   // Mock mode: in-memory by default; PAYPAL_MOCK_STORE_FILE (non-blank)
-  // turns on the mock adapter's opt-in snapshot persistence.
-  const mockFilePath = env[MOCK_PAYPAL_STORE_FILE_ENV]?.trim();
+  // turns on the mock adapter's opt-in snapshot persistence. The path
+  // is normalised by `normalizeMockStoreFilePath` (trimmed; blank is
+  // unset), the same normaliser the mock constructor applies.
+  const mockFilePath = normalizeMockStoreFilePath(env[MOCK_PAYPAL_STORE_FILE_ENV]);
   return new MockPayPalClient(mockFilePath ? { filePath: mockFilePath } : {});
 }

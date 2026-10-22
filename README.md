@@ -854,7 +854,7 @@ are not blocked, the suite also runs on them).
 ```bash
 npm install
 npm run dev        # http://localhost:3000
-npm test           # full test suite (1171 tests)
+npm test           # full test suite (1181 tests)
 npm run typecheck  # tsc --noEmit
 npm run build      # production build
 ```
@@ -1272,7 +1272,7 @@ signatures mirror the REST resources one-to-one.
 ## Testing
 
 ```bash
-npm test           # vitest — 1171 tests, all green
+npm test           # vitest — 1181 tests, all green
 npm run typecheck  # TypeScript strict, clean
 npm run build      # Next.js production build
 npm run verify     # the whole gate below, as one command
@@ -1468,6 +1468,14 @@ blank key was sent as an empty credential; the key is now trimmed
 in both paths, and a blank or whitespace-only key counts as not
 configured — the env factory returns null and the constructor
 refuses, naming no credential value),
+the persistence file-path normalisation (the same normalisation
+applied in both the env helpers and the constructors for the
+ledger store and the mock adapter — a directly constructed store
+or client previously carried its file path verbatim, so a padded
+path persisted to a file whose name contained the padding and a
+whitespace-only path turned persistence on for a file named by
+spaces; the path is now trimmed in both paths, and a blank or
+whitespace-only path counts as not configured — purely in-memory),
 the sandbox transport timeout (an
 AbortSignal on every outbound call, a hanging API call and a hanging
 OAuth token fetch each translated into a 504 `REQUEST_TIMEOUT`

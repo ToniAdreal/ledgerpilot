@@ -16,6 +16,17 @@ build record behind these summaries.
 
 ### Added
 
+- **Persistence file-path normalisation.** The ledger store's
+  and the mock adapter's configured snapshot file paths are now
+  normalised in one place each (`normalizeLedgerStoreFilePath` /
+  `normalizeMockStoreFilePath`, used by both the env helpers /
+  client factory and the constructors): trimmed, with a value
+  that is empty once trimmed counting as not configured (purely
+  in-memory). Previously only the env paths were sanitised, and
+  a directly constructed store or client carried its path
+  verbatim — a padded path persisted to a file whose name
+  contained the padding, and a whitespace-only path turned
+  persistence on for a file named by spaces.
 - **LLM API-key normalisation.** The optional LLM adapter's
   configured API key is now normalised in one place
   (`normalizeLlmApiKey`, used by both the env factory and the
