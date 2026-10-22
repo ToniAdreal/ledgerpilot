@@ -854,7 +854,7 @@ are not blocked, the suite also runs on them).
 ```bash
 npm install
 npm run dev        # http://localhost:3000
-npm test           # full test suite (1136 tests)
+npm test           # full test suite (1144 tests)
 npm run typecheck  # tsc --noEmit
 npm run build      # production build
 ```
@@ -1272,7 +1272,7 @@ signatures mirror the REST resources one-to-one.
 ## Testing
 
 ```bash
-npm test           # vitest — 1136 tests, all green
+npm test           # vitest — 1144 tests, all green
 npm run typecheck  # TypeScript strict, clean
 npm run build      # Next.js production build
 npm run verify     # the whole gate below, as one command
@@ -1431,6 +1431,13 @@ the sandbox base URL normalisation (a configured base URL trimmed
 and stripped of all trailing slashes so request URLs carry exactly
 one slash between base and path, and a blank or slashes-only value
 falling back to the default sandbox base URL),
+the LLM base URL normalisation (the same normalisation applied in
+both the env-built config and the adapter constructor — a
+slashes-only env value previously normalised to the empty string
+and produced the relative request URL `/chat/completions`, and a
+directly constructed adapter previously carried its base URL
+verbatim into double-slash request URLs; a blank or slashes-only
+value now falls back to the default LLM base URL),
 the sandbox transport timeout (an
 AbortSignal on every outbound call, a hanging API call and a hanging
 OAuth token fetch each translated into a 504 `REQUEST_TIMEOUT`

@@ -16,6 +16,19 @@ build record behind these summaries.
 
 ### Added
 
+- **LLM base-URL normalisation.** The optional LLM adapter's
+  configured base URL is now normalised in one place
+  (`normalizeLlmBaseUrl`, used by both the env factory and the
+  adapter constructor): trimmed and stripped of ALL trailing
+  slashes, with a value that is empty once normalised (missing,
+  blank, or slashes only) falling back to the default LLM base URL
+  (`LLM_DEFAULT_BASE_URL`) instead of producing relative request
+  URLs. Previously only the env-built config was partly sanitised
+  (a slashes-only `LLM_BASE_URL` became the empty string, so every
+  request went to `/chat/completions`), and a directly constructed
+  adapter carried its base URL verbatim into double-slash request
+  URLs — mirroring the sandbox adapter's constructor
+  normalisation.
 - **Sandbox base-URL normalisation.** The sandbox adapter's
   configured base URL is now trimmed and stripped of ALL trailing
   slashes (previously exactly one slash was stripped and nothing

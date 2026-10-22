@@ -159,8 +159,9 @@ import { PayPalError, PayPalNotConfiguredError, type PayPalClient } from "./clie
  * slashes, and a value that is empty once normalised (blank, or
  * slashes only) falls back to the default sandbox base URL
  * (`SANDBOX_DEFAULT_BASE_URL`) instead of producing relative
- * request URLs. The LLM adapter's env-built base URL is normalised
- * the same way (trim + strip all trailing slashes).
+ * request URLs. The LLM adapter normalises its base URL the same
+ * way in both its env factory and its constructor, empty-value
+ * fallback included.
  *
  * Invalid success response: every PayPal success body is JSON, and
  * every endpoint this adapter calls answers with a JSON object.

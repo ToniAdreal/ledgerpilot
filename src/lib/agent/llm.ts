@@ -66,6 +66,25 @@
  *    to the default bound (`LLM_MAX_RESPONSE_BYTES`) instead. The
  *    sandbox adapter floors its identical bound the same way, and
  *    the rate limiter floors its fractional limit likewise.
+ *  - **Base URL normalisation.** Every request URL this adapter
+ *    builds is `${baseUrl}/chat/completions`, so the configured
+ *    base URL must carry no trailing slash. Until this
+ *    normalisation existed, only the env-built config was
+ *    sanitised, and only partly: `getLlmConfig` trimmed and
+ *    stripped trailing slashes, so a slashes-only `LLM_BASE_URL`
+ *    (`"///"`) normalised to the empty string and every request
+ *    went to the relative URL `"/chat/completions"`, while a
+ *    directly constructed adapter carried its `baseUrl` verbatim —
+ *    a value like `"https://llm.example/v1//"` produced the
+ *    double-slash URL `"https://llm.example/v1//chat/completions"`
+ *    no OpenAI-compatible route matches. The base URL is now
+ *    normalised in one place (`normalizeLlmBaseUrl`, used by both
+ *    `getLlmConfig` and the adapter constructor): trimmed, stripped
+ *    of ALL trailing slashes, and a value that is empty once
+ *    normalised (missing, blank, or slashes only) falls back to
+ *    the default (`LLM_DEFAULT_BASE_URL`) instead of producing
+ *    relative request URLs. The sandbox adapter normalises its
+ *    base URL in its constructor exactly the same way.
  *
  * The HTTP layer is injectable (fetch + config), so the adapter is fully
  * unit-tested offline against a stub with a fake key — no network, no
@@ -88,8 +107,23 @@ export const LLM_MAX_RESPONSE_BYTES = 262_144;
 /** Per-request timeout, in milliseconds, for an LLM call (spans the response body as well as the wait for headers). */
 export const LLM_REQUEST_TIMEOUT_MS = 10_000;
 
+/** Default base URL for the OpenAI-compatible endpoint, used when none is configured (or the configured value normalises to empty). */
+export const LLM_DEFAULT_BASE_URL = "https://api.openai.com/v1";
+
+/**
+ * Normalise a configured LLM base URL: trim surrounding whitespace,
+ * strip ALL trailing slashes, and fall back to
+ * `LLM_DEFAULT_BASE_URL` when the value is missing or empty once
+ * normalised — see the header's base-URL normalisation note.
+ */
+export function normalizeLlmBaseUrl(value: string | undefined | null): string {
+  const normalised = (value ?? "").trim().replace(/\/+$/, "");
+  return normalised === "" ? LLM_DEFAULT_BASE_URL : normalised;
+}
+
 export interface LlmConfig {
   apiKey: string;
+  /** Base URL for the OpenAI-compatible endpoint. The value is normalised by `normalizeLlmBaseUrl` in `getLlmConfig` and again in the adapter constructor: trimmed, stripped of all trailing slashes, and a value that is empty once normalised falls back to LLM_DEFAULT_BASE_URL. */
   baseUrl: string;
   model: string;
   /** Per-request timeout in ms (default LLM_REQUEST_TIMEOUT_MS; spans the response body as well as the wait for headers; non-positive or non-finite values fall back to the default, and a fractional value is floored to the whole milliseconds it admits — a sub-1 fraction falls back to the default). */
@@ -116,7 +150,7 @@ export function getLlmConfig(env: Record<string, string | undefined>): LlmConfig
   if (!apiKey) return null;
   return {
     apiKey,
-    baseUrl: (env.LLM_BASE_URL?.trim() || "https://api.openai.com/v1").replace(/\/+$/, ""),
+    baseUrl: normalizeLlmBaseUrl(env.LLM_BASE_URL),
     model: env.LLM_MODEL?.trim() || "gpt-4o-mini",
   };
 }
@@ -322,12 +356,21 @@ export interface LlmBriefExtractor {
 }
 
 export class OpenAiCompatibleLlmAdapter implements LlmBriefExtractor {
+  /** The normalised base URL every request is built from (see `normalizeLlmBaseUrl`). */
+  readonly baseUrl: string;
+
+  private readonly config: LlmConfig;
   private readonly fetchFn: FetchLike;
 
   constructor(
-    private readonly config: LlmConfig,
+    config: LlmConfig,
     options: LlmAdapterOptions = {},
   ) {
+    // A directly constructed adapter gets the same base-URL
+    // normalisation the env-built config gets — see the header's
+    // base-URL normalisation note.
+    this.baseUrl = normalizeLlmBaseUrl(config.baseUrl);
+    this.config = { ...config, baseUrl: this.baseUrl };
     this.fetchFn = options.fetchFn ?? (globalThis.fetch as unknown as FetchLike);
   }
 
