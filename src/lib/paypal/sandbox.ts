@@ -147,6 +147,21 @@ import { PayPalError, PayPalNotConfiguredError, type PayPalClient } from "./clie
  * before it) falls back to the default bound instead. This mirrors
  * the rate limiter's floored fractional limit.
  *
+ * Base URL normalisation: every request URL this adapter builds is
+ * `${baseUrl}${path}` with a path that begins with `/`, so the
+ * configured base URL must carry no trailing slash. Until this
+ * normalisation existed, the constructor stripped exactly one
+ * trailing slash and trimmed nothing: a base URL configured as
+ * `https://api-m.sandbox.paypal.com//` (or pasted with surrounding
+ * whitespace) survived into every request as a double-slash or
+ * whitespace-prefixed URL that no PayPal route matches. The
+ * configured value is now trimmed and stripped of ALL trailing
+ * slashes, and a value that is empty once normalised (blank, or
+ * slashes only) falls back to the default sandbox base URL
+ * (`SANDBOX_DEFAULT_BASE_URL`) instead of producing relative
+ * request URLs. The LLM adapter's env-built base URL is normalised
+ * the same way (trim + strip all trailing slashes).
+ *
  * Invalid success response: every PayPal success body is JSON, and
  * every endpoint this adapter calls answers with a JSON object.
  * Until this check existed, `readBody` mapped any unparseable body
@@ -312,6 +327,9 @@ import { PayPalError, PayPalNotConfiguredError, type PayPalClient } from "./clie
 
 export type FetchFn = (url: string, init?: RequestInit) => Promise<Response>;
 
+/** Default base URL for the PayPal sandbox API, used when none is configured (or the configured value normalises to empty). */
+export const SANDBOX_DEFAULT_BASE_URL = "https://api-m.sandbox.paypal.com";
+
 /** Per-request timeout for every outbound PayPal call, in milliseconds. */
 export const SANDBOX_REQUEST_TIMEOUT_MS = 10_000;
 
@@ -331,6 +349,7 @@ export interface SandboxConfig {
   clientId?: string;
   clientSecret?: string;
   webhookId?: string;
+  /** Base URL for the sandbox API. Defaults to SANDBOX_DEFAULT_BASE_URL; the value is trimmed and stripped of all trailing slashes, and a value that is empty once normalised falls back to the default (see the header's base-URL normalisation note). */
   baseUrl?: string;
   /** Injectable HTTP layer (tests). Defaults to global fetch. */
   fetchFn?: FetchFn;
@@ -568,7 +587,8 @@ export class SandboxPayPalClient implements PayPalClient {
     this.clientId = clientId;
     this.clientSecret = clientSecret;
     this.webhookId = config.webhookId ?? process.env.PAYPAL_WEBHOOK_ID;
-    this.baseUrl = (config.baseUrl ?? "https://api-m.sandbox.paypal.com").replace(/\/$/, "");
+    const normalisedBaseUrl = (config.baseUrl ?? SANDBOX_DEFAULT_BASE_URL).trim().replace(/\/+$/, "");
+    this.baseUrl = normalisedBaseUrl === "" ? SANDBOX_DEFAULT_BASE_URL : normalisedBaseUrl;
     this.fetchFn = config.fetchFn ?? ((url, init) => fetch(url, init));
     this.now = config.now ?? Date.now;
     this.timeoutMs =

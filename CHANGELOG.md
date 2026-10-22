@@ -16,6 +16,15 @@ build record behind these summaries.
 
 ### Added
 
+- **Sandbox base-URL normalisation.** The sandbox adapter's
+  configured base URL is now trimmed and stripped of ALL trailing
+  slashes (previously exactly one slash was stripped and nothing
+  was trimmed, so a value configured with a double trailing slash
+  or surrounding whitespace produced double-slash request URLs no
+  PayPal route matches), and a value that is empty once normalised
+  falls back to the default sandbox base URL
+  (`SANDBOX_DEFAULT_BASE_URL`) instead of producing relative
+  request URLs — mirroring the LLM adapter's env-built base URL.
 - **Sandbox money-mapping hygiene.** Amounts mapped from PayPal
   responses are now accepted only when they parse to a finite
   number: a malformed amount in an invoice, order, payout, dispute,
