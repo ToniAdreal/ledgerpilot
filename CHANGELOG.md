@@ -16,6 +16,16 @@ build record behind these summaries.
 
 ### Added
 
+- **Sandbox credential normalisation.** The sandbox adapter's
+  configured client id, client secret, and webhook id are now
+  trimmed in the constructor, and a value that is empty once
+  trimmed counts as missing (the credentials — the constructor
+  throws `PayPalNotConfiguredError` naming them) or as
+  unconfigured (the webhook id — verification returns false with
+  no network call). Previously only truthiness was tested, so a
+  whitespace-only credential passed the missing check and was
+  sent verbatim in the OAuth Basic auth header, while
+  `GET /api/health` already reported that same value as unset.
 - **LLM model normalisation.** The optional LLM adapter's
   configured model name is now normalised in one place
   (`normalizeLlmModel`, used by both the env factory and the

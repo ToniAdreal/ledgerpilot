@@ -163,6 +163,25 @@ import { PayPalError, PayPalNotConfiguredError, type PayPalClient } from "./clie
  * way in both its env factory and its constructor, empty-value
  * fallback included.
  *
+ * Credential normalisation: the configured client id, client
+ * secret, and webhook id are trimmed in the constructor, and a
+ * value that is empty once trimmed counts as missing (the two
+ * credentials — the constructor throws `PayPalNotConfiguredError`
+ * naming them) or as unconfigured (the webhook id — signature
+ * verification returns false without any network call, exactly as
+ * when no id is set). Until this normalisation existed, the
+ * constructor tested only truthiness, so a whitespace-only
+ * credential passed the missing check and was carried verbatim
+ * into the OAuth Basic auth header — where PayPal rejects it for a
+ * reason the caller cannot see — while `GET /api/health` already
+ * reported that same value as unset (its presence rule is
+ * non-blank after trimming), so the readiness surface and the
+ * adapter disagreed about whether the instance was configured at
+ * all. A credential pasted with surrounding whitespace was
+ * likewise sent padded. No credential value is ever logged or
+ * carried in an error by this normalisation: the missing list
+ * names variables only, as before.
+ *
  * Invalid success response: every PayPal success body is JSON, and
  * every endpoint this adapter calls answers with a JSON object.
  * Until this check existed, `readBody` mapped any unparseable body
@@ -347,8 +366,11 @@ export const SANDBOX_TRANSIENT_RETRY_DEFAULT_DELAY_MS = 250;
 export const SANDBOX_TRANSIENT_RETRY_MAX_DELAY_MS = 2_000;
 
 export interface SandboxConfig {
+  /** Sandbox app client id. Trimmed in the constructor; a value that is empty once trimmed counts as missing (see the header's credential normalisation note). */
   clientId?: string;
+  /** Sandbox app client secret. Trimmed in the constructor; a value that is empty once trimmed counts as missing (see the header's credential normalisation note). */
   clientSecret?: string;
+  /** Webhook id for signature verification. Trimmed in the constructor; a value that is empty once trimmed counts as unconfigured (see the header's credential normalisation note). */
   webhookId?: string;
   /** Base URL for the sandbox API. Defaults to SANDBOX_DEFAULT_BASE_URL; the value is trimmed and stripped of all trailing slashes, and a value that is empty once normalised falls back to the default (see the header's base-URL normalisation note). */
   baseUrl?: string;
@@ -578,8 +600,10 @@ export class SandboxPayPalClient implements PayPalClient {
   private payoutSeq = 0;
 
   constructor(config: SandboxConfig = {}) {
-    const clientId = config.clientId ?? process.env.PAYPAL_CLIENT_ID;
-    const clientSecret = config.clientSecret ?? process.env.PAYPAL_CLIENT_SECRET;
+    // Credential normalisation (see the header note): trim each
+    // configured value; empty once trimmed is missing/unconfigured.
+    const clientId = (config.clientId ?? process.env.PAYPAL_CLIENT_ID)?.trim();
+    const clientSecret = (config.clientSecret ?? process.env.PAYPAL_CLIENT_SECRET)?.trim();
     const missing: string[] = [];
     if (!clientId) missing.push("PAYPAL_CLIENT_ID");
     if (!clientSecret) missing.push("PAYPAL_CLIENT_SECRET");
@@ -587,7 +611,8 @@ export class SandboxPayPalClient implements PayPalClient {
     if (!clientId || !clientSecret) throw new PayPalNotConfiguredError(missing);
     this.clientId = clientId;
     this.clientSecret = clientSecret;
-    this.webhookId = config.webhookId ?? process.env.PAYPAL_WEBHOOK_ID;
+    const webhookId = (config.webhookId ?? process.env.PAYPAL_WEBHOOK_ID)?.trim();
+    this.webhookId = webhookId ? webhookId : undefined;
     const normalisedBaseUrl = (config.baseUrl ?? SANDBOX_DEFAULT_BASE_URL).trim().replace(/\/+$/, "");
     this.baseUrl = normalisedBaseUrl === "" ? SANDBOX_DEFAULT_BASE_URL : normalisedBaseUrl;
     this.fetchFn = config.fetchFn ?? ((url, init) => fetch(url, init));
