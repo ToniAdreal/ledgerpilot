@@ -46,7 +46,13 @@ describe("deployment descriptor (render.yaml)", () => {
   it("builds and starts with the package's own scripts", () => {
     expect(packageJson.scripts.build).toBe("next build");
     expect(packageJson.scripts.start).toBe("next start");
-    expect(blueprint).toContain("buildCommand: npm ci && npm run build");
+    // --include=dev is load-bearing, not incidental: NODE_ENV=production
+    // makes a plain `npm ci` omit devDependencies (including TypeScript),
+    // which broke the first Render deploy (commit 32e3477). Pin it here so
+    // a future "simplification" back to plain `npm ci` fails loudly.
+    expect(blueprint).toContain(
+      "buildCommand: npm ci --include=dev && npm run build",
+    );
     expect(blueprint).toContain("startCommand: npm start");
     expect(blueprint).toContain('value: "22"');
   });
