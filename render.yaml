@@ -26,7 +26,12 @@ services:
     name: ledgerpilot
     runtime: node
     plan: free
-    buildCommand: npm ci && npm run build
+    # --include=dev is load-bearing: NODE_ENV=production (set below)
+    # makes a plain `npm ci` omit devDependencies — including
+    # TypeScript — and without it the production build cannot resolve
+    # the src/lib/api modules (verified on Render's first deploy and
+    # reproduced locally from a clean export, 2026-10-30).
+    buildCommand: npm ci --include=dev && npm run build
     # `next start` binds the port Render injects via $PORT.
     startCommand: npm start
     healthCheckPath: /api/health
