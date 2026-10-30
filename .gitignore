@@ -1,8 +1,8 @@
 node_modules/
 .next/
 out/
-.env
-.env.local
+.env*
+!.env.example
 *.tsbuildinfo
 coverage/
 # Optional ledger-store snapshots (LEDGERPILOT_STORE_FILE) are local state.
